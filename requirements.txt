@@ -1,0 +1,12 @@
+streamlit>=1.32
+pandas>=2.0
+pyarrow>=14.0
+plotly>=5.0
+scikit-learn>=1.4
+lightgbm>=4.0
+xgboost>=2.0
+imbalanced-learn>=0.12
+shap>=0.44
+recordlinkage>=0.15
+pySUS>=0.6
+numpy>=1.26
