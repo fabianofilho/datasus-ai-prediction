@@ -1,6 +1,3 @@
-> [!NOTE]
-> Este repositório foi gerado pela IA Manus, com o objetivo de mapear e documentar os principais sistemas de informação do DataSUS (departamento de informática do Sistema Único de Saúde do Brasil) que são relevantes para a construção de modelos preditivos com machine learning. A análise focou em datasets que permitem a identificação de indivíduos, a construção de cohorts e a predição de desfechos de saúde futuros.
-
 # DataSUS para IA: Um Guia de Fontes de Dados para Modelagem Preditiva
 
 ## Visão Geral
