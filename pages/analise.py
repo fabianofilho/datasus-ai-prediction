@@ -729,8 +729,12 @@ if ss["model_results"]:
     if results.get("sample_n") and results["sample_n"] < len(cohort):
         sample_info = f' &nbsp;·&nbsp; amostra <strong>{results["sample_n"]:,}</strong>'
     hpo_tag = " · Optuna" if results.get("hpo_mode") == "Optuna (automático)" else ""
+    if results.get("validation_strategy") == "holdout":
+        val_tag = f' · Holdout {results.get("holdout_size", 0.2):.0%}'
+    else:
+        val_tag = ""
     done_bar(
-        f'<strong>{results["algorithm"].upper()}</strong>{hpo_tag} &nbsp;·&nbsp; '
+        f'<strong>{results["algorithm"].upper()}</strong>{hpo_tag}{val_tag} &nbsp;·&nbsp; '
         f'AUC <strong>{m["roc_auc"]:.3f}</strong> &nbsp;·&nbsp; '
         f'F1 <strong>{m["f1"]:.3f}</strong> &nbsp;·&nbsp; '
         f'PR-AUC <strong>{m["pr_auc"]:.3f}</strong>{sample_info}',
@@ -750,7 +754,7 @@ with _tab_train:
   else:
     # ── config ────────────────────────────────────────────────────────────────
     step_title(4, "Treinar Modelo",
-               "Configure o algoritmo, amostragem e hiperparâmetros. Validação cruzada estratificada.")
+               "Configure o algoritmo, validação e hiperparâmetros.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
     st.info(
@@ -758,14 +762,20 @@ with _tab_train:
         f"**{len(X.columns)}** features disponíveis"
     )
 
-    use_sample = st.checkbox(
-        "Usar amostra para treinamento", value=False,
-        help="Útil para exploração rápida em coortes grandes.",
-    )
-    sample_n = (
-        st.slider("Tamanho da amostra", 500, min(total_n, 50_000), min(total_n, 5_000), 500)
-        if use_sample else total_n
-    )
+    # ── Tamanho do conjunto de treino ─────────────────────────────────────────
+    sn_col1, sn_col2 = st.columns([1, 2])
+    with sn_col1:
+        sample_n = st.number_input(
+            "Registros para treino", min_value=100, max_value=total_n,
+            value=total_n, step=100,
+            help="Use o total ou defina um subconjunto para treino mais rápido.",
+        )
+    with sn_col2:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        if sample_n < total_n:
+            st.caption(f"Usando **{sample_n:,}** de **{total_n:,}** registros ({sample_n/total_n:.0%}). Amostragem estratificada.")
+        else:
+            st.caption("Usando todos os registros disponíveis.")
 
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
@@ -773,7 +783,22 @@ with _tab_train:
         st.markdown("**Algoritmo e validação**")
         algo_label = st.selectbox("Algoritmo", list(ALGORITHMS.keys()))
         algo = ALGORITHMS[algo_label]
-        n_folds = st.slider("Folds (cross-validation)", 3, 10, 5)
+        val_strategy = st.radio(
+            "Estratégia de validação",
+            ["Validação cruzada (k-fold)", "Holdout (train/test)"],
+            horizontal=True,
+        )
+        if val_strategy == "Validação cruzada (k-fold)":
+            n_folds = st.slider("Folds", 3, 10, 5)
+            holdout_size = None
+        else:
+            holdout_size = st.select_slider(
+                "Proporção de teste",
+                options=[0.10, 0.15, 0.20, 0.25, 0.30],
+                value=0.20,
+                format_func=lambda x: f"{x:.0%}",
+            )
+            n_folds = 1
         use_smote = st.checkbox("SMOTE — oversample da classe minoritária",
                                 help="Recomendado quando prevalência < 5%")
         st.markdown("**Modo de hiperparâmetros**")
@@ -838,13 +863,17 @@ with _tab_train:
     _lc_chart_ph.plotly_chart(_lc_fig([], [], []), use_container_width=True)
 
     # ── Botão treinar ─────────────────────────────────────────────────────────
-    btn_label = (
-        f"Otimizar + Treinar {algo_label} com {n_folds}-fold CV"
-        if hpo_mode == "Optuna (automático)"
-        else f"Treinar {algo_label} com {n_folds}-fold CV"
+    _val_tag = (
+        f"{n_folds}-fold CV" if val_strategy == "Validação cruzada (k-fold)"
+        else f"Holdout {holdout_size:.0%}"
     )
-    if use_sample and sample_n < total_n:
-        btn_label += f" (amostra {sample_n:,})"
+    btn_label = (
+        f"Otimizar + Treinar {algo_label} · {_val_tag}"
+        if hpo_mode == "Optuna (automático)"
+        else f"Treinar {algo_label} · {_val_tag}"
+    )
+    if sample_n < total_n:
+        btn_label += f" ({sample_n:,} registros)"
 
     if st.button(btn_label, type="primary"):
         try:
@@ -853,9 +882,9 @@ with _tab_train:
 
             X_train = X[selected_features]
             y_train = y
-            if use_sample and sample_n < total_n:
+            if sample_n < total_n:
                 X_train, _, y_train, _ = train_test_split(
-                    X_train, y_train, train_size=sample_n,
+                    X_train, y_train, train_size=int(sample_n),
                     stratify=y_train, random_state=42,
                 )
 
@@ -893,7 +922,7 @@ with _tab_train:
                     f"Fração {int(_frac*100)}% — {_n:,} registros — Val AUC: {_vl_auc:.3f}"
                 )
 
-            _lc_status_ph.caption("Finalizando com validação cruzada completa…")
+            _lc_status_ph.caption("Finalizando treino…")
 
             # ── Optuna HPO ────────────────────────────────────────────────────
             if hpo_mode == "Optuna (automático)":
@@ -903,24 +932,72 @@ with _tab_train:
                     prog.progress(done / total,
                                   text=f"Optuna: trial {done}/{total} — melhor ROC-AUC {best:.4f}")
 
+                _hpo_folds = min(n_folds, 3) if val_strategy == "Validação cruzada (k-fold)" else 3
                 params = optimize_hyperparams(
                     X_train, y_train, algorithm=algo,
-                    n_trials=n_trials, n_folds=min(n_folds, 3),
+                    n_trials=n_trials, n_folds=_hpo_folds,
                     use_smote=use_smote, progress_callback=_optuna_cb,
                 )
                 prog.progress(1.0, text=f"Optuna concluído — {n_trials} trials")
 
-            # ── CV final ──────────────────────────────────────────────────────
-            with st.spinner(f"Treinando {algo_label} com {n_folds}-fold CV…"):
-                results = train_cv(
-                    X=X_train, y=y_train, algorithm=algo,
-                    params=params, n_folds=n_folds, use_smote=use_smote,
-                )
-                results["sample_n"] = len(X_train)
-                results["best_params"] = params
-                results["hpo_mode"] = hpo_mode
-                ss["model_results"] = results
-                st.rerun()
+            # ── Treino final ──────────────────────────────────────────────────
+            if val_strategy == "Validação cruzada (k-fold)":
+                with st.spinner(f"Treinando {algo_label} com {n_folds}-fold CV…"):
+                    results = train_cv(
+                        X=X_train, y=y_train, algorithm=algo,
+                        params=params, n_folds=n_folds, use_smote=use_smote,
+                    )
+                    results["validation_strategy"] = "cv"
+            else:
+                with st.spinner(f"Treinando {algo_label} — holdout {holdout_size:.0%}…"):
+                    import numpy as _np
+                    from sklearn.metrics import (
+                        roc_auc_score as _rauc, average_precision_score as _ap,
+                        f1_score as _f1, precision_score as _prec,
+                        recall_score as _rec, brier_score_loss as _brier,
+                    )
+                    X_tr, X_te, y_tr, y_te = train_test_split(
+                        X_train, y_train, test_size=holdout_size,
+                        stratify=y_train, random_state=42,
+                    )
+                    _pipe = build_pipeline(X_tr, algo, params, use_smote)
+                    _pipe.fit(X_tr, y_tr)
+                    _te_probs = _pipe.predict_proba(X_te)[:, 1]
+                    _te_preds = (_te_probs >= 0.5).astype(int)
+                    _m = {
+                        "roc_auc": float(_rauc(y_te, _te_probs)),
+                        "pr_auc": float(_ap(y_te, _te_probs)),
+                        "f1": float(_f1(y_te, _te_preds, zero_division=0)),
+                        "precision": float(_prec(y_te, _te_preds, zero_division=0)),
+                        "recall": float(_rec(y_te, _te_preds, zero_division=0)),
+                        "brier": float(_brier(y_te, _te_probs)),
+                        "fold": 1,
+                    }
+                    # Refit on full training set
+                    _final = build_pipeline(X_train, algo, params, use_smote)
+                    _final.fit(X_train, y_train)
+                    _imp = {}
+                    _m2 = _final[-1]
+                    if hasattr(_m2, "feature_importances_"):
+                        _imp = dict(zip(X_train.columns, _m2.feature_importances_))
+                    results = {
+                        "fold_metrics": [_m],
+                        "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
+                        "oof_probs": _te_probs,
+                        "y_eval": y_te.values,
+                        "feature_importances": _imp,
+                        "model": _final,
+                        "X_columns": X_train.columns.tolist(),
+                        "algorithm": algo,
+                        "validation_strategy": "holdout",
+                        "holdout_size": holdout_size,
+                    }
+
+            results["sample_n"] = len(X_train)
+            results["best_params"] = params
+            results["hpo_mode"] = hpo_mode
+            ss["model_results"] = results
+            st.rerun()
         except Exception as e:
             st.error(f"Erro no treino: {e}")
             st.exception(e)
@@ -950,7 +1027,8 @@ with _tab_val:
     
     col_exp1, col_exp2 = st.columns(2)
     with col_exp1:
-        with st.expander("Métricas por fold"):
+        _exp_label = "Métricas por fold" if results.get("validation_strategy") != "holdout" else "Métricas do conjunto de teste"
+        with st.expander(_exp_label):
             st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
     with col_exp2:
         with st.expander("Hiperparâmetros utilizados"):
@@ -967,7 +1045,11 @@ with _tab_val:
     
     X_res = X[results["X_columns"]]
     oof = results["oof_probs"]
-    y_arr = y.values
+    # Holdout: usar apenas os labels do conjunto de teste
+    if results.get("validation_strategy") == "holdout":
+        y_arr = results["y_eval"]
+    else:
+        y_arr = y.values
     
     st.markdown("#### Curvas de desempenho")
     col1, col2 = st.columns(2)
