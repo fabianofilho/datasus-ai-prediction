@@ -44,9 +44,18 @@ def _pd():
 # ── Pre-warm em background: carrega tudo enquanto o usuário lê a tela ────────
 @st.cache_resource(show_spinner=False)
 def _start_prewarm():
+    """Importa módulos pesados em background enquanto o usuário vê step 1."""
     def _warm():
         try:
-            _dl(); _cohort(); _pipeline(); _ev(); _px(); _pd()
+            import pandas                          # noqa
+            import plotly.express                  # noqa
+            import requests                        # noqa
+            from core.data import downloader       # noqa
+            from core.features import cohort       # noqa
+            from core.models import evaluation     # noqa
+            from core.models import pipeline       # noqa
+            import lightgbm                        # noqa
+            import xgboost                         # noqa
         except Exception:
             pass
     threading.Thread(target=_warm, daemon=True).start()
