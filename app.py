@@ -350,7 +350,7 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Resultados", "Calibração", "Comparação"]
+    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Resultados", "Benchmark", "Comparação"]
     parts = []
     for i, lbl in enumerate(labels):
         n = i + 1
@@ -856,9 +856,9 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 6 — CALIBRAÇÃO (opcional)
+# ETAPA 6 — BENCHMARK (opcional)
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(6, "Calibração do Modelo",
+step_title(6, "Benchmark do Modelo",
            "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
 
 if ss["calib_results"]:
@@ -887,16 +887,16 @@ if ss["calib_results"]:
         st.metric("Brier depois", f"{cr['brier_after']:.4f}",
                   delta=f"{-delta:+.4f}", delta_color="inverse")
         if delta > 0:
-            st.success("Calibração melhorou as probabilidades.")
+            st.success("Benchmark melhorou as probabilidades.")
         elif delta < 0:
-            st.warning("Calibração piorou levemente. Considere o método alternativo.")
+            st.warning("Benchmark piorou levemente. Considere o método alternativo.")
         else:
             st.info("Sem variação significativa.")
 else:
     c_col1, c_col2 = st.columns([2, 1])
     with c_col1:
         calib_method = st.radio(
-            "Método de calibração",
+            "Método de benchmark",
             ["sigmoid", "isotonic"],
             format_func=lambda x: "Platt Scaling (sigmoid)" if x == "sigmoid" else "Isotonic Regression",
             horizontal=True,
@@ -907,13 +907,13 @@ else:
         )
     with c_col2:
         st.caption(
-            "A calibração usa 25% dos dados como holdout interno para ajustar "
+            "O benchmark usa 25% dos dados como holdout interno para ajustar "
             "as probabilidades sem vazar informação do treino."
         )
     col_cb1, col_cb2 = st.columns(2)
     with col_cb1:
-        if st.button("Calibrar modelo", type="primary", use_container_width=True):
-            with st.spinner("Calibrando…"):
+        if st.button("Executar Benchmark", type="primary", use_container_width=True):
+            with st.spinner("Executando benchmark…"):
                 try:
                     cr = calibrate_model(
                         results["model"],
@@ -924,9 +924,9 @@ else:
                     ss["calib_results"] = cr
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro na calibração: {e}")
+                    st.error(f"Erro no benchmark: {e}")
     with col_cb2:
-        if st.button("Pular calibração", type="secondary", use_container_width=True):
+        if st.button("Pular benchmark", type="secondary", use_container_width=True):
             ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
             st.rerun()
 

@@ -45,9 +45,9 @@ def calibration_chart(y_true: np.ndarray, oof_probs: np.ndarray, n_bins: int = 1
     prob_true, prob_pred = calibration_curve(y_true, oof_probs, n_bins=n_bins, strategy="uniform")
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=prob_pred, y=prob_true, mode="lines+markers", name="Modelo", line=dict(color="#2ca02c", width=2)))
-    fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="Calibração perfeita", line=dict(dash="dash", color="gray")))
+    fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="Benchmark perfeito", line=dict(dash="dash", color="gray")))
     fig.update_layout(
-        title="Curva de Calibração",
+        title="Benchmark — Curva de Calibração",
         xaxis_title="Probabilidade prevista",
         yaxis_title="Fração de positivos reais",
         width=550, height=420,
@@ -123,7 +123,7 @@ def calibration_comparison_chart(
     pa_true, pa_pred = calibration_curve(y_true, probs_after, n_bins=n_bins, strategy="uniform")
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=pb_pred, y=pb_true, mode="lines+markers", name="Antes da calibração",
+        x=pb_pred, y=pb_true, mode="lines+markers", name="Antes do benchmark",
         line=dict(color="#94a3b8", width=2, dash="dot"),
     ))
     fig.add_trace(go.Scatter(
@@ -135,7 +135,7 @@ def calibration_comparison_chart(
         line=dict(dash="dash", color="#059669"),
     ))
     fig.update_layout(
-        title="Curva de Calibração — antes e depois",
+        title="Benchmark — antes e depois",
         xaxis_title="Probabilidade prevista",
         yaxis_title="Fração de positivos reais",
         width=600, height=420,
