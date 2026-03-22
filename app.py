@@ -188,34 +188,49 @@ st.markdown(
 )
 
 # ── Selecao de desfecho ───────────────────────────────────────────────────────
-sel = st.session_state.outcome_key
+try:
+    sel = st.session_state.outcome_key
 
-for group_name, outcomes in OUTCOME_GROUPS.items():
-    st.markdown(f'<p class="ds-group">{group_name}</p>', unsafe_allow_html=True)
-    cols = st.columns(len(outcomes))
-    for col, (key, icon, name, source) in zip(cols, outcomes):
-        with col:
-            is_sel = sel == key
-            cls = "ds-card sel" if is_sel else "ds-card"
-            st.markdown(
-                f'<div class="{cls}">'
-                f'<strong><span class="ms">{icon}</span>{name}</strong>'
-                f'<span class="ds-badge">{source}</span>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-            label = "Selecionado" if is_sel else "Selecionar"
-            if st.button(label, key=f"sel_{key}",
-                         type="primary" if is_sel else "secondary",
-                         use_container_width=True):
-                st.session_state.outcome_key = key
-                st.rerun()
+    for group_name, outcomes in OUTCOME_GROUPS.items():
+        st.markdown(f'<p class="ds-group">{group_name}</p>', unsafe_allow_html=True)
+        cols = st.columns(len(outcomes))
+        for col, (key, icon, name, source) in zip(cols, outcomes):
+            with col:
+                is_sel = sel == key
+                cls = "ds-card sel" if is_sel else "ds-card"
+                st.markdown(
+                    f'<div class="{cls}">'
+                    f'<strong><span class="ms">{icon}</span>{name}</strong>'
+                    f'<span class="ds-badge">{source}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                label = "Selecionado" if is_sel else "Selecionar"
+                try:
+                    clicked = st.button(label, key=f"sel_{key}",
+                                        type="primary" if is_sel else "secondary",
+                                        use_container_width=True)
+                except TypeError:
+                    clicked = st.button(label, key=f"sel_{key}",
+                                        type="primary" if is_sel else "secondary")
+                if clicked:
+                    st.session_state.outcome_key = key
+                    st.rerun()
 
-# ── CTA ───────────────────────────────────────────────────────────────────────
-st.markdown("---")
-if sel:
-    st.success("Desfecho selecionado. Clique abaixo para iniciar a analise.")
-    if st.button("Iniciar Analise", type="primary", use_container_width=False):
-        st.switch_page("pages/analise.py")
-else:
-    st.info("Selecione um desfecho acima para comecar a modelagem.")
+    # ── CTA ───────────────────────────────────────────────────────────────────
+    st.markdown("---")
+    if sel:
+        st.success("Desfecho selecionado. Clique abaixo para iniciar a analise.")
+        try:
+            cta = st.button("Iniciar Analise", type="primary", use_container_width=False)
+        except TypeError:
+            cta = st.button("Iniciar Analise", type="primary")
+        if cta:
+            st.switch_page("pages/analise.py")
+    else:
+        st.info("Selecione um desfecho acima para comecar a modelagem.")
+
+except Exception as e:
+    import traceback
+    st.error(f"**Erro na aplicacao:** {e}")
+    st.code(traceback.format_exc())
