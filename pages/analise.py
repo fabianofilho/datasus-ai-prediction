@@ -496,14 +496,14 @@ else:
         ss["sel_states"] = st.multiselect("Estados (UF)", STATES, default=ss["sel_states"])
     with c2:
         ss["sel_years"] = st.multiselect("Anos", list(range(2018, 2025)), default=ss["sel_years"])
-    with c3:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        _download_clicked = st.button("⬇ Baixar", type="primary", use_container_width=True,
-                                      disabled=not ss["sel_states"] or not ss["sel_years"])
 
     if not ss["sel_states"] or not ss["sel_years"]:
         st.info("Selecione pelo menos um estado e um ano para continuar.")
         st.stop()
+
+    with c3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        _download_clicked = st.button("Baixar", type="primary", use_container_width=True)
 
     if _download_clicked:
         raw_data: dict = {}
