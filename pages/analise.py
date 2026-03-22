@@ -368,7 +368,7 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Resultados", "Benchmark", "Comparação"]
+    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Resultados", "Calibração", "Benchmark"]
     parts = []
     for i, lbl in enumerate(labels):
         n = i + 1
@@ -936,9 +936,9 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 6 — BENCHMARK (opcional)
+# ETAPA 6 — CALIBRAÇÃO (opcional)
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(6, "Benchmark do Modelo",
+step_title(6, "Calibração do Modelo",
            "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
 
 if ss["calib_results"]:
@@ -967,16 +967,16 @@ if ss["calib_results"]:
         st.metric("Brier depois", f"{cr['brier_after']:.4f}",
                   delta=f"{-delta:+.4f}", delta_color="inverse")
         if delta > 0:
-            st.success("Benchmark melhorou as probabilidades.")
+            st.success("Calibração melhorou as probabilidades.")
         elif delta < 0:
-            st.warning("Benchmark piorou levemente. Considere o método alternativo.")
+            st.warning("Calibração piorou levemente. Considere o método alternativo.")
         else:
             st.info("Sem variação significativa.")
 else:
     c_col1, c_col2 = st.columns([2, 1])
     with c_col1:
         calib_method = st.radio(
-            "Método de benchmark",
+            "Método de calibração",
             ["sigmoid", "isotonic"],
             format_func=lambda x: "Platt Scaling (sigmoid)" if x == "sigmoid" else "Isotonic Regression",
             horizontal=True,
@@ -987,13 +987,13 @@ else:
         )
     with c_col2:
         st.caption(
-            "O benchmark usa 25% dos dados como holdout interno para ajustar "
+            "A calibração usa 25% dos dados como holdout interno para ajustar "
             "as probabilidades sem vazar informação do treino."
         )
     col_cb1, col_cb2 = st.columns(2)
     with col_cb1:
-        if st.button("Executar Benchmark", type="primary", use_container_width=True):
-            with st.spinner("Executando benchmark…"):
+        if st.button("Executar Calibração", type="primary", use_container_width=True):
+            with st.spinner("Executando calibração…"):
                 try:
                     cr = calibrate_model(
                         results["model"],
@@ -1016,7 +1016,7 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 7 — COMPARAÇÃO ENTRE ESTADOS (opcional)
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(7, "Comparação entre Estados",
+step_title(7, "Benchmark entre Estados",
            "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e explicabilidade SHAP.")
 
 # Modelo a usar: calibrado (se disponível e não pulado) ou original
