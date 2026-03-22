@@ -25,7 +25,7 @@ OUTCOME_GROUPS = {
         ("apgar_baixo",           "❤️", "Apgar Baixo no 5 Minuto",               "SINASC"),
     ],
     "Tuberculose e Hanseniase": [
-        ("abandono_tb",           "🫁", "Abandono de Tratamento TB",              "SINAN"),
+        ("abandono_tb",           "🫀", "Abandono de Tratamento TB",              "SINAN"),
         ("abandono_hanseniase",   "🩺", "Abandono de Tratamento Hanseniase",      "SINAN"),
     ],
     "Arboviroses": [
@@ -114,27 +114,31 @@ html, body, [data-testid="stAppViewContainer"],
     font-weight: 500;
 }
 
-/* Botoes secundarios (Selecionar) — brancos com borda */
-div[data-testid="stButton"] > button[kind="secondary"] {
+/* Todos os botoes — base branca com borda */
+div[data-testid="stButton"] > button {
     background-color: #ffffff !important;
     color: #1e2d4a !important;
     border: 1.5px solid #dce3ed !important;
     border-radius: 6px !important;
     font-size: .8rem !important;
+    font-weight: 500 !important;
 }
-div[data-testid="stButton"] > button[kind="secondary"]:hover {
+div[data-testid="stButton"] > button:hover {
     background-color: #eff6ff !important;
     border-color: #1a56db !important;
     color: #1a56db !important;
 }
 
-/* Botoes primarios (Selecionado / Iniciar) */
-div[data-testid="stButton"] > button[kind="primary"] {
+/* Botao primario — azul solido */
+div[data-testid="stButton"] > button[data-testid="baseButton-primary"] {
     background-color: #1a56db !important;
     color: #ffffff !important;
-    border: none !important;
-    border-radius: 6px !important;
-    font-size: .8rem !important;
+    border-color: #1a56db !important;
+}
+div[data-testid="stButton"] > button[data-testid="baseButton-primary"]:hover {
+    background-color: #1648c0 !important;
+    border-color: #1648c0 !important;
+    color: #ffffff !important;
 }
 </style>
 """, unsafe_allow_html=True)
