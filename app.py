@@ -114,8 +114,25 @@ html, body, [data-testid="stAppViewContainer"],
     font-weight: 500;
 }
 
-/* Botoes */
-div[data-testid="stButton"] > button {
+/* Botoes secundarios (Selecionar) — brancos com borda */
+div[data-testid="stButton"] > button[kind="secondary"] {
+    background-color: #ffffff !important;
+    color: #1e2d4a !important;
+    border: 1.5px solid #dce3ed !important;
+    border-radius: 6px !important;
+    font-size: .8rem !important;
+}
+div[data-testid="stButton"] > button[kind="secondary"]:hover {
+    background-color: #eff6ff !important;
+    border-color: #1a56db !important;
+    color: #1a56db !important;
+}
+
+/* Botoes primarios (Selecionado / Iniciar) */
+div[data-testid="stButton"] > button[kind="primary"] {
+    background-color: #1a56db !important;
+    color: #ffffff !important;
+    border: none !important;
     border-radius: 6px !important;
     font-size: .8rem !important;
 }
