@@ -661,38 +661,40 @@ if ss["cohort"] is not None:
         "chg_cohort",
         ["cohort", "model_results"],
     )
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total", f"{bal['total']:,}")
-    c2.metric("Positivos", f"{bal['positive']:,}")
-    c3.metric("Negativos", f"{bal['negative']:,}")
-    c4.metric("Prevalência", f"{bal['prevalence']:.1%}")
+    # Mostrar detalhes da coorte apenas antes do modelo ser treinado
+    if not ss["model_results"]:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total", f"{bal['total']:,}")
+        c2.metric("Positivos", f"{bal['positive']:,}")
+        c3.metric("Negativos", f"{bal['negative']:,}")
+        c4.metric("Prevalência", f"{bal['prevalence']:.1%}")
 
-    with st.expander("Distribuição e dados faltantes"):
-        ca, cb = st.columns(2)
-        with ca:
-            fig_pie = px.pie(
-                values=[bal["positive"], bal["negative"]],
-                names=["Positivo (1)", "Negativo (0)"],
-                color_discrete_sequence=["#ef4444", "#3b82f6"],
-                title="Distribuição do desfecho",
-            )
-            fig_pie.update_layout(margin=dict(t=40, b=0, l=0, r=0), height=260)
-            st.plotly_chart(fig_pie, use_container_width=True)
-        with cb:
-            missing = (cohort.isnull().mean() * 100).sort_values(ascending=False)
-            missing = missing[missing > 0].head(15)
-            if not missing.empty:
-                fig_miss = px.bar(
-                    x=missing.values, y=missing.index, orientation="h",
-                    labels={"x": "% faltante", "y": ""},
-                    title="Dados faltantes por coluna",
-                    color=missing.values, color_continuous_scale="Reds",
+        with st.expander("Distribuição e dados faltantes"):
+            ca, cb = st.columns(2)
+            with ca:
+                fig_pie = px.pie(
+                    values=[bal["positive"], bal["negative"]],
+                    names=["Positivo (1)", "Negativo (0)"],
+                    color_discrete_sequence=["#ef4444", "#3b82f6"],
+                    title="Distribuição do desfecho",
                 )
-                fig_miss.update_layout(margin=dict(t=40, b=0, l=0, r=0), height=260, showlegend=False)
-                st.plotly_chart(fig_miss, use_container_width=True)
-            else:
-                st.success("Sem dados faltantes.")
-        st.dataframe(cohort.head(50), use_container_width=True)
+                fig_pie.update_layout(margin=dict(t=40, b=0, l=0, r=0), height=260)
+                st.plotly_chart(fig_pie, use_container_width=True)
+            with cb:
+                missing = (cohort.isnull().mean() * 100).sort_values(ascending=False)
+                missing = missing[missing > 0].head(15)
+                if not missing.empty:
+                    fig_miss = px.bar(
+                        x=missing.values, y=missing.index, orientation="h",
+                        labels={"x": "% faltante", "y": ""},
+                        title="Dados faltantes por coluna",
+                        color=missing.values, color_continuous_scale="Reds",
+                    )
+                    fig_miss.update_layout(margin=dict(t=40, b=0, l=0, r=0), height=260, showlegend=False)
+                    st.plotly_chart(fig_miss, use_container_width=True)
+                else:
+                    st.success("Sem dados faltantes.")
+            st.dataframe(cohort.head(50), use_container_width=True)
 else:
     step_title(3, "Construir Coorte",
                "Filtra casos elegíveis, cria features e define o target para o modelo.")
