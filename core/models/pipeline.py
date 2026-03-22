@@ -1,4 +1,4 @@
-"""ML training pipeline with cross-validation.
+"""ML training pipeline with cross-validation and optional Optuna HPO.
 
 Supported algorithms: LightGBM (default), XGBoost, Logistic Regression, Random Forest.
 """
@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
@@ -67,6 +67,75 @@ def _build_model(algorithm: str, params: dict):
             n_jobs=-1,
         )
     raise ValueError(f"Unknown algorithm: {algorithm}")
+
+
+def _suggest_params(trial, algorithm: str) -> dict:
+    """Map an Optuna trial to a params dict for the given algorithm."""
+    if algorithm == "lgbm":
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 800, step=50),
+            "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.2, log=True),
+            "max_depth": trial.suggest_int("max_depth", -1, 12),
+            "num_leaves": trial.suggest_int("num_leaves", 20, 150),
+        }
+    if algorithm == "xgb":
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 800, step=50),
+            "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.2, log=True),
+            "max_depth": trial.suggest_int("max_depth", 3, 12),
+        }
+    if algorithm == "rf":
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 500, step=50),
+            "max_depth": trial.suggest_int("max_depth", 3, 20),
+        }
+    if algorithm == "logreg":
+        return {"C": trial.suggest_float("C", 0.001, 100.0, log=True)}
+    return {}
+
+
+def optimize_hyperparams(
+    X: pd.DataFrame,
+    y: pd.Series,
+    algorithm: str = "lgbm",
+    n_trials: int = 50,
+    n_folds: int = 3,
+    use_smote: bool = False,
+    progress_callback=None,
+) -> dict:
+    """Run Optuna hyperparameter search. Returns best params dict.
+
+    Args:
+        progress_callback: optional callable(completed_trials, n_trials, best_value)
+            called after each trial for live progress updates.
+    """
+    try:
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+    except ImportError:
+        raise ImportError("Instale optuna: pip install optuna")
+
+    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+    completed = [0]
+
+    def objective(trial):
+        params = _suggest_params(trial, algorithm)
+        scores = []
+        for tr_idx, vl_idx in skf.split(X, y):
+            X_tr, X_vl = X.iloc[tr_idx], X.iloc[vl_idx]
+            y_tr, y_vl = y.iloc[tr_idx], y.iloc[vl_idx]
+            pipe = build_pipeline(X_tr, algorithm, params, use_smote)
+            pipe.fit(X_tr, y_tr)
+            probs = pipe.predict_proba(X_vl)[:, 1]
+            scores.append(roc_auc_score(y_vl, probs))
+        completed[0] += 1
+        if progress_callback:
+            progress_callback(completed[0], n_trials, float(np.mean(scores)))
+        return float(np.mean(scores))
+
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+    return study.best_params
 
 
 def build_pipeline(

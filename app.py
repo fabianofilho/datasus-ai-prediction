@@ -13,7 +13,7 @@ from core.data.downloader import (
 )
 from core.features.cohort import CohortBuilder
 from core.models import evaluation as ev
-from core.models.pipeline import ALGORITHMS, train_cv
+from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams
 from core.outcomes import OUTCOME_GROUPS, OUTCOMES
 
 st.set_page_config(
@@ -598,46 +598,99 @@ X, y = builder.get_Xy(cohort)
 if ss["model_results"]:
     results = ss["model_results"]
     m = results["mean_metrics"]
+    sample_info = ""
+    total_n_done = bal["total"] if "bal" in dir() else results.get("sample_n", "?")
+    if results.get("sample_n") and results["sample_n"] < len(cohort):
+        sample_info = f' &nbsp;·&nbsp; amostra <strong>{results["sample_n"]:,}</strong>'
+    hpo_tag = " · Optuna" if results.get("hpo_mode") == "Optuna (automático)" else ""
     done_bar(
-        f'<strong>{results["algorithm"].upper()}</strong> &nbsp;·&nbsp; '
+        f'<strong>{results["algorithm"].upper()}</strong>{hpo_tag} &nbsp;·&nbsp; '
         f'AUC <strong>{m["roc_auc"]:.3f}</strong> &nbsp;·&nbsp; '
         f'F1 <strong>{m["f1"]:.3f}</strong> &nbsp;·&nbsp; '
-        f'PR-AUC <strong>{m["pr_auc"]:.3f}</strong>',
+        f'PR-AUC <strong>{m["pr_auc"]:.3f}</strong>{sample_info}',
         "chg_model",
         ["model_results"],
     )
 else:
     step_title(4, "Treinar Modelo",
-               "Configure o algoritmo e hiperparâmetros. Validação cruzada estratificada.")
+               "Configure o algoritmo, amostragem e hiperparâmetros. Validação cruzada estratificada.")
     bal = builder.class_balance(cohort)
+    total_n = bal["total"]
     st.info(
-        f"**{bal['total']:,}** registros · prevalência **{bal['prevalence']:.1%}** · "
+        f"**{total_n:,}** registros · prevalência **{bal['prevalence']:.1%}** · "
         f"**{len(X.columns)}** features disponíveis"
     )
 
+    # ── Amostragem ────────────────────────────────────────────────────────────
+    st.markdown("**Amostragem**")
+    use_sample = st.checkbox(
+        "Usar amostra para treinamento",
+        value=False,
+        help="Útil para exploração rápida em coortes grandes. A amostra é estratificada pelo desfecho.",
+    )
+    if use_sample:
+        max_sample = min(total_n, 50_000)
+        default_sample = min(total_n, 5_000)
+        sample_n = st.slider(
+            "Tamanho da amostra", 500, max_sample, default_sample, 500,
+            help="Número de registros selecionados de forma estratificada para treino.",
+        )
+    else:
+        sample_n = total_n
+
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+    # ── Algoritmo e validação ─────────────────────────────────────────────────
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**Algoritmo e validação**")
         algo_label = st.selectbox("Algoritmo", list(ALGORITHMS.keys()))
         algo = ALGORITHMS[algo_label]
         n_folds = st.slider("Folds (cross-validation)", 3, 10, 5)
-        use_smote = st.checkbox("SMOTE — oversample da classe minoritária",
-                                help="Recomendado quando prevalência < 5%")
-    with c2:
-        st.markdown("**Hiperparâmetros**")
-        params: dict = {}
-        if algo in ("lgbm", "xgb", "rf"):
-            params["n_estimators"] = st.slider("Árvores (n_estimators)", 50, 1000, 300, 50)
-        if algo in ("lgbm", "xgb"):
-            params["learning_rate"] = st.select_slider(
-                "Learning rate", [0.005, 0.01, 0.02, 0.05, 0.1, 0.2], value=0.05
+        use_smote = st.checkbox(
+            "SMOTE — oversample da classe minoritária",
+            help="Recomendado quando prevalência < 5%",
+        )
+        st.markdown("**Modo de hiperparâmetros**")
+        hpo_mode = st.radio(
+            "Modo",
+            ["Manual", "Optuna (automático)"],
+            horizontal=True,
+            label_visibility="collapsed",
+            help="Optuna busca automaticamente os melhores hiperparâmetros via otimização bayesiana.",
+        )
+        if hpo_mode == "Optuna (automático)":
+            n_trials = st.slider(
+                "Tentativas (trials)", 10, 200, 50, 10,
+                help="Mais tentativas = maior chance de encontrar bons parâmetros, mas mais lento.",
             )
-        if algo in ("lgbm", "xgb", "rf"):
-            params["max_depth"] = st.slider("max_depth (−1 = sem limite)", -1, 15, -1)
-        if algo == "logreg":
-            params["C"] = st.select_slider("C (regularização)",
-                                           [0.001, 0.01, 0.1, 1.0, 10.0], value=1.0)
 
+    with c2:
+        if hpo_mode == "Manual":
+            st.markdown("**Hiperparâmetros**")
+            params: dict = {}
+            if algo in ("lgbm", "xgb", "rf"):
+                params["n_estimators"] = st.slider("Árvores (n_estimators)", 50, 1000, 300, 50)
+            if algo in ("lgbm", "xgb"):
+                params["learning_rate"] = st.select_slider(
+                    "Learning rate", [0.005, 0.01, 0.02, 0.05, 0.1, 0.2], value=0.05
+                )
+            if algo in ("lgbm", "xgb", "rf"):
+                params["max_depth"] = st.slider("max_depth (−1 = sem limite)", -1, 15, -1)
+            if algo == "logreg":
+                params["C"] = st.select_slider(
+                    "C (regularização)", [0.001, 0.01, 0.1, 1.0, 10.0], value=1.0
+                )
+        else:
+            params = {}
+            st.markdown("**Optuna**")
+            st.caption(
+                "Os hiperparâmetros serão buscados automaticamente por otimização bayesiana "
+                f"em {n_trials} tentativas com {min(n_folds, 3)}-fold CV interno. "
+                "Os melhores parâmetros encontrados ficam visíveis nos resultados."
+            )
+
+    # ── Features ──────────────────────────────────────────────────────────────
     selected_features = st.multiselect(
         "Features para o modelo", X.columns.tolist(), default=X.columns.tolist(),
         help="Por padrão todas as features sugeridas são incluídas.",
@@ -646,19 +699,61 @@ else:
         st.warning("Selecione pelo menos uma feature.")
         st.stop()
 
-    if st.button(f"Treinar {algo_label} com {n_folds}-fold CV",
-                 type="primary", use_container_width=True):
-        with st.spinner(f"Treinando {algo_label}…"):
-            try:
+    btn_label = (
+        f"Otimizar + Treinar {algo_label} com {n_folds}-fold CV"
+        if hpo_mode == "Optuna (automático)"
+        else f"Treinar {algo_label} com {n_folds}-fold CV"
+    )
+    if use_sample and sample_n < total_n:
+        btn_label += f" (amostra {sample_n:,})"
+
+    if st.button(btn_label, type="primary", use_container_width=True):
+        try:
+            from sklearn.model_selection import train_test_split
+
+            X_train = X[selected_features]
+            y_train = y
+
+            # Aplica amostragem estratificada se necessário
+            if use_sample and sample_n < total_n:
+                X_train, _, y_train, _ = train_test_split(
+                    X_train, y_train,
+                    train_size=sample_n,
+                    stratify=y_train,
+                    random_state=42,
+                )
+
+            # Otimização Optuna (se selecionada)
+            if hpo_mode == "Optuna (automático)":
+                prog = st.progress(0.0, text="Iniciando Optuna…")
+
+                def _optuna_cb(done, total, best):
+                    pct = done / total
+                    prog.progress(pct, text=f"Optuna: trial {done}/{total} — melhor ROC-AUC {best:.4f}")
+
+                params = optimize_hyperparams(
+                    X_train, y_train,
+                    algorithm=algo,
+                    n_trials=n_trials,
+                    n_folds=min(n_folds, 3),
+                    use_smote=use_smote,
+                    progress_callback=_optuna_cb,
+                )
+                prog.progress(1.0, text=f"Optuna concluído — {n_trials} trials")
+
+            with st.spinner(f"Treinando {algo_label} com {n_folds}-fold CV…"):
                 results = train_cv(
-                    X=X[selected_features], y=y, algorithm=algo,
+                    X=X_train, y=y_train, algorithm=algo,
                     params=params, n_folds=n_folds, use_smote=use_smote,
                 )
+                results["sample_n"] = len(X_train)
+                results["best_params"] = params
+                results["hpo_mode"] = hpo_mode
                 ss["model_results"] = results
                 st.rerun()
-            except Exception as e:
-                st.error(f"Erro no treino: {e}")
-                st.exception(e)
+        except Exception as e:
+            st.error(f"Erro no treino: {e}")
+            st.exception(e)
     st.stop()
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
@@ -682,8 +777,22 @@ c3.metric("F1-Score", f"{m['f1']:.4f}")
 c4.metric("Recall", f"{m['recall']:.4f}")
 c5.metric("Brier Score", f"{m['brier']:.4f}")
 
-with st.expander("Métricas por fold"):
-    st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
+col_exp1, col_exp2 = st.columns(2)
+with col_exp1:
+    with st.expander("Métricas por fold"):
+        st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
+with col_exp2:
+    with st.expander("Hiperparâmetros utilizados"):
+        bp = results.get("best_params") or {}
+        if bp:
+            st.json(bp)
+        else:
+            st.caption("Parâmetros padrão (sem configuração explícita).")
+        if results.get("sample_n"):
+            sn = results["sample_n"]
+            st.caption(f"Treinado com {sn:,} registros (amostra estratificada).")
+        if results.get("hpo_mode") == "Optuna (automático)":
+            st.caption("Hiperparâmetros encontrados via otimização bayesiana (Optuna).")
 
 X_res = X[results["X_columns"]]
 oof = results["oof_probs"]
