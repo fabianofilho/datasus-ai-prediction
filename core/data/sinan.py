@@ -17,6 +17,7 @@ KEEP_COLS = [
     "CS_RACA",
     "CS_ESCOL_N",          # education
     "ID_MN_RESI",          # municipality of residence
+    "SG_UF_NOT",           # state of notification
     # Clinical
     "FORMA",               # clinical form (pulmonary/extrapulmonary/both)
     "BACILOSC_E",          # initial sputum smear
@@ -24,8 +25,7 @@ KEEP_COLS = [
     "HIV",                 # HIV co-infection status
     "AGRAVAIDS",           # AIDS complication
     "TRAT_SUPER",          # directly observed treatment (DOT)
-    "SITUA_ENCE",          # case closure situation (outcome)
-    "EVOLUCAO",            # evolution: 1=cure, 2=death, 3=abandon, 4=transfer, etc.
+    "SITUA_ENCE",          # case closure situation: 1=cure,2=death,3=abandon,5=transfer
     "TP_INFECC",           # infection type (new/retreatment)
     "RAIOX_TORA",          # chest X-ray result
     # Identifiers
@@ -36,11 +36,10 @@ KEEP_COLS = [
     "TP_NOT",
 ]
 
-# EVOLUCAO codes
-EVOLUCAO_ABANDONO = "3"    # treatment abandonment
-EVOLUCAO_CURA = "1"        # cure
-EVOLUCAO_OBITO_TB = "2"    # death from TB
-EVOLUCAO_OBITO_OUTRO = "9" # death from other causes
+# SITUA_ENCE codes (values may have leading/trailing spaces in raw data)
+SITUA_ABANDONO = "3"   # treatment abandonment
+SITUA_CURA = "1"       # cure
+SITUA_OBITO = "2"      # death
 
 
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
@@ -48,27 +47,28 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     cols = [c for c in KEEP_COLS if c in df.columns]
     df = df[cols].copy()
 
-    # Dates
+    # Dates — dbfread already returns date objects; coerce gracefully
     for col in ["DT_NOTIFIC", "DT_DIAG", "DT_ENCERRA", "DT_NASC"]:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce", format="%d/%m/%Y")
+            df[col] = pd.to_datetime(df[col], errors="coerce")
 
     # Age in years
     if "NU_IDADE_N" in df.columns:
         df["idade_anos"] = _decode_idade_sinan(df["NU_IDADE_N"])
 
-    # Binary target helpers
-    if "EVOLUCAO" in df.columns:
-        df["abandono"] = (df["EVOLUCAO"].astype(str) == EVOLUCAO_ABANDONO).astype(int)
-        df["cura"] = (df["EVOLUCAO"].astype(str) == EVOLUCAO_CURA).astype(int)
+    # Binary target helpers — strip spaces from SITUA_ENCE values
+    if "SITUA_ENCE" in df.columns:
+        situacao = df["SITUA_ENCE"].astype(str).str.strip()
+        df["abandono"] = (situacao == SITUA_ABANDONO).astype(int)
+        df["cura"] = (situacao == SITUA_CURA).astype(int)
 
     # DOT (tratamento supervisionado)
     if "TRAT_SUPER" in df.columns:
-        df["dot"] = (df["TRAT_SUPER"].astype(str) == "1").astype(int)
+        df["dot"] = (df["TRAT_SUPER"].astype(str).str.strip() == "1").astype(int)
 
     # HIV positive flag
     if "HIV" in df.columns:
-        df["hiv_pos"] = (df["HIV"].astype(str) == "1").astype(int)
+        df["hiv_pos"] = (df["HIV"].astype(str).str.strip() == "1").astype(int)
 
     # Identifiers
     for col in ["NM_PACIENT", "NM_MAE_PAC", "CNS_1"]:

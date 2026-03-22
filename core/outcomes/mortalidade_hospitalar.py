@@ -58,8 +58,9 @@ class MortalidadeHospitalar(OutcomeConfig):
             df["diag_chapter"] = eng.icd10_chapter(df["DIAG_PRINC"])
             df["diag_block"] = eng.icd10_block(df["DIAG_PRINC"])
 
-        if "DIAG_SEC" in df.columns:
-            df["n_diag_sec"] = (~df["DIAG_SEC"].isna()).astype(int)
+        diag_sec_col = next((c for c in ["DIAG_SEC", "DIAGSEC1", "DIAG_SECUN"] if c in df.columns), None)
+        if diag_sec_col:
+            df["n_diag_sec"] = (~df[diag_sec_col].isna()).astype(int)
 
         if "IDADE" in df.columns:
             df["age_group"] = eng.age_group(df["IDADE"])

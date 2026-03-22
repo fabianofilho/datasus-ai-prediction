@@ -32,20 +32,94 @@ FTP_HOST = "ftp.datasus.gov.br"
 # FTP paths and filename patterns per system
 FTP_CONFIG = {
     "SIH": {
+        # Monthly files: RD{STATE}{YY}{MM}.dbc — download all 12 months
         "path": "/dissemin/publicos/SIHSUS/200801_/Dados/",
-        "pattern": "RD{state}{year2}.dbc",   # e.g. RDSP23.dbc
+        "pattern": "RD{state}{year2}{month:02d}.dbc",  # e.g. RDSP2301.dbc
+        "monthly": True,
     },
     "SIM": {
         "path": "/dissemin/publicos/SIM/CID10/DORES/",
         "pattern": "DO{state}{year}.dbc",    # e.g. DOSP2023.dbc
     },
     "SINASC": {
-        "path": "/dissemin/publicos/SINASC/1994_/Dados/{state}/",
-        "pattern": "DN{state}{year}.dbc",    # e.g. DNSP2023.dbc
+        # Real path: 1996_/Dados/DNRES/ (not per-state subdirectory)
+        "path": "/dissemin/publicos/SINASC/1996_/Dados/DNRES/",
+        "pattern": "DN{state}{year}.DBC",    # e.g. DNSP2023.DBC
+    },
+    "SINAN_DENG": {
+        # National dengue file — FINAIS first, then PRELIM
+        "paths": [
+            "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+            "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+        ],
+        "pattern": "DENGBR{year2}.dbc",
+        "national": True,
+        "uf_col": "SG_UF_NOT",
+    },
+    "SINAN_HANS": {
+        # National Hansen's disease file — FINAIS first, then PRELIM
+        "paths": [
+            "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+            "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+        ],
+        "pattern": "HANSBR{year2}.dbc",
+        "national": True,
+        "uf_col": "SG_UF_NOT",
     },
     "SINAN_TB": {
-        "path": "/dissemin/publicos/SINAN/DADOS/FINAIS/",
-        "pattern": "TBRC{year2}.dbc",        # national file, e.g. TBRC23.dbc
+        "paths": [
+            "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+            "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+        ],
+        "pattern": "TUBEBR{year2}.dbc",
+        "national": True,
+        "uf_col": "SG_UF_NOT",
+    },
+    "SINAN_CHIK": {
+        "paths": [
+            "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+            "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+        ],
+        "pattern": "CHIKBR{year2}.dbc",
+        "national": True,
+        "uf_col": "SG_UF_NOT",
+    },
+    "SINAN_VIOL": {
+        "paths": [
+            "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+            "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+        ],
+        "pattern": "VIOLBR{year2}.dbc",
+        "national": True,
+        "uf_col": "SG_UF_NOT",
+    },
+    "SINAN_IEXO": {
+        "paths": [
+            "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+            "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+        ],
+        "pattern": "IEXOBR{year2}.dbc",
+        "national": True,
+        "uf_col": "SG_UF_NOT",
+    },
+    "SINAN_AIDS": {
+        "paths": [
+            "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+            "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+        ],
+        "pattern": "AIDABR{year2}.dbc",
+        "national": True,
+        "uf_col": "SG_UF_NOT",
+    },
+    "SINAN_SIFA": {
+        # Sífilis adquirida
+        "paths": [
+            "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+            "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+        ],
+        "pattern": "SIFABR{year2}.dbc",
+        "national": True,
+        "uf_col": "SG_UF_NOT",
     },
 }
 
@@ -110,100 +184,120 @@ def _try_pysus(system: str, state: str, year: int) -> pd.DataFrame | None:
 
 # ── Strategy 2: FTP + DBC ─────────────────────────────────────────────────────
 
-def _ftp_filename(system: str, state: str, year: int) -> tuple[str, str]:
-    cfg = FTP_CONFIG[system]
-    year2 = str(year)[-2:]
-    filename = (
-        cfg["pattern"]
-        .replace("{state}", state.upper())
-        .replace("{year}", str(year))
-        .replace("{year2}", year2)
-    )
-    path = cfg["path"].replace("{state}", state.upper())
-    return path, filename
-
-
-def _ftp_download(system: str, state: str, year: int) -> bytes | None:
-    """Try multiple filename capitalisation variants on the DataSUS FTP."""
-    path, filename = _ftp_filename(system, state, year)
-    variants = [filename, filename.upper(), filename.lower()]
-    try:
-        with ftplib.FTP(FTP_HOST, timeout=30) as ftp:
-            ftp.login()
-            for name in variants:
-                buf = io.BytesIO()
-                try:
-                    ftp.retrbinary(f"RETR {path}{name}", buf.write)
-                    return buf.getvalue()
-                except ftplib.error_perm:
-                    continue
-    except Exception:
-        return None
+def _ftp_download_file(ftp: ftplib.FTP, path: str, filename: str) -> bytes | None:
+    """Try exact filename + upper + lower variants on an open FTP connection."""
+    for name in [filename, filename.upper(), filename.lower()]:
+        buf = io.BytesIO()
+        try:
+            ftp.retrbinary(f"RETR {path}{name}", buf.write)
+            return buf.getvalue()
+        except ftplib.error_perm:
+            continue
     return None
 
 
-def _dbc_to_df(data: bytes) -> pd.DataFrame | None:
-    """Convert DBC bytes → DataFrame via pure-Python blast + dbfread."""
+def _ftp_download(system: str, state: str, year: int) -> bytes | list[bytes] | None:
+    """Download DBC file(s) from DataSUS FTP.
+
+    Returns bytes for single-file systems, list[bytes] for monthly SIH,
+    or None if not found.
+    """
+    cfg = FTP_CONFIG[system]
+    year2 = str(year)[-2:]
+
+    def _render(pattern: str, month: int = 1) -> str:
+        return (
+            pattern
+            .replace("{state}", state.upper())
+            .replace("{year}", str(year))
+            .replace("{year2}", year2)
+            .replace("{month:02d}", f"{month:02d}")
+        )
+
     try:
-        dbf_bytes = _blast_decompress(data)
-        if dbf_bytes is None:
-            return None
-        return _dbf_bytes_to_df(dbf_bytes)
+        with ftplib.FTP(FTP_HOST, timeout=60) as ftp:
+            ftp.login()
+
+            # SIH: download all 12 monthly files
+            if cfg.get("monthly"):
+                results = []
+                for m in range(1, 13):
+                    data = _ftp_download_file(ftp, cfg["path"], _render(cfg["pattern"], month=m))
+                    if data:
+                        results.append(data)
+                return results if results else None
+
+            # SINAN_TB: try multiple base paths
+            if "paths" in cfg:
+                for base_path in cfg["paths"]:
+                    data = _ftp_download_file(ftp, base_path, _render(cfg["pattern"]))
+                    if data:
+                        return data
+                return None
+
+            # Standard single-file
+            return _ftp_download_file(ftp, cfg["path"], _render(cfg["pattern"]))
+
     except Exception:
         return None
+
+
+def _dbc_to_df(data: bytes) -> pd.DataFrame | None:
+    """Convert DBC bytes → DataFrame via pyreaddbc (dbc2dbf) + dbfread."""
+    import os
+    dbc_path = None
+    dbf_path = None
+    try:
+        from pyreaddbc import dbc2dbf
+        import dbfread
+
+        with tempfile.NamedTemporaryFile(suffix=".dbc", delete=False) as f:
+            f.write(data)
+            dbc_path = f.name
+
+        dbf_path = dbc_path.replace(".dbc", ".dbf")
+        dbc2dbf(dbc_path, dbf_path)
+        records = list(dbfread.DBF(dbf_path, encoding="latin-1"))
+        return pd.DataFrame(records)
+    except Exception:
+        return None
+    finally:
+        for p in [dbc_path, dbf_path]:
+            if p and os.path.exists(p):
+                os.unlink(p)
 
 
 def _try_ftp(system: str, state: str, year: int) -> pd.DataFrame | None:
     raw = _ftp_download(system, state, year)
     if raw is None:
         return None
-    return _dbc_to_df(raw)
 
+    # SIH returns list of monthly bytes
+    if isinstance(raw, list):
+        dfs = [_dbc_to_df(chunk) for chunk in raw]
+        dfs = [df for df in dfs if df is not None and len(df) > 0]
+        return pd.concat(dfs, ignore_index=True) if dfs else None
 
-# ── Pure-Python blast decompressor ────────────────────────────────────────────
-# Implements the PKWare blast (implode) algorithm used by DataSUS DBC files.
-# Based on the public-domain C implementation by Mark Adler.
+    df = _dbc_to_df(raw)
 
-def _blast_decompress(data: bytes) -> bytes | None:
-    """Decompress a DataSUS .dbc file → raw .dbf bytes."""
-    # DBC files: first 2 bytes are DBC header, rest is blast-compressed DBF
-    if len(data) < 10:
-        return None
+    # National SINAN files — filter by UF using configured column or fallback detection
+    if cfg.get("national") and df is not None:
+        code = UF_CODE.get(state.upper(), "")
+        if code:
+            uf_col_hint = cfg.get("uf_col")
+            filter_col = None
+            if uf_col_hint and uf_col_hint in df.columns:
+                filter_col = uf_col_hint
+            else:
+                for col in df.columns:
+                    col_upper = col.upper()
+                    if col_upper in ("SG_UF_NOT", "SG_UF") or "SG_UF" in col_upper:
+                        filter_col = col
+                        break
+            if filter_col:
+                df = df[df[filter_col].astype(str).str.strip() == str(int(code))]
 
-    # Skip 2-byte DBC marker and decompress
-    payload = data[8:]   # DataSUS adds 8-byte preamble before blast stream
-
-    try:
-        return _blast(payload)
-    except Exception:
-        try:
-            return _blast(data[2:])
-        except Exception:
-            return None
-
-
-def _blast(src: bytes) -> bytes:
-    """Pure Python blast (PKWare DCL implode) decompressor."""
-    # Decode tables
-    LITLEN  = [11, 124,  8, 7, 28, 7, 188, 13, 76, 4, 10, 8, 12, 10, 12, 10,
-               8, 23, 8, 9, 7, 6, 7, 8, 9, 6, 6, 5, 9, 7, 7, 6, 5, 13, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6]
-    LENLEN  = [2, 35, 36, 53, 38, 23]
-    DISTLEN = [2, 20, 53, 230, 247, 151, 248]
-
-    # Use a simpler wrapper: try importing blast from available sources
-    raise NotImplementedError("Pure blast not yet implemented — use dbfread fallback")
+    return df
 
 
 # ── DBF reader (pure Python via dbfread) ─────────────────────────────────────
@@ -211,12 +305,27 @@ def _blast(src: bytes) -> bytes:
 def _dbf_bytes_to_df(dbf_bytes: bytes) -> pd.DataFrame | None:
     try:
         import dbfread
+
         with tempfile.NamedTemporaryFile(suffix=".dbf", delete=False) as f:
             f.write(dbf_bytes)
             tmpname = f.name
-        records = list(dbfread.DBF(tmpname, encoding="latin-1"))
+
+        table = dbfread.DBF(tmpname, encoding="latin-1", char_decode_errors="replace")
+
+        # Iterate record-by-record; skip records with bad date/value fields
+        records = []
+        it = iter(table)
+        while True:
+            try:
+                record = next(it)
+                records.append(dict(record))
+            except StopIteration:
+                break
+            except Exception:
+                continue  # skip malformed record (e.g. invalid date '****')
+
         Path(tmpname).unlink(missing_ok=True)
-        return pd.DataFrame(records)
+        return pd.DataFrame(records) if records else None
     except Exception:
         return None
 
