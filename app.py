@@ -1,5 +1,4 @@
 """DataSUS AI Prediction — home page minima, zero imports pesados."""
-import sys
 import streamlit as st
 
 st.set_page_config(
@@ -8,9 +7,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-
-# Mostra info de ambiente em caso de crash (remover depois)
-st.caption(f"Python {sys.version} | Streamlit {st.__version__}")
 
 # ── Metadados dos desfechos (hardcoded — zero imports) ────────────────────────
 
