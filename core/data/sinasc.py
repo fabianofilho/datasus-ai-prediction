@@ -27,7 +27,6 @@ KEEP_COLS = [
     "CNES",              # facility
     # Identifiers
     "NOMEMAE",
-    "DTNASC",
     "CNS_MAE", "CPF_MAE",
     "CNS",               # infant CNS
 ]

@@ -48,7 +48,9 @@ class ReadmissaoHospitalar30d(OutcomeConfig):
         if id_col:
             df = _flag_readmission(df, id_col, window_days=30)
         else:
-            # Fallback: no linkage possible → mark all as 0 (model still useful for exploration)
+            # O SIH-RD público não expõe CNS_PAC/CPF_PAC do paciente.
+            # Sem identificador, linkage temporal é impossível → target zero.
+            # Use este desfecho apenas com dados que incluam identificador do paciente.
             df["readmissao_30d"] = 0
 
         return df
@@ -62,8 +64,9 @@ class ReadmissaoHospitalar30d(OutcomeConfig):
             df["diag_block"] = eng.icd10_block(df["DIAG_PRINC"])
 
         # Number of secondary diagnoses
-        if "DIAG_SEC" in df.columns:
-            df["n_diag_sec"] = (~df["DIAG_SEC"].isna()).astype(int)
+        diag_sec_col = next((c for c in ["DIAG_SEC", "DIAGSEC1", "DIAG_SECUN"] if c in df.columns), None)
+        if diag_sec_col:
+            df["n_diag_sec"] = (~df[diag_sec_col].isna()).astype(int)
 
         # Age group
         if "IDADE" in df.columns:

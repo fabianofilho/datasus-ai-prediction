@@ -10,11 +10,12 @@ DBC decompression uses `datasus-dbc` (pure Python / pre-compiled wheel,
 works on Windows without a C compiler).
 
 Verified filename patterns (from FTP inspection):
-  SIH     → SIHSUS/200801_/Dados/RD{state}{year2}{month2}.dbc  (monthly, concatenated)
-  SIM     → SIM/CID10/DORES/DO{state}{year}.dbc                (annual per state, 4-digit year)
-  SINASC  → SINASC/1996_/Dados/DNRES/DN{state}{year}.dbc       (annual per state, 4-digit year)
-  SINAN_TB→ SINAN/DADOS/FINAIS/TUBEBR{year2}.dbc  (≤2019)
-           | SINAN/DADOS/PRELIM/TUBEBR{year2}.dbc  (≥2020)
+  SIH       → SIHSUS/200801_/Dados/RD{state}{year2}{month2}.dbc  (monthly, concatenated)
+  SIM       → SIM/CID10/DORES/DO{state}{year}.dbc                (annual per state)
+  SINASC    → SINASC/1996_/Dados/DNRES/DN{state}{year}.dbc       (annual per state)
+  SINAN_TB  → SINAN/DADOS/FINAIS/TUBEBR{year2}.dbc  (<=2019)
+             | SINAN/DADOS/PRELIM/TUBEBR{year2}.dbc  (>=2020)
+  SINAN_*   → SINAN/DADOS/FINAIS/{PAT}BR{year2}.dbc  (national, filtered by UF)
 """
 
 from __future__ import annotations
@@ -41,6 +42,7 @@ HTTP_MIRROR = "https://datasus-ftp-mirror.nyc3.cdn.digitaloceanspaces.com"
 
 # Configuration per system.
 # SIH is monthly (pattern includes {month2}); others are annual.
+# national=True means one file for all Brazil, filter by UF after download.
 FTP_CONFIG = {
     "SIH": {
         "ftp_path":  "/dissemin/publicos/SIHSUS/200801_/Dados/",
@@ -60,14 +62,72 @@ FTP_CONFIG = {
         "pattern":   "DN{state}{year}.dbc",
         "monthly":   False,
     },
-    # SINAN_TB uses two FTP dirs depending on year; handled specially in _filenames_sinan_tb
     "SINAN_TB": {
+        # Directory changes depending on year
         "ftp_path_finais": "/dissemin/publicos/SINAN/DADOS/FINAIS/",
         "ftp_path_prelim": "/dissemin/publicos/SINAN/DADOS/PRELIM/",
         "http_path_finais": "SINAN/DADOS/FINAIS/",
         "http_path_prelim": "SINAN/DADOS/PRELIM/",
-        "pattern":  "TUBEBR{year2}.dbc",
-        "monthly":  False,
+        "pattern":   "TUBEBR{year2}.dbc",
+        "monthly":   False,
+        "national":  True,
+        "uf_col":    "SG_UF_NOT",
+    },
+    "SINAN_DENG": {
+        "ftp_paths":  ["/dissemin/publicos/SINAN/DADOS/FINAIS/", "/dissemin/publicos/SINAN/DADOS/PRELIM/"],
+        "http_paths": ["SINAN/DADOS/FINAIS/", "SINAN/DADOS/PRELIM/"],
+        "pattern":   "DENGBR{year2}.dbc",
+        "monthly":   False,
+        "national":  True,
+        "uf_col":    "SG_UF_NOT",
+    },
+    "SINAN_HANS": {
+        "ftp_paths":  ["/dissemin/publicos/SINAN/DADOS/FINAIS/", "/dissemin/publicos/SINAN/DADOS/PRELIM/"],
+        "http_paths": ["SINAN/DADOS/FINAIS/", "SINAN/DADOS/PRELIM/"],
+        "pattern":   "HANSBR{year2}.dbc",
+        "monthly":   False,
+        "national":  True,
+        "uf_col":    "SG_UF_NOT",
+    },
+    "SINAN_CHIK": {
+        "ftp_paths":  ["/dissemin/publicos/SINAN/DADOS/FINAIS/", "/dissemin/publicos/SINAN/DADOS/PRELIM/"],
+        "http_paths": ["SINAN/DADOS/FINAIS/", "SINAN/DADOS/PRELIM/"],
+        "pattern":   "CHIKBR{year2}.dbc",
+        "monthly":   False,
+        "national":  True,
+        "uf_col":    "SG_UF_NOT",
+    },
+    "SINAN_VIOL": {
+        "ftp_paths":  ["/dissemin/publicos/SINAN/DADOS/FINAIS/", "/dissemin/publicos/SINAN/DADOS/PRELIM/"],
+        "http_paths": ["SINAN/DADOS/FINAIS/", "SINAN/DADOS/PRELIM/"],
+        "pattern":   "VIOLBR{year2}.dbc",
+        "monthly":   False,
+        "national":  True,
+        "uf_col":    "SG_UF_NOT",
+    },
+    "SINAN_IEXO": {
+        "ftp_paths":  ["/dissemin/publicos/SINAN/DADOS/PRELIM/", "/dissemin/publicos/SINAN/DADOS/FINAIS/"],
+        "http_paths": ["SINAN/DADOS/PRELIM/", "SINAN/DADOS/FINAIS/"],
+        "pattern":   "IEXOBR{year2}.dbc",
+        "monthly":   False,
+        "national":  True,
+        "uf_col":    "SG_UF_NOT",
+    },
+    "SINAN_AIDS": {
+        "ftp_paths":  ["/dissemin/publicos/SINAN/DADOS/PRELIM/", "/dissemin/publicos/SINAN/DADOS/FINAIS/"],
+        "http_paths": ["SINAN/DADOS/PRELIM/", "SINAN/DADOS/FINAIS/"],
+        "pattern":   "AIDABR{year2}.dbc",
+        "monthly":   False,
+        "national":  True,
+        "uf_col":    "SG_UF_NOT",
+    },
+    "SINAN_SIFA": {
+        "ftp_paths":  ["/dissemin/publicos/SINAN/DADOS/PRELIM/", "/dissemin/publicos/SINAN/DADOS/FINAIS/"],
+        "http_paths": ["SINAN/DADOS/PRELIM/", "SINAN/DADOS/FINAIS/"],
+        "pattern":   "SIFABR{year2}.dbc",
+        "monthly":   False,
+        "national":  True,
+        "uf_col":    "SG_UF_NOT",
     },
 }
 
@@ -89,8 +149,8 @@ class ManualUploadRequired(Exception):
         self.year   = year
         self.reason = reason
         super().__init__(
-            f"Não foi possível baixar {system} {state} {year} automaticamente. "
-            "Faça o download manual no TABNET e faça upload do CSV na plataforma."
+            f"Nao foi possivel baixar {system} {state} {year} automaticamente. "
+            "Faca o download manual no TABNET e faca upload do CSV na plataforma."
         )
 
 
@@ -105,10 +165,9 @@ def _save(df: pd.DataFrame, system: str, state: str, year: int) -> pd.DataFrame:
     return df
 
 
-# ── Filename resolution ───────────────────────────────────────────────────────
+# ── Filename helpers ──────────────────────────────────────────────────────────
 
 def _name_variants(name: str) -> list[str]:
-    """Try uppercase, lowercase, and original variants."""
     return list(dict.fromkeys([name, name.upper(), name.lower()]))
 
 
@@ -132,6 +191,25 @@ def _sinan_tb_dirs(year: int) -> tuple[str, str]:
     return cfg["ftp_path_prelim"], cfg["http_path_prelim"]
 
 
+def _filter_national(df: pd.DataFrame, cfg: dict, state: str) -> pd.DataFrame:
+    """Filter national SINAN file to a single UF."""
+    code = UF_CODE.get(state.upper(), "")
+    if not code:
+        return df
+    uf_col_hint = cfg.get("uf_col")
+    filter_col = None
+    if uf_col_hint and uf_col_hint in df.columns:
+        filter_col = uf_col_hint
+    else:
+        for col in df.columns:
+            if "SG_UF" in col.upper():
+                filter_col = col
+                break
+    if filter_col:
+        df = df[df[filter_col].astype(str).str.strip() == str(int(code))]
+    return df
+
+
 # ── DBC → DataFrame ──────────────────────────────────────────────────────────
 
 def _dbc_to_df(dbc_bytes: bytes) -> pd.DataFrame:
@@ -140,11 +218,9 @@ def _dbc_to_df(dbc_bytes: bytes) -> pd.DataFrame:
     import dbfread
 
     dbf_bytes = decompress_bytes(dbc_bytes)
-
     with tempfile.NamedTemporaryFile(suffix=".dbf", delete=False) as f:
         f.write(dbf_bytes)
         tmp = Path(f.name)
-
     try:
         records = list(dbfread.DBF(str(tmp), encoding="latin-1"))
         return pd.DataFrame(records)
@@ -183,35 +259,7 @@ def _ftp_get(ftp_dir: str, filename: str) -> bytes | None:
     return None
 
 
-# ── Annual single-file systems (SIM, SINASC, SINAN_TB) ───────────────────────
-
-def _try_http_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
-    cfg = FTP_CONFIG[system]
-    filename = _resolve_filename(cfg, state, year)
-    if system == "SINAN_TB":
-        _, http_dir = _sinan_tb_dirs(year)
-    else:
-        http_dir = cfg["http_path"]
-    raw = _http_get(http_dir, filename)
-    if raw:
-        return _dbc_to_df(raw)
-    return None
-
-
-def _try_ftp_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
-    cfg = FTP_CONFIG[system]
-    filename = _resolve_filename(cfg, state, year)
-    if system == "SINAN_TB":
-        ftp_dir, _ = _sinan_tb_dirs(year)
-    else:
-        ftp_dir = cfg["ftp_path"]
-    raw = _ftp_get(ftp_dir, filename)
-    if raw:
-        return _dbc_to_df(raw)
-    return None
-
-
-# ── SIH: monthly files concatenated ──────────────────────────────────────────
+# ── HTTP strategies ───────────────────────────────────────────────────────────
 
 def _try_http_sih(state: str, year: int) -> pd.DataFrame | None:
     cfg = FTP_CONFIG["SIH"]
@@ -226,6 +274,38 @@ def _try_http_sih(state: str, year: int) -> pd.DataFrame | None:
                 pass
     return pd.concat(dfs, ignore_index=True) if dfs else None
 
+
+def _try_http_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
+    cfg = FTP_CONFIG[system]
+    filename = _resolve_filename(cfg, state, year)
+
+    # Systems with multiple candidate paths (SINAN_DENG, SINAN_HANS, etc.)
+    if "http_paths" in cfg:
+        for http_dir in cfg["http_paths"]:
+            raw = _http_get(http_dir, filename)
+            if raw:
+                df = _dbc_to_df(raw)
+                if cfg.get("national"):
+                    df = _filter_national(df, cfg, state)
+                return df
+        return None
+
+    # SINAN_TB year-dependent path
+    if system == "SINAN_TB":
+        _, http_dir = _sinan_tb_dirs(year)
+    else:
+        http_dir = cfg["http_path"]
+
+    raw = _http_get(http_dir, filename)
+    if raw:
+        df = _dbc_to_df(raw)
+        if cfg.get("national"):
+            df = _filter_national(df, cfg, state)
+        return df
+    return None
+
+
+# ── FTP strategies ────────────────────────────────────────────────────────────
 
 def _try_ftp_sih(state: str, year: int) -> pd.DataFrame | None:
     cfg = FTP_CONFIG["SIH"]
@@ -247,6 +327,36 @@ def _try_ftp_sih(state: str, year: int) -> pd.DataFrame | None:
     except Exception:
         pass
     return pd.concat(dfs, ignore_index=True) if dfs else None
+
+
+def _try_ftp_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
+    cfg = FTP_CONFIG[system]
+    filename = _resolve_filename(cfg, state, year)
+
+    # Systems with multiple candidate paths
+    if "ftp_paths" in cfg:
+        for ftp_dir in cfg["ftp_paths"]:
+            raw = _ftp_get(ftp_dir, filename)
+            if raw:
+                df = _dbc_to_df(raw)
+                if cfg.get("national"):
+                    df = _filter_national(df, cfg, state)
+                return df
+        return None
+
+    # SINAN_TB year-dependent path
+    if system == "SINAN_TB":
+        ftp_dir, _ = _sinan_tb_dirs(year)
+    else:
+        ftp_dir = cfg["ftp_path"]
+
+    raw = _ftp_get(ftp_dir, filename)
+    if raw:
+        df = _dbc_to_df(raw)
+        if cfg.get("national"):
+            df = _filter_national(df, cfg, state)
+        return df
+    return None
 
 
 # ── Strategy 0: pySUS (Linux/Mac only) ───────────────────────────────────────
@@ -286,7 +396,7 @@ def fetch(system: str, state: str, year: int, progress_callback=None) -> pd.Data
     # 0. Cache hit
     if cache.exists():
         if progress_callback:
-            progress_callback(1.0, f"{system} {state} {year} (cache local ✓)")
+            progress_callback(1.0, f"{system} {state} {year} (cache local)")
         return pd.read_parquet(cache)
 
     errors = []
@@ -298,33 +408,27 @@ def fetch(system: str, state: str, year: int, progress_callback=None) -> pd.Data
     df = _try_pysus(system, state, year)
     if df is not None and len(df) > 0:
         if progress_callback:
-            progress_callback(1.0, f"{system} {state} {year} via pySUS ✓")
+            progress_callback(1.0, f"{system} {state} {year} via pySUS")
         return _save(df, system, state, year)
-    errors.append("pySUS indisponível")
+    errors.append("pySUS indisponivel")
 
     # 2. HTTP mirror
     if progress_callback:
         progress_callback(0.3, f"{system} {state} {year} — tentando mirror HTTP...")
-    if is_monthly:
-        df = _try_http_sih(state, year)
-    else:
-        df = _try_http_annual(system, state, year)
+    df = _try_http_sih(state, year) if is_monthly else _try_http_annual(system, state, year)
     if df is not None and len(df) > 0:
         if progress_callback:
-            progress_callback(1.0, f"{system} {state} {year} via HTTP ✓")
+            progress_callback(1.0, f"{system} {state} {year} via HTTP mirror")
         return _save(df, system, state, year)
     errors.append("mirror HTTP falhou")
 
     # 3. FTP direto
     if progress_callback:
         progress_callback(0.6, f"{system} {state} {year} — tentando FTP DataSUS...")
-    if is_monthly:
-        df = _try_ftp_sih(state, year)
-    else:
-        df = _try_ftp_annual(system, state, year)
+    df = _try_ftp_sih(state, year) if is_monthly else _try_ftp_annual(system, state, year)
     if df is not None and len(df) > 0:
         if progress_callback:
-            progress_callback(1.0, f"{system} {state} {year} via FTP ✓")
+            progress_callback(1.0, f"{system} {state} {year} via FTP")
         return _save(df, system, state, year)
     errors.append("FTP DataSUS falhou")
 

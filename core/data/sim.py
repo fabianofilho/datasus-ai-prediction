@@ -8,7 +8,7 @@ import pandas as pd
 KEEP_COLS = [
     "NUMERODO",
     "DTOBITO", "HORAOBITO",
-    "DTNASC", "IDADE", "SEXO", "RACACOR",
+    "DTNASC", "IDADE", "SEXO", "RACACOR", "PESO",
     "CAUSABAS",                          # underlying cause (ICD-10)
     "LINHAA", "LINHAB", "LINHAC", "LINHAD",  # causal chain
     "CODMUNOCOR", "CODMUNRES",

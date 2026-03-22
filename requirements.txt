@@ -6,6 +6,7 @@ scikit-learn>=1.4
 lightgbm>=4.0
 xgboost>=2.0
 imbalanced-learn>=0.12
+optuna>=3.6
 shap>=0.44
 recordlinkage>=0.15
 dbfread>=2.0.7

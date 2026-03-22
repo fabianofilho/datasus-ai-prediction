@@ -1,4 +1,4 @@
-"""ML training pipeline with cross-validation.
+"""ML training pipeline with cross-validation and optional Optuna HPO.
 
 Supported algorithms: LightGBM (default), XGBoost, Logistic Regression, Random Forest.
 """
@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
@@ -67,6 +67,75 @@ def _build_model(algorithm: str, params: dict):
             n_jobs=-1,
         )
     raise ValueError(f"Unknown algorithm: {algorithm}")
+
+
+def _suggest_params(trial, algorithm: str) -> dict:
+    """Map an Optuna trial to a params dict for the given algorithm."""
+    if algorithm == "lgbm":
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 800, step=50),
+            "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.2, log=True),
+            "max_depth": trial.suggest_int("max_depth", -1, 12),
+            "num_leaves": trial.suggest_int("num_leaves", 20, 150),
+        }
+    if algorithm == "xgb":
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 800, step=50),
+            "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.2, log=True),
+            "max_depth": trial.suggest_int("max_depth", 3, 12),
+        }
+    if algorithm == "rf":
+        return {
+            "n_estimators": trial.suggest_int("n_estimators", 100, 500, step=50),
+            "max_depth": trial.suggest_int("max_depth", 3, 20),
+        }
+    if algorithm == "logreg":
+        return {"C": trial.suggest_float("C", 0.001, 100.0, log=True)}
+    return {}
+
+
+def optimize_hyperparams(
+    X: pd.DataFrame,
+    y: pd.Series,
+    algorithm: str = "lgbm",
+    n_trials: int = 50,
+    n_folds: int = 3,
+    use_smote: bool = False,
+    progress_callback=None,
+) -> dict:
+    """Run Optuna hyperparameter search. Returns best params dict.
+
+    Args:
+        progress_callback: optional callable(completed_trials, n_trials, best_value)
+            called after each trial for live progress updates.
+    """
+    try:
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+    except ImportError:
+        raise ImportError("Instale optuna: pip install optuna")
+
+    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+    completed = [0]
+
+    def objective(trial):
+        params = _suggest_params(trial, algorithm)
+        scores = []
+        for tr_idx, vl_idx in skf.split(X, y):
+            X_tr, X_vl = X.iloc[tr_idx], X.iloc[vl_idx]
+            y_tr, y_vl = y.iloc[tr_idx], y.iloc[vl_idx]
+            pipe = build_pipeline(X_tr, algorithm, params, use_smote)
+            pipe.fit(X_tr, y_tr)
+            probs = pipe.predict_proba(X_vl)[:, 1]
+            scores.append(roc_auc_score(y_vl, probs))
+        completed[0] += 1
+        if progress_callback:
+            progress_callback(completed[0], n_trials, float(np.mean(scores)))
+        return float(np.mean(scores))
+
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+    return study.best_params
 
 
 def build_pipeline(
@@ -171,6 +240,59 @@ def train_cv(
         "model": final_pipe,
         "X_columns": X.columns.tolist(),
         "algorithm": algorithm,
+    }
+
+
+def calibrate_model(
+    model,
+    X: pd.DataFrame,
+    y: pd.Series,
+    method: str = "sigmoid",
+    cal_fraction: float = 0.25,
+) -> dict:
+    """Post-hoc Platt/isotonic calibration using a held-out calibration set.
+
+    Returns a dict with keys:
+        cal_model     — CalibratedClassifierCV fitted on the calibration split
+        raw_probs     — uncalibrated probabilities on the cal split
+        cal_probs     — calibrated probabilities on the cal split
+        y_eval        — true labels for the cal split
+        brier_before  — Brier score before calibration
+        brier_after   — Brier score after calibration
+        brier_delta   — improvement (positive = better)
+        method        — calibration method used
+    """
+    from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.model_selection import train_test_split
+
+    # Reserve a calibration set that the model has never seen during CV
+    _, X_cal, _, y_cal = train_test_split(
+        X, y, test_size=cal_fraction, stratify=y, random_state=7
+    )
+
+    raw_probs = model.predict_proba(X_cal)[:, 1]
+
+    try:
+        # sklearn >= 1.6: FrozenEstimator is preferred over cv="prefit"
+        from sklearn.frozen import FrozenEstimator
+        cal_clf = CalibratedClassifierCV(estimator=FrozenEstimator(model), method=method)
+    except ImportError:
+        cal_clf = CalibratedClassifierCV(estimator=model, cv="prefit", method=method)
+    cal_clf.fit(X_cal, y_cal)
+    cal_probs = cal_clf.predict_proba(X_cal)[:, 1]
+
+    brier_before = brier_score_loss(y_cal, raw_probs)
+    brier_after = brier_score_loss(y_cal, cal_probs)
+
+    return {
+        "cal_model": cal_clf,
+        "method": method,
+        "raw_probs": raw_probs,
+        "cal_probs": cal_probs,
+        "y_eval": y_cal.values,
+        "brier_before": float(brier_before),
+        "brier_after": float(brier_after),
+        "brier_delta": float(brier_before - brier_after),
     }
 
 

@@ -164,53 +164,73 @@ def link_sih_sim(
     return merged
 
 
+def _filter_neonatal_deaths(sim: pd.DataFrame, window_days: int = 28) -> pd.DataFrame:
+    """Keep only SIM records that are plausibly neonatal deaths.
+
+    Uses the IDADE encoding (1XX=hours, 2XX=days, 3XX=months, 4XX=years).
+    For window_days=28 we keep hours, days ≤ 28, and months = 0 (< 1 month).
+    Falls back to keeping all records if IDADE is missing.
+    """
+    if "IDADE" not in sim.columns:
+        return sim
+    s = pd.to_numeric(sim["IDADE"], errors="coerce")
+    unit = (s // 100).fillna(-1).astype(int)
+    value = (s % 100).fillna(999)
+    neonatal = (
+        (unit == 1)                                    # hours → always < 28 days
+        | ((unit == 2) & (value <= window_days))       # days ≤ window
+        | ((unit == 3) & (value == 0))                 # months = 0 (<1 month)
+    )
+    filtered = sim[neonatal]
+    # If filter is too aggressive (no results), return all
+    return filtered if len(filtered) > 0 else sim
+
+
 def link_sinasc_sim(
     sinasc: pd.DataFrame,
     sim: pd.DataFrame,
     window_days: int = 28,
 ) -> pd.DataFrame:
-    """Link SINASC births to SIM deaths within `window_days` (neonatal mortality).
+    """Link SINASC births to SIM neonatal deaths within `window_days`.
 
-    Returns sinasc with added column 'death_date' and 'neonatal_death' (0/1).
+    Strategy (memory-safe):
+    1. Filter SIM to neonatal deaths only (~3-5k records vs ~330k total).
+    2. Build a set of (DTNASC, SEXO, PESO) keys present in neonatal deaths.
+    3. Flag SINASC records whose key appears in that set as neonatal deaths.
+
+    This avoids any full cartesian / probabilistic join.
+    Returns sinasc with added column 'neonatal_death' (0/1).
     """
     sinasc = sinasc.copy()
-    sim = sim.copy()
+    sim_neonatal = _filter_neonatal_deaths(sim, window_days)
 
-    # Deterministic by infant CNS
-    det = link_deterministic(
-        sinasc, sim,
-        left_id="NUMERODN",
-        right_id="NUMERODO",
-        id_cols=["CNS"],
-    )
+    # Build join keys — use whatever fields are available in both DataFrames
+    join_cols = []
+    for col in ["DTNASC", "SEXO", "PESO"]:
+        if col in sinasc.columns and col in sim_neonatal.columns:
+            join_cols.append(col)
 
-    if len(det) > 0:
-        sim_dates = sim.set_index("NUMERODO")["DTOBITO"]
-        det["death_date"] = det["NUMERODO"].map(sim_dates)
-        merged = sinasc.merge(det[["NUMERODN", "death_date"]], on="NUMERODN", how="left")
-    else:
-        # Probabilistic fallback using mother name + birth date
-        pairs = link_probabilistic(
-            sinasc, sim,
-            left_id="NUMERODN",
-            right_id="NUMERODO",
-            left_name_col="NOMEMAE" if "NOMEMAE" in sinasc.columns else None,
-            right_name_col="NOMEMAE" if "NOMEMAE" in sim.columns else None,
-            left_dob_col="DTNASC" if "DTNASC" in sinasc.columns else None,
-            right_dob_col="DTOBITO" if "DTOBITO" in sim.columns else None,
-        )
-        if len(pairs) > 0:
-            sim_dates = sim.set_index("NUMERODO")["DTOBITO"]
-            pairs["death_date"] = pairs["NUMERODO"].map(sim_dates)
-            merged = sinasc.merge(pairs[["NUMERODN", "death_date"]], on="NUMERODN", how="left")
-        else:
-            merged = sinasc.copy()
-            merged["death_date"] = pd.NaT
+    if not join_cols:
+        # No common fields — cannot link; assume no neonatal deaths
+        sinasc["neonatal_death"] = 0
+        return sinasc
 
-    # Flag neonatal deaths
-    delta = (merged["death_date"] - merged["DTNASC"]).dt.days
-    merged["neonatal_death"] = (
-        delta.notna() & (delta >= 0) & (delta <= window_days)
-    ).astype(int)
+    # Normalise join key columns
+    def _normalise(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+        df = df[cols].copy()
+        if "DTNASC" in cols:
+            df["DTNASC"] = pd.to_datetime(df["DTNASC"], errors="coerce")
+        if "PESO" in cols:
+            df["PESO"] = pd.to_numeric(df["PESO"], errors="coerce")
+        if "SEXO" in cols:
+            df["SEXO"] = df["SEXO"].astype(str).str.strip()
+        return df
 
-    return merged
+    left_keys = _normalise(sinasc, join_cols)
+    right_keys = _normalise(sim_neonatal, join_cols).drop_duplicates()
+
+    # Flag: SINASC row is a neonatal death if its key exists in SIM neonatal
+    indicator = left_keys.merge(right_keys.assign(_match=1), on=join_cols, how="left")
+    sinasc["neonatal_death"] = indicator["_match"].fillna(0).astype(int).values
+
+    return sinasc
