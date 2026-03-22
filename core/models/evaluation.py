@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-# _trapz was removed in NumPy 2.0 → use np.trapezoid with fallback
-_trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
+# np.trapz removed in NumPy 2.0; np.trapezoid added in 2.0
+try:
+    from numpy import trapezoid as _trapz  # NumPy >= 2.0
+except ImportError:
+    from numpy import trapz as _trapz      # NumPy < 2.0
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
