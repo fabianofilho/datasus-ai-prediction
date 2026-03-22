@@ -1,8 +1,9 @@
 {
-  "rewrites": [
+  "redirects": [
     {
       "source": "/(.*)",
-      "destination": "https://fabianonbfilho-datasus-ai-prediction.hf.space/$1"
+      "destination": "https://datasus-ai-prediction.streamlit.app",
+      "permanent": false
     }
   ]
 }
