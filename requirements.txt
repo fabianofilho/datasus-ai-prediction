@@ -9,5 +9,6 @@ imbalanced-learn>=0.12
 shap>=0.44
 recordlinkage>=0.15
 dbfread>=2.0.7
+datasus-dbc>=0.1.3
 numpy>=1.26
 # pySUS>=0.6  # requer compilador C (pyreaddbc); use upload manual no Windows

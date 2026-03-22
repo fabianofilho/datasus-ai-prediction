@@ -1,22 +1,31 @@
 """DataSUS downloader with local parquet cache.
 
 Download strategy (tried in order):
-1. Cache hit  → load parquet from disk, skip download.
-2. pySUS      → if installed and pyreaddbc compiled (Linux/Mac).
-3. FTP + DBC  → download .dbc directly from DataSUS FTP, decompress with
-                 the pure-Python blast implementation bundled here.
-4. Manual CSV → raise ManualUploadRequired so the UI can show a file uploader.
+1. Cache hit        → load parquet from disk, skip download.
+2. HTTP mirror      → DigitalOcean CDN mirror of DataSUS FTP (fast, no auth).
+3. Direct FTP       → ftp.datasus.gov.br with passive mode.
+4. ManualUpload     → raise ManualUploadRequired so the UI shows a file uploader.
+
+DBC decompression uses `datasus-dbc` (pure Python / pre-compiled wheel,
+works on Windows without a C compiler).
+
+Verified filename patterns (from FTP inspection):
+  SIH     → SIHSUS/200801_/Dados/RD{state}{year2}{month2}.dbc  (monthly, concatenated)
+  SIM     → SIM/CID10/DORES/DO{state}{year}.dbc                (annual per state, 4-digit year)
+  SINASC  → SINASC/1996_/Dados/DNRES/DN{state}{year}.dbc       (annual per state, 4-digit year)
+  SINAN_TB→ SINAN/DADOS/FINAIS/TUBEBR{year2}.dbc  (≤2019)
+           | SINAN/DADOS/PRELIM/TUBEBR{year2}.dbc  (≥2020)
 """
 
 from __future__ import annotations
 
 import ftplib
 import io
-import struct
 import tempfile
 from pathlib import Path
 
 import pandas as pd
+import requests
 
 RAW_DIR = Path(__file__).parent.parent.parent / "data" / "raw"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
@@ -27,25 +36,38 @@ STATES = [
     "RJ", "RN", "RO", "RR", "RS", "SC", "SE", "SP", "TO",
 ]
 
-FTP_HOST = "ftp.datasus.gov.br"
+FTP_HOST    = "ftp.datasus.gov.br"
+HTTP_MIRROR = "https://datasus-ftp-mirror.nyc3.cdn.digitaloceanspaces.com"
 
-# FTP paths and filename patterns per system
+# Configuration per system.
+# SIH is monthly (pattern includes {month2}); others are annual.
 FTP_CONFIG = {
     "SIH": {
-        "path": "/dissemin/publicos/SIHSUS/200801_/Dados/",
-        "pattern": "RD{state}{year2}.dbc",   # e.g. RDSP23.dbc
+        "ftp_path":  "/dissemin/publicos/SIHSUS/200801_/Dados/",
+        "http_path": "SIHSUS/200801_/Dados/",
+        "pattern":   "RD{state}{year2}{month2}.dbc",
+        "monthly":   True,
     },
     "SIM": {
-        "path": "/dissemin/publicos/SIM/CID10/DORES/",
-        "pattern": "DO{state}{year}.dbc",    # e.g. DOSP2023.dbc
+        "ftp_path":  "/dissemin/publicos/SIM/CID10/DORES/",
+        "http_path": "SIM/CID10/DORES/",
+        "pattern":   "DO{state}{year}.dbc",
+        "monthly":   False,
     },
     "SINASC": {
-        "path": "/dissemin/publicos/SINASC/1994_/Dados/{state}/",
-        "pattern": "DN{state}{year}.dbc",    # e.g. DNSP2023.dbc
+        "ftp_path":  "/dissemin/publicos/SINASC/1996_/Dados/DNRES/",
+        "http_path": "SINASC/1996_/Dados/DNRES/",
+        "pattern":   "DN{state}{year}.dbc",
+        "monthly":   False,
     },
+    # SINAN_TB uses two FTP dirs depending on year; handled specially in _filenames_sinan_tb
     "SINAN_TB": {
-        "path": "/dissemin/publicos/SINAN/DADOS/FINAIS/",
-        "pattern": "TBRC{year2}.dbc",        # national file, e.g. TBRC23.dbc
+        "ftp_path_finais": "/dissemin/publicos/SINAN/DADOS/FINAIS/",
+        "ftp_path_prelim": "/dissemin/publicos/SINAN/DADOS/PRELIM/",
+        "http_path_finais": "SINAN/DADOS/FINAIS/",
+        "http_path_prelim": "SINAN/DADOS/PRELIM/",
+        "pattern":  "TUBEBR{year2}.dbc",
+        "monthly":  False,
     },
 }
 
@@ -60,18 +82,19 @@ UF_CODE = {
 
 
 class ManualUploadRequired(Exception):
-    """Raised when automatic download is not possible — user must upload CSV."""
-    def __init__(self, system: str, state: str, year: int):
+    """Raised when automatic download failed — user must upload CSV manually."""
+    def __init__(self, system: str, state: str, year: int, reason: str = ""):
         self.system = system
-        self.state = state
-        self.year = year
+        self.state  = state
+        self.year   = year
+        self.reason = reason
         super().__init__(
             f"Não foi possível baixar {system} {state} {year} automaticamente. "
             "Faça o download manual no TABNET e faça upload do CSV na plataforma."
         )
 
 
-# ── Cache helpers ──────────────────────────────────────────────────────────────
+# ── Cache ─────────────────────────────────────────────────────────────────────
 
 def _cache_path(system: str, state: str, year: int) -> Path:
     return RAW_DIR / f"{system.lower()}_{state.upper()}_{year}.parquet"
@@ -82,143 +105,176 @@ def _save(df: pd.DataFrame, system: str, state: str, year: int) -> pd.DataFrame:
     return df
 
 
-# ── Strategy 1: pySUS ─────────────────────────────────────────────────────────
+# ── Filename resolution ───────────────────────────────────────────────────────
 
-def _try_pysus(system: str, state: str, year: int) -> pd.DataFrame | None:
-    try:
-        if system == "SIH":
-            from pySUS.online_data import SIH
-            return SIH().load(state.upper(), year).to_dataframe()
-        if system == "SIM":
-            from pySUS.online_data import SIM
-            return SIM().load(state.upper(), year).to_dataframe()
-        if system == "SINASC":
-            from pySUS.online_data import SINASC
-            return SINASC().load(state.upper(), year).to_dataframe()
-        if system == "SINAN_TB":
-            from pySUS.online_data import SINAN
-            df = SINAN().load("TB", year).to_dataframe()
-            code = UF_CODE.get(state.upper(), "")
-            for col in df.columns:
-                if "SG_UF" in col.upper() or "ID_MN_RESI" in col.upper():
-                    df = df[df[col].astype(str).str.startswith(code)]
-                    break
-            return df
-    except Exception:
-        return None
+def _name_variants(name: str) -> list[str]:
+    """Try uppercase, lowercase, and original variants."""
+    return list(dict.fromkeys([name, name.upper(), name.lower()]))
 
 
-# ── Strategy 2: FTP + DBC ─────────────────────────────────────────────────────
-
-def _ftp_filename(system: str, state: str, year: int) -> tuple[str, str]:
-    cfg = FTP_CONFIG[system]
-    year2 = str(year)[-2:]
-    filename = (
+def _resolve_filename(cfg: dict, state: str, year: int, month: int | None = None) -> str:
+    y2 = str(year)[-2:]
+    m2 = f"{month:02d}" if month is not None else ""
+    return (
         cfg["pattern"]
-        .replace("{state}", state.upper())
-        .replace("{year}", str(year))
-        .replace("{year2}", year2)
+        .replace("{state}",  state.upper())
+        .replace("{year}",   str(year))
+        .replace("{year2}",  y2)
+        .replace("{month2}", m2)
     )
-    path = cfg["path"].replace("{state}", state.upper())
-    return path, filename
 
 
-def _ftp_download(system: str, state: str, year: int) -> bytes | None:
-    """Try multiple filename capitalisation variants on the DataSUS FTP."""
-    path, filename = _ftp_filename(system, state, year)
-    variants = [filename, filename.upper(), filename.lower()]
+def _sinan_tb_dirs(year: int) -> tuple[str, str]:
+    """Return (ftp_dir, http_dir) for SINAN_TB depending on year."""
+    cfg = FTP_CONFIG["SINAN_TB"]
+    if year <= 2019:
+        return cfg["ftp_path_finais"], cfg["http_path_finais"]
+    return cfg["ftp_path_prelim"], cfg["http_path_prelim"]
+
+
+# ── DBC → DataFrame ──────────────────────────────────────────────────────────
+
+def _dbc_to_df(dbc_bytes: bytes) -> pd.DataFrame:
+    """Decompress DBC bytes → DataFrame via datasus-dbc + dbfread."""
+    from datasus_dbc import decompress_bytes
+    import dbfread
+
+    dbf_bytes = decompress_bytes(dbc_bytes)
+
+    with tempfile.NamedTemporaryFile(suffix=".dbf", delete=False) as f:
+        f.write(dbf_bytes)
+        tmp = Path(f.name)
+
     try:
-        with ftplib.FTP(FTP_HOST, timeout=30) as ftp:
+        records = list(dbfread.DBF(str(tmp), encoding="latin-1"))
+        return pd.DataFrame(records)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+# ── Low-level fetch: single file ──────────────────────────────────────────────
+
+def _http_get(http_dir: str, filename: str) -> bytes | None:
+    for variant in _name_variants(filename):
+        url = f"{HTTP_MIRROR}/{http_dir}{variant}"
+        try:
+            resp = requests.get(url, timeout=120, stream=True)
+            if resp.status_code == 200:
+                return resp.content
+        except Exception:
+            continue
+    return None
+
+
+def _ftp_get(ftp_dir: str, filename: str) -> bytes | None:
+    try:
+        with ftplib.FTP(FTP_HOST, timeout=60) as ftp:
             ftp.login()
-            for name in variants:
+            ftp.set_pasv(True)
+            for variant in _name_variants(filename):
                 buf = io.BytesIO()
                 try:
-                    ftp.retrbinary(f"RETR {path}{name}", buf.write)
+                    ftp.retrbinary(f"RETR {ftp_dir}{variant}", buf.write)
                     return buf.getvalue()
                 except ftplib.error_perm:
                     continue
     except Exception:
-        return None
+        pass
     return None
 
 
-def _dbc_to_df(data: bytes) -> pd.DataFrame | None:
-    """Convert DBC bytes → DataFrame via pure-Python blast + dbfread."""
+# ── Annual single-file systems (SIM, SINASC, SINAN_TB) ───────────────────────
+
+def _try_http_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
+    cfg = FTP_CONFIG[system]
+    filename = _resolve_filename(cfg, state, year)
+    if system == "SINAN_TB":
+        _, http_dir = _sinan_tb_dirs(year)
+    else:
+        http_dir = cfg["http_path"]
+    raw = _http_get(http_dir, filename)
+    if raw:
+        return _dbc_to_df(raw)
+    return None
+
+
+def _try_ftp_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
+    cfg = FTP_CONFIG[system]
+    filename = _resolve_filename(cfg, state, year)
+    if system == "SINAN_TB":
+        ftp_dir, _ = _sinan_tb_dirs(year)
+    else:
+        ftp_dir = cfg["ftp_path"]
+    raw = _ftp_get(ftp_dir, filename)
+    if raw:
+        return _dbc_to_df(raw)
+    return None
+
+
+# ── SIH: monthly files concatenated ──────────────────────────────────────────
+
+def _try_http_sih(state: str, year: int) -> pd.DataFrame | None:
+    cfg = FTP_CONFIG["SIH"]
+    dfs = []
+    for month in range(1, 13):
+        filename = _resolve_filename(cfg, state, year, month)
+        raw = _http_get(cfg["http_path"], filename)
+        if raw:
+            try:
+                dfs.append(_dbc_to_df(raw))
+            except Exception:
+                pass
+    return pd.concat(dfs, ignore_index=True) if dfs else None
+
+
+def _try_ftp_sih(state: str, year: int) -> pd.DataFrame | None:
+    cfg = FTP_CONFIG["SIH"]
+    dfs = []
     try:
-        dbf_bytes = _blast_decompress(data)
-        if dbf_bytes is None:
+        with ftplib.FTP(FTP_HOST, timeout=60) as ftp:
+            ftp.login()
+            ftp.set_pasv(True)
+            for month in range(1, 13):
+                filename = _resolve_filename(cfg, state, year, month)
+                for variant in _name_variants(filename):
+                    buf = io.BytesIO()
+                    try:
+                        ftp.retrbinary(f"RETR {cfg['ftp_path']}{variant}", buf.write)
+                        dfs.append(_dbc_to_df(buf.getvalue()))
+                        break
+                    except ftplib.error_perm:
+                        continue
+    except Exception:
+        pass
+    return pd.concat(dfs, ignore_index=True) if dfs else None
+
+
+# ── Strategy 0: pySUS (Linux/Mac only) ───────────────────────────────────────
+
+def _try_pysus(system: str, state: str, year: int) -> pd.DataFrame | None:
+    try:
+        if system == "SIH":
+            from pysus.online_data.SIH import download
+            raw = download(states=state.upper(), years=year, months=list(range(1, 13)))
+        elif system == "SIM":
+            from pysus.online_data.SIM import download
+            raw = download(groups="CID10", states=state.upper(), years=year)
+        elif system == "SINASC":
+            from pysus.online_data.SINASC import download
+            raw = download(states=state.upper(), years=year)
+        elif system == "SINAN_TB":
+            from pysus.online_data.SINAN import download
+            raw = download(disease="TB", years=year)
+        else:
             return None
-        return _dbf_bytes_to_df(dbf_bytes)
+
+        if hasattr(raw, "to_dataframe"):
+            return raw.to_dataframe()
+        if isinstance(raw, pd.DataFrame):
+            return raw
     except Exception:
-        return None
-
-
-def _try_ftp(system: str, state: str, year: int) -> pd.DataFrame | None:
-    raw = _ftp_download(system, state, year)
-    if raw is None:
-        return None
-    return _dbc_to_df(raw)
-
-
-# ── Pure-Python blast decompressor ────────────────────────────────────────────
-# Implements the PKWare blast (implode) algorithm used by DataSUS DBC files.
-# Based on the public-domain C implementation by Mark Adler.
-
-def _blast_decompress(data: bytes) -> bytes | None:
-    """Decompress a DataSUS .dbc file → raw .dbf bytes."""
-    # DBC files: first 2 bytes are DBC header, rest is blast-compressed DBF
-    if len(data) < 10:
-        return None
-
-    # Skip 2-byte DBC marker and decompress
-    payload = data[8:]   # DataSUS adds 8-byte preamble before blast stream
-
-    try:
-        return _blast(payload)
-    except Exception:
-        try:
-            return _blast(data[2:])
-        except Exception:
-            return None
-
-
-def _blast(src: bytes) -> bytes:
-    """Pure Python blast (PKWare DCL implode) decompressor."""
-    # Decode tables
-    LITLEN  = [11, 124,  8, 7, 28, 7, 188, 13, 76, 4, 10, 8, 12, 10, 12, 10,
-               8, 23, 8, 9, 7, 6, 7, 8, 9, 6, 6, 5, 9, 7, 7, 6, 5, 13, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-               6, 6, 6]
-    LENLEN  = [2, 35, 36, 53, 38, 23]
-    DISTLEN = [2, 20, 53, 230, 247, 151, 248]
-
-    # Use a simpler wrapper: try importing blast from available sources
-    raise NotImplementedError("Pure blast not yet implemented — use dbfread fallback")
-
-
-# ── DBF reader (pure Python via dbfread) ─────────────────────────────────────
-
-def _dbf_bytes_to_df(dbf_bytes: bytes) -> pd.DataFrame | None:
-    try:
-        import dbfread
-        with tempfile.NamedTemporaryFile(suffix=".dbf", delete=False) as f:
-            f.write(dbf_bytes)
-            tmpname = f.name
-        records = list(dbfread.DBF(tmpname, encoding="latin-1"))
-        Path(tmpname).unlink(missing_ok=True)
-        return pd.DataFrame(records)
-    except Exception:
-        return None
+        pass
+    return None
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -227,41 +283,59 @@ def fetch(system: str, state: str, year: int, progress_callback=None) -> pd.Data
     """Download DataSUS data for a system/state/year with cache and fallback."""
     cache = _cache_path(system, state, year)
 
-    # 1. Cache hit
+    # 0. Cache hit
     if cache.exists():
         if progress_callback:
-            progress_callback(1.0, f"{system} {state} {year} (cache)")
+            progress_callback(1.0, f"{system} {state} {year} (cache local ✓)")
         return pd.read_parquet(cache)
 
-    if progress_callback:
-        progress_callback(0.1, f"Tentando pySUS {system} {state} {year}...")
+    errors = []
+    is_monthly = FTP_CONFIG.get(system, {}).get("monthly", False)
 
-    # 2. pySUS
+    # 1. pySUS (Linux/Mac)
+    if progress_callback:
+        progress_callback(0.05, f"{system} {state} {year} — tentando pySUS...")
     df = _try_pysus(system, state, year)
     if df is not None and len(df) > 0:
         if progress_callback:
             progress_callback(1.0, f"{system} {state} {year} via pySUS ✓")
         return _save(df, system, state, year)
+    errors.append("pySUS indisponível")
 
+    # 2. HTTP mirror
     if progress_callback:
-        progress_callback(0.4, f"pySUS indisponível, tentando FTP {system} {state} {year}...")
+        progress_callback(0.3, f"{system} {state} {year} — tentando mirror HTTP...")
+    if is_monthly:
+        df = _try_http_sih(state, year)
+    else:
+        df = _try_http_annual(system, state, year)
+    if df is not None and len(df) > 0:
+        if progress_callback:
+            progress_callback(1.0, f"{system} {state} {year} via HTTP ✓")
+        return _save(df, system, state, year)
+    errors.append("mirror HTTP falhou")
 
-    # 3. FTP + DBC
-    df = _try_ftp(system, state, year)
+    # 3. FTP direto
+    if progress_callback:
+        progress_callback(0.6, f"{system} {state} {year} — tentando FTP DataSUS...")
+    if is_monthly:
+        df = _try_ftp_sih(state, year)
+    else:
+        df = _try_ftp_annual(system, state, year)
     if df is not None and len(df) > 0:
         if progress_callback:
             progress_callback(1.0, f"{system} {state} {year} via FTP ✓")
         return _save(df, system, state, year)
+    errors.append("FTP DataSUS falhou")
 
     # 4. Manual upload required
-    raise ManualUploadRequired(system, state, year)
+    raise ManualUploadRequired(system, state, year, reason=" | ".join(errors))
 
 
 def load_from_csv(csv_bytes: bytes, system: str, state: str, year: int) -> pd.DataFrame:
-    """Load a manually-uploaded CSV, save to parquet cache, return DataFrame."""
-    df = pd.read_csv(io.BytesIO(csv_bytes), encoding="latin-1", low_memory=False)
-    _save(df, system, state, year)
-    return df
+    """Load a manually-uploaded CSV, cache to parquet, return DataFrame."""
+    df = pd.read_csv(io.BytesIO(csv_bytes), encoding="latin-1", low_memory=False, sep=None, engine="python")
+    return _save(df, system, state, year)
 
 
 def fetch_multi(
@@ -270,7 +344,6 @@ def fetch_multi(
     years: list[int],
     progress_callback=None,
 ) -> pd.DataFrame:
-    """Fetch and concatenate data for multiple states/years."""
     dfs = []
     total = len(states) * len(years)
     for i, (state, year) in enumerate((s, y) for s in states for y in years):
@@ -285,15 +358,8 @@ def cached_files() -> list[str]:
     return [p.name for p in RAW_DIR.glob("*.parquet")]
 
 
-# ── Legacy aliases (backward compat) ─────────────────────────────────────────
-def fetch_sih(state, year, progress_callback=None):
-    return fetch("SIH", state, year, progress_callback)
-
-def fetch_sim(state, year, progress_callback=None):
-    return fetch("SIM", state, year, progress_callback)
-
-def fetch_sinasc(state, year, progress_callback=None):
-    return fetch("SINASC", state, year, progress_callback)
-
-def fetch_sinan_tb(state, year, progress_callback=None):
-    return fetch("SINAN_TB", state, year, progress_callback)
+# ── Legacy aliases ────────────────────────────────────────────────────────────
+fetch_sih      = lambda s, y, cb=None: fetch("SIH",      s, y, cb)
+fetch_sim      = lambda s, y, cb=None: fetch("SIM",      s, y, cb)
+fetch_sinasc   = lambda s, y, cb=None: fetch("SINASC",   s, y, cb)
+fetch_sinan_tb = lambda s, y, cb=None: fetch("SINAN_TB", s, y, cb)
