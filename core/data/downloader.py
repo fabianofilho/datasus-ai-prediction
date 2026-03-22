@@ -220,8 +220,12 @@ def _filter_national(df: pd.DataFrame, cfg: dict, state: str) -> pd.DataFrame:
 
 # ── DBC → DataFrame ──────────────────────────────────────────────────────────
 
-def _dbc_to_df(dbc_bytes: bytes) -> pd.DataFrame:
-    """Decompress DBC bytes → DataFrame via datasus-dbc + dbfread."""
+def _dbc_to_df(dbc_bytes: bytes, max_rows: int | None = None) -> pd.DataFrame:
+    """Decompress DBC bytes → DataFrame via datasus-dbc + dbfread.
+
+    max_rows: if set, stop reading after this many records (prevents OOM for
+    large files like SIH SP which can exceed 1 GB when fully loaded).
+    """
     from datasus_dbc import decompress_bytes
     import dbfread
 
@@ -230,7 +234,14 @@ def _dbc_to_df(dbc_bytes: bytes) -> pd.DataFrame:
         f.write(dbf_bytes)
         tmp = Path(f.name)
     try:
-        records = list(dbfread.DBF(str(tmp), encoding="latin-1"))
+        if max_rows is None:
+            records = list(dbfread.DBF(str(tmp), encoding="latin-1"))
+        else:
+            records = []
+            for rec in dbfread.DBF(str(tmp), encoding="latin-1"):
+                records.append(rec)
+                if len(records) >= max_rows:
+                    break
         return pd.DataFrame(records)
     finally:
         tmp.unlink(missing_ok=True)
@@ -269,21 +280,28 @@ def _ftp_get(ftp_dir: str, filename: str) -> bytes | None:
 
 # ── HTTP strategies ───────────────────────────────────────────────────────────
 
-def _try_http_sih(state: str, year: int) -> pd.DataFrame | None:
+def _try_http_sih(state: str, year: int, max_rows: int | None = None) -> pd.DataFrame | None:
     cfg = FTP_CONFIG["SIH"]
-    dfs = []
+    dfs: list[pd.DataFrame] = []
+    total = 0
     for month in range(1, 13):
         filename = _resolve_filename(cfg, state, year, month)
         raw = _http_get(cfg["http_path"], filename)
         if raw:
             try:
-                dfs.append(_dbc_to_df(raw))
+                remaining = (max_rows - total) if max_rows else None
+                part = _dbc_to_df(raw, max_rows=remaining)
+                del raw  # free compressed bytes ASAP
+                dfs.append(part)
+                total += len(part)
+                if max_rows and total >= max_rows:
+                    break  # enough rows — skip remaining months
             except Exception:
                 pass
     return pd.concat(dfs, ignore_index=True) if dfs else None
 
 
-def _try_http_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
+def _try_http_annual(system: str, state: str, year: int, max_rows: int | None = None) -> pd.DataFrame | None:
     cfg = FTP_CONFIG[system]
     filename = _resolve_filename(cfg, state, year)
 
@@ -292,7 +310,7 @@ def _try_http_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
         for http_dir in cfg["http_paths"]:
             raw = _http_get(http_dir, filename)
             if raw:
-                df = _dbc_to_df(raw)
+                df = _dbc_to_df(raw, max_rows=max_rows)
                 if cfg.get("national"):
                     df = _filter_national(df, cfg, state)
                 return df
@@ -306,7 +324,7 @@ def _try_http_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
 
     raw = _http_get(http_dir, filename)
     if raw:
-        df = _dbc_to_df(raw)
+        df = _dbc_to_df(raw, max_rows=max_rows)
         if cfg.get("national"):
             df = _filter_national(df, cfg, state)
         return df
@@ -315,9 +333,10 @@ def _try_http_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
 
 # ── FTP strategies ────────────────────────────────────────────────────────────
 
-def _try_ftp_sih(state: str, year: int) -> pd.DataFrame | None:
+def _try_ftp_sih(state: str, year: int, max_rows: int | None = None) -> pd.DataFrame | None:
     cfg = FTP_CONFIG["SIH"]
-    dfs = []
+    dfs: list[pd.DataFrame] = []
+    total = 0
     try:
         with ftplib.FTP(FTP_HOST, timeout=60) as ftp:
             ftp.login()
@@ -328,16 +347,21 @@ def _try_ftp_sih(state: str, year: int) -> pd.DataFrame | None:
                     buf = io.BytesIO()
                     try:
                         ftp.retrbinary(f"RETR {cfg['ftp_path']}{variant}", buf.write)
-                        dfs.append(_dbc_to_df(buf.getvalue()))
+                        remaining = (max_rows - total) if max_rows else None
+                        part = _dbc_to_df(buf.getvalue(), max_rows=remaining)
+                        dfs.append(part)
+                        total += len(part)
                         break
                     except ftplib.error_perm:
                         continue
+                if max_rows and total >= max_rows:
+                    break
     except Exception:
         pass
     return pd.concat(dfs, ignore_index=True) if dfs else None
 
 
-def _try_ftp_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
+def _try_ftp_annual(system: str, state: str, year: int, max_rows: int | None = None) -> pd.DataFrame | None:
     cfg = FTP_CONFIG[system]
     filename = _resolve_filename(cfg, state, year)
 
@@ -346,7 +370,7 @@ def _try_ftp_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
         for ftp_dir in cfg["ftp_paths"]:
             raw = _ftp_get(ftp_dir, filename)
             if raw:
-                df = _dbc_to_df(raw)
+                df = _dbc_to_df(raw, max_rows=max_rows)
                 if cfg.get("national"):
                     df = _filter_national(df, cfg, state)
                 return df
@@ -360,7 +384,7 @@ def _try_ftp_annual(system: str, state: str, year: int) -> pd.DataFrame | None:
 
     raw = _ftp_get(ftp_dir, filename)
     if raw:
-        df = _dbc_to_df(raw)
+        df = _dbc_to_df(raw, max_rows=max_rows)
         if cfg.get("national"):
             df = _filter_national(df, cfg, state)
         return df
@@ -397,47 +421,67 @@ def _try_pysus(system: str, state: str, year: int) -> pd.DataFrame | None:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def fetch(system: str, state: str, year: int, progress_callback=None) -> pd.DataFrame:
-    """Download DataSUS data for a system/state/year with cache and fallback."""
-    cache = _cache_path(system, state, year)
+def fetch(
+    system: str,
+    state: str,
+    year: int,
+    progress_callback=None,
+    max_rows: int | None = None,
+) -> pd.DataFrame:
+    """Download DataSUS data for a system/state/year with cache and fallback.
 
-    # 0. Cache hit
-    if cache.exists():
+    max_rows: cap rows read during decompression to avoid OOM on large files
+    (e.g. SIH SP). When set, the result is NOT cached because it is partial.
+    """
+    cache = _cache_path(system, state, year)
+    is_monthly = FTP_CONFIG.get(system, {}).get("monthly", False)
+
+    # 0. Cache hit (only when not limiting rows)
+    if cache.exists() and max_rows is None:
         if progress_callback:
             progress_callback(1.0, f"{system} {state} {year} (cache local)")
         return pd.read_parquet(cache)
 
     errors = []
-    is_monthly = FTP_CONFIG.get(system, {}).get("monthly", False)
 
     # 1. pySUS (Linux/Mac)
     if progress_callback:
         progress_callback(0.05, f"{system} {state} {year} — tentando pySUS...")
     df = _try_pysus(system, state, year)
     if df is not None and len(df) > 0:
+        if max_rows and len(df) > max_rows:
+            df = df.sample(n=max_rows, random_state=42).reset_index(drop=True)
         if progress_callback:
             progress_callback(1.0, f"{system} {state} {year} via pySUS")
-        return _save(df, system, state, year)
+        return df if max_rows else _save(df, system, state, year)
     errors.append("pySUS indisponivel")
 
     # 2. HTTP mirror
     if progress_callback:
         progress_callback(0.3, f"{system} {state} {year} — tentando mirror HTTP...")
-    df = _try_http_sih(state, year) if is_monthly else _try_http_annual(system, state, year)
+    df = (
+        _try_http_sih(state, year, max_rows=max_rows)
+        if is_monthly
+        else _try_http_annual(system, state, year, max_rows=max_rows)
+    )
     if df is not None and len(df) > 0:
         if progress_callback:
             progress_callback(1.0, f"{system} {state} {year} via HTTP mirror")
-        return _save(df, system, state, year)
+        return df if max_rows else _save(df, system, state, year)
     errors.append("mirror HTTP falhou")
 
     # 3. FTP direto
     if progress_callback:
         progress_callback(0.6, f"{system} {state} {year} — tentando FTP DataSUS...")
-    df = _try_ftp_sih(state, year) if is_monthly else _try_ftp_annual(system, state, year)
+    df = (
+        _try_ftp_sih(state, year, max_rows=max_rows)
+        if is_monthly
+        else _try_ftp_annual(system, state, year, max_rows=max_rows)
+    )
     if df is not None and len(df) > 0:
         if progress_callback:
             progress_callback(1.0, f"{system} {state} {year} via FTP")
-        return _save(df, system, state, year)
+        return df if max_rows else _save(df, system, state, year)
     errors.append("FTP DataSUS falhou")
 
     # 4. Manual upload required

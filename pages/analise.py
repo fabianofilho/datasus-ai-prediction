@@ -345,7 +345,7 @@ _defaults: dict = {
     "sel_states": ["SP"],
     "sel_years": [2023],
     "manual_needed": [],
-    "sample_n": 50_000,
+    "sample_n": 10_000,
     "sample_seed": 42,
     "use_sample": True,
 }
@@ -576,16 +576,17 @@ else:
                 dfs = []
                 for state in ss["sel_states"]:
                     for year in ss["sel_years"]:
-                        part = fetch(source, state, year,
-                                     lambda p, m, _p=prog: _p.progress(min(p, 1.0), text=m))
-                        # ── Amostragem por arquivo (evita OOM antes do concat) ──
-                        if _use_sample and _quota_per_file and len(part) > _quota_per_file:
-                            part = part.sample(n=_quota_per_file, random_state=_sample_seed).reset_index(drop=True)
+                        # max_rows limita leitura dentro do _dbc_to_df (evita OOM)
+                        part = fetch(
+                            source, state, year,
+                            progress_callback=lambda p, m, _p=prog: _p.progress(min(p, 1.0), text=m),
+                            max_rows=_quota_per_file,
+                        )
                         dfs.append(part)
 
                 df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
-                # ── Segunda passagem: garante o total exato ─────────────────────
+                # ── Garante o total exato após concat ──────────────────────────
                 if _use_sample and len(df) > _sample_n:
                     df = df.sample(n=_sample_n, random_state=_sample_seed).reset_index(drop=True)
                     prog.progress(1.0, text=f"{source}: {len(df):,} registros (amostra)")
