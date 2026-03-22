@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import numpy as np
+
+# _trapz was removed in NumPy 2.0 → use np.trapezoid with fallback
+_trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -12,7 +15,7 @@ from sklearn.metrics import roc_curve, precision_recall_curve
 
 def roc_chart(y_true: np.ndarray, oof_probs: np.ndarray) -> go.Figure:
     fpr, tpr, _ = roc_curve(y_true, oof_probs)
-    auc = np.trapz(tpr, fpr)
+    auc = _trapz(tpr, fpr)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name=f"ROC (AUC={auc:.3f})", line=dict(color="#1f77b4", width=2)))
     fig.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="Random", line=dict(dash="dash", color="gray")))
@@ -27,7 +30,7 @@ def roc_chart(y_true: np.ndarray, oof_probs: np.ndarray) -> go.Figure:
 
 def pr_chart(y_true: np.ndarray, oof_probs: np.ndarray) -> go.Figure:
     precision, recall, _ = precision_recall_curve(y_true, oof_probs)
-    auc = np.trapz(precision, recall[::-1])
+    auc = _trapz(precision, recall[::-1])
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=recall, y=precision, mode="lines", name=f"PR (AUC={auc:.3f})", line=dict(color="#ff7f0e", width=2)))
     prevalence = y_true.mean()
