@@ -1,0 +1,24 @@
+[project]
+name = "datasus-ai-prediction"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "streamlit>=1.32",
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    "plotly>=5.0",
+    "scikit-learn>=1.4",
+    "lightgbm>=4.0",
+    "xgboost>=2.0",
+    "imbalanced-learn>=0.12",
+    "shap>=0.44",
+    "recordlinkage>=0.15",
+    "dbfread>=2.0.7",
+    "numpy>=1.26",
+    # Requerem compilador C — funcionam no Mac/Linux (Xcode / build-essential)
+    "pySUS>=0.6",
+    "pyreaddbc>=0.2",
+]
+
+[tool.uv]
+package = false

@@ -1,11 +1,11 @@
-import streamlit as st
 import pandas as pd
-from core.outcomes import OUTCOMES
+import streamlit as st
+
 from core.data.downloader import (
-    STATES, fetch_multi, cached_files,
+    STATES, cached_files,
     ManualUploadRequired, load_from_csv,
-    _cache_path,
 )
+from core.outcomes import OUTCOMES
 
 st.set_page_config(page_title="Dados | DataSUS AI", page_icon="📥", layout="wide")
 st.title("📥 Baixar Dados")
@@ -62,7 +62,7 @@ if st.button("⬇️ Baixar / Carregar Dados", type="primary", use_container_wid
 
         except ManualUploadRequired as e:
             progress.empty()
-            manual_needed.append((source, selected_states, selected_years, str(e)))
+            manual_needed.append((source, selected_states, selected_years, e.reasons))
 
     if raw_data:
         st.session_state["raw_data"] = raw_data
@@ -81,7 +81,7 @@ if st.button("⬇️ Baixar / Carregar Dados", type="primary", use_container_wid
 manual_needed = st.session_state.get("manual_needed", [])
 if manual_needed:
     st.divider()
-    st.warning("⚠️ Download automático não disponível (pySUS requer compilador C no Windows). Faça upload manual dos CSVs abaixo.")
+    st.warning("⚠️ Download automático falhou. Verifique os erros abaixo ou faça upload manual dos CSVs.")
 
     with st.expander("📖 Como baixar do TABNET", expanded=True):
         st.markdown("""
@@ -103,9 +103,12 @@ if manual_needed:
 
     raw_data = st.session_state.get("raw_data", {})
 
-    for (source, states, years_list, msg) in manual_needed:
+    for (source, states, years_list, reasons) in manual_needed:
         st.subheader(f"Upload: {source}")
-        st.caption(msg)
+        if reasons:
+            with st.expander("🔍 Detalhes do erro"):
+                for r in reasons:
+                    st.code(r)
 
         uploaded = st.file_uploader(
             f"Faça upload do CSV do {source} ({', '.join(states)}, {years_list})",
