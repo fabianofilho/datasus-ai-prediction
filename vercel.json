@@ -1,9 +1,8 @@
 {
-  "redirects": [
+  "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "https://huggingface.co/spaces/fabianonbfilho/datasus-ai-prediction",
-      "permanent": false
+      "destination": "https://fabianonbfilho-datasus-ai-prediction.hf.space/$1"
     }
   ]
 }
