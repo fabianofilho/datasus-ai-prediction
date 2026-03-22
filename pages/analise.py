@@ -124,7 +124,10 @@ html, body, .stApp,
   display: flex; align-items: center; gap: 10px;
   font-size: 1rem; font-weight: 700; color: var(--fg);
   text-decoration: none;
+  cursor: pointer;
 }
+.ds-topbar-logo:hover { color: var(--primary); }
+.ds-topbar-logo:hover .ms { color: var(--primary-hover); }
 .ds-topbar-badge {
   background: var(--primary); color: #fff;
   font-size: 0.68rem; font-weight: 700;
@@ -371,11 +374,11 @@ def current_step() -> int:
 def render_topbar() -> None:
     st.markdown(
         '<div class="ds-topbar">'
-        '<div class="ds-topbar-logo">'
+        '<a class="ds-topbar-logo" href="/" target="_self">'
         '<span class="ms" style="font-size:1.3rem;color:#1a56db">local_hospital</span>'
         'DataSUS AI'
         '<span class="ds-topbar-badge">PREDICTION</span>'
-        '</div>'
+        '</a>'
         '<div class="ds-topbar-right">Modelagem preditiva em saúde pública</div>'
         '</div>',
         unsafe_allow_html=True,
