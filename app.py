@@ -24,19 +24,13 @@ OUTCOME_GROUPS = {
         ("prematuridade",            "baby_changing_station","Prematuridade",                          "SINASC"),
         ("apgar_baixo",              "cardiology",          "Apgar Baixo no 5 Minuto",                "SINASC"),
     ],
-    "Tuberculose e Hanseniase": [
+    "SINAN — Agravos e Doencas de Notificacao": [
         ("abandono_tb",              "pulmonology",         "Abandono de Tratamento TB",               "SINAN"),
         ("abandono_hanseniase",      "stethoscope",         "Abandono de Tratamento Hanseniase",       "SINAN"),
-    ],
-    "Arboviroses": [
         ("dengue_grave",             "pest_control",        "Dengue Grave ou com Sinais de Alarme",    "SINAN"),
         ("chikungunya_hospitalizado","local_hospital",      "Hospitalizacao por Chikungunya",          "SINAN"),
-    ],
-    "HIV e ISTs": [
         ("obito_aids",               "medical_information", "Obito por AIDS",                          "SINAN"),
         ("sifilis_nao_cura",         "medication",          "Nao-Cura de Sifilis Adquirida",           "SINAN"),
-    ],
-    "Violencia e Intoxicacoes": [
         ("violencia_autoprovocada",  "psychology",          "Risco de Violencia Autoprovocada",        "SINAN"),
         ("intoxicacao_grave",        "warning",             "Desfecho Adverso em Intoxicacao Exogena", "SINAN"),
     ],
@@ -194,32 +188,34 @@ try:
     N_COLS = 5
     for group_name, outcomes in OUTCOME_GROUPS.items():
         st.markdown(f'<p class="ds-group">{group_name}</p>', unsafe_allow_html=True)
-        cols = st.columns(N_COLS)
-        for i, (key, icon, name, source) in enumerate(outcomes):
-            with cols[i]:
-                is_sel = sel == key
-                cls = "ds-card sel" if is_sel else "ds-card"
-                st.markdown(
-                    f'<div class="{cls}">'
-                    f'<strong><span class="ms">{icon}</span>{name}</strong>'
-                    f'<span class="ds-badge">{source}</span>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-                try:
-                    clicked = st.button(
-                        "Selecionar", key=f"sel_{key}",
-                        type="primary" if is_sel else "secondary",
-                        use_container_width=True,
+        for row_start in range(0, len(outcomes), N_COLS):
+            row = outcomes[row_start : row_start + N_COLS]
+            cols = st.columns(N_COLS)
+            for col_idx, (key, icon, name, source) in enumerate(row):
+                with cols[col_idx]:
+                    is_sel = sel == key
+                    cls = "ds-card sel" if is_sel else "ds-card"
+                    st.markdown(
+                        f'<div class="{cls}">'
+                        f'<strong><span class="ms">{icon}</span>{name}</strong>'
+                        f'<span class="ds-badge">{source}</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
                     )
-                except TypeError:
-                    clicked = st.button(
-                        "Selecionar", key=f"sel_{key}",
-                        type="primary" if is_sel else "secondary",
-                    )
-                if clicked:
-                    st.session_state.outcome_key = key
-                    st.switch_page("pages/analise.py")
+                    try:
+                        clicked = st.button(
+                            "Selecionar", key=f"sel_{key}",
+                            type="primary" if is_sel else "secondary",
+                            use_container_width=True,
+                        )
+                    except TypeError:
+                        clicked = st.button(
+                            "Selecionar", key=f"sel_{key}",
+                            type="primary" if is_sel else "secondary",
+                        )
+                    if clicked:
+                        st.session_state.outcome_key = key
+                        st.switch_page("pages/analise.py")
 
 except Exception as e:
     import traceback
