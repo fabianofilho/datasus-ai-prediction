@@ -491,17 +491,21 @@ else:
     step_title(2, "Baixar Dados",
                f"Fontes necessárias para este desfecho: {', '.join(outcome.data_sources)}")
 
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns([2, 2, 1])
     with c1:
         ss["sel_states"] = st.multiselect("Estados (UF)", STATES, default=ss["sel_states"])
     with c2:
         ss["sel_years"] = st.multiselect("Anos", list(range(2018, 2025)), default=ss["sel_years"])
+    with c3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        _download_clicked = st.button("⬇ Baixar", type="primary", use_container_width=True,
+                                      disabled=not ss["sel_states"] or not ss["sel_years"])
 
     if not ss["sel_states"] or not ss["sel_years"]:
         st.info("Selecione pelo menos um estado e um ano para continuar.")
         st.stop()
 
-    if st.button("Baixar Dados do DataSUS", type="primary", use_container_width=True):
+    if _download_clicked:
         raw_data: dict = {}
         manual_needed: list = []
         for source in outcome.data_sources:
