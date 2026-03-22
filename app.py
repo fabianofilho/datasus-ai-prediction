@@ -46,26 +46,79 @@ OUTCOME_GROUPS = {
 if "outcome_key" not in st.session_state:
     st.session_state.outcome_key = None
 
-# ── CSS minimo ────────────────────────────────────────────────────────────────
+# ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-header, footer, [data-testid="stSidebar"],
-[data-testid="stSidebarNav"], [data-testid="stHeader"],
-[data-testid="stToolbar"], [data-testid="stDecoration"],
-#MainMenu { display: none !important; }
+/* Oculta elementos desnecessários */
+header, footer,
+[data-testid="stSidebar"], [data-testid="stSidebarNav"],
+[data-testid="stHeader"], [data-testid="stToolbar"],
+[data-testid="stDecoration"], #MainMenu { display: none !important; }
 
-.block-container { padding: 2rem 3rem !important; max-width: 1100px !important; }
+/* Forca fundo branco em toda a app */
+html, body, [data-testid="stAppViewContainer"],
+[data-testid="stMain"], .main, .block-container {
+    background-color: #ffffff !important;
+    color: #1e2d4a !important;
+}
 
-.ds-title { font-size: 2rem; font-weight: 700; color: #1e2d4a; margin-bottom: .25rem; }
-.ds-sub   { color: #6b7d9b; margin-bottom: 2rem; }
-.ds-group { font-size: .75rem; font-weight: 700; color: #6b7d9b;
-            text-transform: uppercase; letter-spacing: .08em;
-            margin: 1.5rem 0 .5rem; }
-.ds-card  { border: 1px solid #dce3ed; border-radius: 8px; padding: .75rem 1rem;
-            cursor: pointer; margin-bottom: .5rem; background: #fff; }
-.ds-card:hover { border-color: #1a56db; background: #eff6ff; }
-.ds-card.sel   { border-color: #1a56db; background: #eff6ff; }
-.ds-badge { font-size: .7rem; color: #6b7d9b; }
+.block-container {
+    padding: 2.5rem 3rem !important;
+    max-width: 1100px !important;
+}
+
+/* Tipografia */
+.ds-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1e2d4a !important;
+    margin-bottom: .2rem;
+}
+.ds-sub {
+    font-size: 1rem;
+    color: #6b7d9b !important;
+    margin-bottom: 2rem;
+}
+.ds-group {
+    font-size: .7rem;
+    font-weight: 700;
+    color: #6b7d9b !important;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    margin: 1.5rem 0 .4rem;
+}
+
+/* Cards */
+.ds-card {
+    border: 1.5px solid #dce3ed;
+    border-radius: 10px;
+    padding: .8rem 1rem;
+    margin-bottom: .5rem;
+    background: #ffffff !important;
+    min-height: 72px;
+}
+.ds-card strong {
+    font-size: .85rem;
+    color: #1e2d4a !important;
+    display: block;
+    margin-bottom: .2rem;
+    line-height: 1.35;
+}
+.ds-card.sel {
+    border-color: #1a56db;
+    background: #eff6ff !important;
+}
+.ds-badge {
+    font-size: .68rem;
+    color: #6b7d9b !important;
+    font-weight: 500;
+}
+
+/* Botoes */
+div[data-testid="stButton"] > button {
+    border-radius: 6px !important;
+    font-size: .8rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -85,12 +138,12 @@ for group_name, outcomes in OUTCOME_GROUPS.items():
             cls = "ds-card sel" if is_sel else "ds-card"
             st.markdown(
                 f'<div class="{cls}">'
-                f'<strong>{icon} {name}</strong><br>'
+                f'<strong>{icon} {name}</strong>'
                 f'<span class="ds-badge">{source}</span>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
-            label = "Selecionado" if is_sel else "Selecionar"
+            label = "✓ Selecionado" if is_sel else "Selecionar"
             if st.button(label, key=f"sel_{key}",
                          type="primary" if is_sel else "secondary",
                          use_container_width=True):
@@ -100,7 +153,7 @@ for group_name, outcomes in OUTCOME_GROUPS.items():
 # ── CTA ───────────────────────────────────────────────────────────────────────
 st.markdown("---")
 if sel:
-    st.success(f"Desfecho selecionado. Abra **Analise** no menu para continuar.")
+    st.success(f"Desfecho selecionado. Clique abaixo para iniciar a analise.")
     if st.button("Iniciar Analise →", type="primary", use_container_width=False):
         st.switch_page("pages/analise.py")
 else:
