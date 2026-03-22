@@ -1,35 +1,175 @@
-from core.outcomes.base import OutcomeConfig
+"""Outcomes registry — lightweight metadata only at import time.
 
-# Internação hospitalar (SIH)
-from core.outcomes.mortalidade_hospitalar import MortalidadeHospitalar
-from core.outcomes.readmissao_30d import ReadmissaoHospitalar30d
-from core.outcomes.permanencia_prolongada import PermanenciaProlongada
-from core.outcomes.infeccao_hospitalar import InfeccaoHospitalar
-from core.outcomes.custo_elevado import CustoHospitalarElevado
+Heavy outcome classes are imported lazily on first access, so the UI
+renders immediately without waiting for all 17 modules + their data
+preprocessors to load.
+"""
+from __future__ import annotations
 
-# Saúde materno-infantil (SINASC + SIM)
-from core.outcomes.mortalidade_neonatal import MortalidadeNeonatal
-from core.outcomes.baixo_peso_nascer import BaixoPesoNascer
-from core.outcomes.prematuridade import Prematuridade
-from core.outcomes.apgar_baixo import ApgarBaixo
+# ── Metadata registry (no heavy imports) ─────────────────────────────────────
 
-# Tuberculose e Hanseníase (SINAN)
-from core.outcomes.abandono_tb import AbandonoTB
-from core.outcomes.abandono_hanseniase import AbandonoHanseniase
+_REGISTRY: dict[str, dict] = {
+    # Internação Hospitalar
+    "mortalidade_hospitalar": {
+        "module": "core.outcomes.mortalidade_hospitalar",
+        "class":  "MortalidadeHospitalar",
+        "name":   "Mortalidade Hospitalar",
+        "description": "Prediz óbito durante a internação hospitalar usando dados do SIH linkados ao SIM.",
+        "data_sources": ["SIH", "SIM"],
+        "icon": "💀",
+        "estimated_download_min": 15,
+    },
+    "readmissao_30d": {
+        "module": "core.outcomes.readmissao_30d",
+        "class":  "ReadmissaoHospitalar30d",
+        "name":   "Readmissão Hospitalar 30 dias",
+        "description": "Prediz se um paciente será reinternado em até 30 dias após a alta hospitalar.",
+        "data_sources": ["SIH"],
+        "icon": "🔁",
+        "estimated_download_min": 10,
+    },
+    "permanencia_prolongada": {
+        "module": "core.outcomes.permanencia_prolongada",
+        "class":  "PermanenciaProlongada",
+        "name":   "Permanência Hospitalar Prolongada",
+        "description": "Prediz internações com duração acima do percentil 90 para o mesmo grupo diagnóstico.",
+        "data_sources": ["SIH"],
+        "icon": "🛏️",
+        "estimated_download_min": 10,
+    },
+    "infeccao_hospitalar": {
+        "module": "core.outcomes.infeccao_hospitalar",
+        "class":  "InfeccaoHospitalar",
+        "name":   "Infecção Hospitalar",
+        "description": "Prediz ocorrência de infecção adquirida durante a internação (CID T80-T88).",
+        "data_sources": ["SIH"],
+        "icon": "🦠",
+        "estimated_download_min": 10,
+    },
+    "custo_elevado": {
+        "module": "core.outcomes.custo_elevado",
+        "class":  "CustoHospitalarElevado",
+        "name":   "Custo Hospitalar Elevado",
+        "description": "Prediz internações com custo acima do percentil 90 no mesmo grupo de procedimentos.",
+        "data_sources": ["SIH"],
+        "icon": "💰",
+        "estimated_download_min": 10,
+    },
+    # Saúde Materno-Infantil
+    "mortalidade_neonatal": {
+        "module": "core.outcomes.mortalidade_neonatal",
+        "class":  "MortalidadeNeonatal",
+        "name":   "Mortalidade Neonatal",
+        "description": "Prediz óbito neonatal (0-27 dias) linkando SINASC ao SIM.",
+        "data_sources": ["SINASC", "SIM"],
+        "icon": "👶",
+        "estimated_download_min": 12,
+    },
+    "baixo_peso_nascer": {
+        "module": "core.outcomes.baixo_peso_nascer",
+        "class":  "BaixoPesoNascer",
+        "name":   "Baixo Peso ao Nascer",
+        "description": "Prediz nascimentos com peso inferior a 2.500g a partir de dados do SINASC.",
+        "data_sources": ["SINASC"],
+        "icon": "⚖️",
+        "estimated_download_min": 5,
+    },
+    "prematuridade": {
+        "module": "core.outcomes.prematuridade",
+        "class":  "Prematuridade",
+        "name":   "Prematuridade",
+        "description": "Prediz nascimentos com menos de 37 semanas de gestação.",
+        "data_sources": ["SINASC"],
+        "icon": "🍼",
+        "estimated_download_min": 5,
+    },
+    "apgar_baixo": {
+        "module": "core.outcomes.apgar_baixo",
+        "class":  "ApgarBaixo",
+        "name":   "Apgar Baixo no 5º Minuto",
+        "description": "Prediz Apgar < 7 no 5º minuto, indicador de asfixia perinatal.",
+        "data_sources": ["SINASC"],
+        "icon": "❤️",
+        "estimated_download_min": 5,
+    },
+    # Tuberculose e Hanseníase
+    "abandono_tb": {
+        "module": "core.outcomes.abandono_tb",
+        "class":  "AbandonoTB",
+        "name":   "Abandono de Tratamento TB",
+        "description": "Prediz abandono do tratamento de tuberculose antes da cura.",
+        "data_sources": ["SINAN_TB"],
+        "icon": "🫁",
+        "estimated_download_min": 8,
+    },
+    "abandono_hanseniase": {
+        "module": "core.outcomes.abandono_hanseniase",
+        "class":  "AbandonoHanseniase",
+        "name":   "Abandono de Tratamento — Hanseníase",
+        "description": "Prediz abandono do tratamento de hanseníase antes da alta por cura.",
+        "data_sources": ["SINAN_HANS"],
+        "icon": "🩺",
+        "estimated_download_min": 5,
+    },
+    # Arboviroses
+    "dengue_grave": {
+        "module": "core.outcomes.dengue_grave",
+        "class":  "DengueGrave",
+        "name":   "Dengue com Sinais de Alarme ou Grave",
+        "description": "Prediz evolução para dengue grave ou com sinais de alarme no SINAN.",
+        "data_sources": ["SINAN_DENG"],
+        "icon": "🦟",
+        "estimated_download_min": 8,
+    },
+    "chikungunya_hospitalizado": {
+        "module": "core.outcomes.chikungunya_hospitalizado",
+        "class":  "ChikungunyaHospitalizado",
+        "name":   "Hospitalização por Chikungunya",
+        "description": "Prediz necessidade de hospitalização em casos notificados de chikungunya.",
+        "data_sources": ["SINAN_CHIK"],
+        "icon": "🦟",
+        "estimated_download_min": 6,
+    },
+    # HIV e ISTs
+    "obito_aids": {
+        "module": "core.outcomes.obito_aids",
+        "class":  "ObitoAIDS",
+        "name":   "Óbito por AIDS",
+        "description": "Prediz óbito em casos notificados de AIDS no SINAN.",
+        "data_sources": ["SINAN_AIDS"],
+        "icon": "🎗️",
+        "estimated_download_min": 5,
+    },
+    "sifilis_nao_cura": {
+        "module": "core.outcomes.sifilis_nao_cura",
+        "class":  "SifilisNaoCura",
+        "name":   "Não-Cura de Sífilis Adquirida",
+        "description": "Prediz encerramento sem cura (abandono, óbito, transferência) em casos de sífilis.",
+        "data_sources": ["SINAN_SIFA"],
+        "icon": "💊",
+        "estimated_download_min": 5,
+    },
+    # Violência e Intoxicações
+    "violencia_autoprovocada": {
+        "module": "core.outcomes.violencia_autoprovocada",
+        "class":  "ViolenciaAutoprovocada",
+        "name":   "Risco de Violência Autoprovocada / Suicídio",
+        "description": "Prediz violência autoprovocada com base em notificações do SINAN.",
+        "data_sources": ["SINAN_VIOL"],
+        "icon": "🧠",
+        "estimated_download_min": 10,
+    },
+    "intoxicacao_grave": {
+        "module": "core.outcomes.intoxicacao_grave",
+        "class":  "IntoxicacaoGrave",
+        "name":   "Desfecho Adverso em Intoxicação Exógena",
+        "description": "Prediz desfecho grave (óbito ou sequela) em intoxicações exógenas notificadas.",
+        "data_sources": ["SINAN_IEXO"],
+        "icon": "⚠️",
+        "estimated_download_min": 10,
+    },
+}
 
-# Arboviroses (SINAN)
-from core.outcomes.dengue_grave import DengueGrave
-from core.outcomes.chikungunya_hospitalizado import ChikungunyaHospitalizado
-
-# HIV e ISTs (SINAN)
-from core.outcomes.obito_aids import ObitoAIDS
-from core.outcomes.sifilis_nao_cura import SifilisNaoCura
-
-# Violência e Intoxicações (SINAN)
-from core.outcomes.violencia_autoprovocada import ViolenciaAutoprovocada
-from core.outcomes.intoxicacao_grave import IntoxicacaoGrave
-
-# ── Agrupamento por tópico para exibição na UI ─────────────────────────────
 OUTCOME_GROUPS: dict[str, list[str]] = {
     "Internação Hospitalar": [
         "mortalidade_hospitalar",
@@ -62,25 +202,41 @@ OUTCOME_GROUPS: dict[str, list[str]] = {
     ],
 }
 
-OUTCOMES: dict[str, OutcomeConfig] = {
-    o.key: o
-    for o in [
-        MortalidadeHospitalar(),
-        ReadmissaoHospitalar30d(),
-        PermanenciaProlongada(),
-        InfeccaoHospitalar(),
-        CustoHospitalarElevado(),
-        MortalidadeNeonatal(),
-        BaixoPesoNascer(),
-        Prematuridade(),
-        ApgarBaixo(),
-        AbandonoTB(),
-        AbandonoHanseniase(),
-        DengueGrave(),
-        ChikungunyaHospitalizado(),
-        ObitoAIDS(),
-        SifilisNaoCura(),
-        ViolenciaAutoprovocada(),
-        IntoxicacaoGrave(),
-    ]
+
+# ── Lazy proxy ────────────────────────────────────────────────────────────────
+
+class _LazyOutcome:
+    """Holds metadata immediately; imports the real class only on first method call."""
+
+    def __init__(self, key: str, meta: dict):
+        self.key                   = key
+        self.name                  = meta["name"]
+        self.description           = meta["description"]
+        self.data_sources          = meta["data_sources"]
+        self.icon                  = meta.get("icon", "🏥")
+        self.estimated_download_min = meta.get("estimated_download_min", 5)
+        self._meta                 = meta
+        self._instance             = None
+
+    def _load(self):
+        if self._instance is None:
+            import importlib
+            mod = importlib.import_module(self._meta["module"])
+            self._instance = getattr(mod, self._meta["class"])()
+        return self._instance
+
+    def __getattr__(self, name: str):
+        # Called for any attribute not found above (e.g. build_cohort, build_features)
+        return getattr(self._load(), name)
+
+    def __repr__(self):
+        return f"<Outcome {self.key}>"
+
+
+OUTCOMES: dict[str, _LazyOutcome] = {
+    key: _LazyOutcome(key, meta)
+    for key, meta in _REGISTRY.items()
 }
+
+# Keep OutcomeConfig importable from this package for type hints
+from core.outcomes.base import OutcomeConfig  # noqa: E402

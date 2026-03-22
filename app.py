@@ -5,16 +5,37 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from core.data.downloader import (
-    STATES,
-    ManualUploadRequired,
-    fetch,
-    load_from_csv,
-)
-from core.features.cohort import CohortBuilder
-from core.models import evaluation as ev
-from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model
+# Leve — apenas metadados, sem importar os 17 módulos de desfecho
 from core.outcomes import OUTCOME_GROUPS, OUTCOMES
+
+
+# ── Lazy loaders com cache de processo ───────────────────────────────────────
+# Cada função é chamada apenas no passo onde o módulo é necessário.
+# @st.cache_resource garante importação única por processo (não por sessão).
+
+@st.cache_resource(show_spinner=False)
+def _dl():
+    """Downloader: fetch, STATES, ManualUploadRequired, load_from_csv."""
+    from core.data.downloader import STATES, ManualUploadRequired, fetch, load_from_csv
+    return STATES, ManualUploadRequired, fetch, load_from_csv
+
+@st.cache_resource(show_spinner=False)
+def _cohort():
+    """CohortBuilder."""
+    from core.features.cohort import CohortBuilder
+    return CohortBuilder
+
+@st.cache_resource(show_spinner=False)
+def _pipeline():
+    """ML pipeline: ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model."""
+    from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model
+    return ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model
+
+@st.cache_resource(show_spinner=False)
+def _ev():
+    """Evaluation module (ROC, PR, SHAP, calibration charts)."""
+    from core.models import evaluation
+    return evaluation
 
 st.set_page_config(
     page_title="DataSUS AI Prediction",
@@ -448,6 +469,8 @@ else:
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 outcome = OUTCOMES[ss["outcome_key"]]
 
+# ── Lazy: downloader (só carrega ao chegar na etapa 2) ───────────────────────
+STATES, ManualUploadRequired, fetch, load_from_csv = _dl()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 2 — DADOS
@@ -534,6 +557,8 @@ else:
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
+# ── Lazy: CohortBuilder (só carrega ao chegar na etapa 3) ────────────────────
+CohortBuilder = _cohort()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 3 — COORTE
@@ -597,6 +622,8 @@ else:
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
+# ── Lazy: pipeline ML (só carrega ao chegar na etapa 4) ──────────────────────
+ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model = _pipeline()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 4 — MODELO
@@ -768,6 +795,8 @@ else:
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
+# ── Lazy: evaluation (só carrega ao chegar na etapa 5) ───────────────────────
+ev = _ev()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 5 — RESULTADOS
