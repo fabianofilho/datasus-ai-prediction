@@ -31,32 +31,32 @@ from core.outcomes.intoxicacao_grave import IntoxicacaoGrave
 
 # ── Agrupamento por tópico para exibição na UI ─────────────────────────────
 OUTCOME_GROUPS: dict[str, list[str]] = {
-    "🏥 Internação Hospitalar": [
+    "Internação Hospitalar": [
         "mortalidade_hospitalar",
         "readmissao_30d",
         "permanencia_prolongada",
         "infeccao_hospitalar",
         "custo_elevado",
     ],
-    "👶 Saúde Materno-Infantil": [
+    "Saúde Materno-Infantil": [
         "mortalidade_neonatal",
         "baixo_peso_nascer",
         "prematuridade",
         "apgar_baixo",
     ],
-    "🫁 Tuberculose e Hanseníase": [
+    "Tuberculose e Hanseníase": [
         "abandono_tb",
         "abandono_hanseniase",
     ],
-    "🦟 Arboviroses": [
+    "Arboviroses": [
         "dengue_grave",
         "chikungunya_hospitalizado",
     ],
-    "🔴 HIV e ISTs": [
+    "HIV e ISTs": [
         "obito_aids",
         "sifilis_nao_cura",
     ],
-    "🚨 Violência e Intoxicações": [
+    "Violência e Intoxicações": [
         "violencia_autoprovocada",
         "intoxicacao_grave",
     ],
