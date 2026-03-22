@@ -540,7 +540,7 @@ else:
                 value=ss["sample_n"],
                 step=5_000,
                 disabled=not ss["use_sample"],
-                help="Número máximo de registros a usar após o download.",
+                help="Número máximo de registros no dataset final. A amostragem é aplicada por arquivo durante o download para economizar memória.",
             )
         with sa3:
             ss["sample_seed"] = st.number_input(
@@ -564,21 +564,30 @@ else:
     if _download_clicked:
         raw_data: dict = {}
         manual_needed: list = []
+        _use_sample = ss["use_sample"]
+        _sample_n   = int(ss["sample_n"])
+        _sample_seed = int(ss["sample_seed"])
+        # Quota por arquivo para não estourar memória antes do concat
+        _quota_per_file = max(1_000, _sample_n // max(len(ss["sel_states"]) * len(ss["sel_years"]), 1)) if _use_sample else None
+
         for source in outcome.data_sources:
             prog = st.progress(0.0, text=f"Baixando {source}…")
             try:
                 dfs = []
                 for state in ss["sel_states"]:
                     for year in ss["sel_years"]:
-                        dfs.append(
-                            fetch(source, state, year,
-                                  lambda p, m, _p=prog: _p.progress(min(p, 1.0), text=m))
-                        )
+                        part = fetch(source, state, year,
+                                     lambda p, m, _p=prog: _p.progress(min(p, 1.0), text=m))
+                        # ── Amostragem por arquivo (evita OOM antes do concat) ──
+                        if _use_sample and _quota_per_file and len(part) > _quota_per_file:
+                            part = part.sample(n=_quota_per_file, random_state=_sample_seed).reset_index(drop=True)
+                        dfs.append(part)
+
                 df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
-                # ── Amostragem ─────────────────────────────────────────────────
-                if ss["use_sample"] and len(df) > ss["sample_n"]:
-                    df = df.sample(n=ss["sample_n"], random_state=ss["sample_seed"]).reset_index(drop=True)
+                # ── Segunda passagem: garante o total exato ─────────────────────
+                if _use_sample and len(df) > _sample_n:
+                    df = df.sample(n=_sample_n, random_state=_sample_seed).reset_index(drop=True)
                     prog.progress(1.0, text=f"{source}: {len(df):,} registros (amostra)")
                 else:
                     prog.progress(1.0, text=f"{source}: {len(df):,} registros")
