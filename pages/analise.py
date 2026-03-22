@@ -20,8 +20,8 @@ def _cohort():
 
 @st.cache_resource(show_spinner=False)
 def _pipeline():
-    from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model
-    return ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model
+    from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline
+    return ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline
 
 @st.cache_resource(show_spinner=False)
 def _ev():
@@ -702,7 +702,7 @@ else:
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Lazy: pipeline ML (só carrega ao chegar na etapa 4) ──────────────────────
-ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model = _pipeline()
+ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline = _pipeline()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 4 — MODELO
@@ -715,7 +715,6 @@ if ss["model_results"]:
     results = ss["model_results"]
     m = results["mean_metrics"]
     sample_info = ""
-    total_n_done = bal["total"] if "bal" in dir() else results.get("sample_n", "?")
     if results.get("sample_n") and results["sample_n"] < len(cohort):
         sample_info = f' &nbsp;·&nbsp; amostra <strong>{results["sample_n"]:,}</strong>'
     hpo_tag = " · Optuna" if results.get("hpo_mode") == "Optuna (automático)" else ""
@@ -727,7 +726,18 @@ if ss["model_results"]:
         "chg_model",
         ["model_results", "calib_results", "comparison_results"],
     )
-else:
+
+# ── Tabs: Treinar / Validar ───────────────────────────────────────────────────
+_tab_train, _tab_val = st.tabs(["Treinar Modelo", "Validação e Resultados"])
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB TREINAR
+# ─────────────────────────────────────────────────────────────────────────────
+with _tab_train:
+  if ss["model_results"]:
+    st.success("Modelo treinado. Confira a aba **Validação e Resultados**.")
+  else:
+    # ── config ────────────────────────────────────────────────────────────────
     step_title(4, "Treinar Modelo",
                "Configure o algoritmo, amostragem e hiperparâmetros. Validação cruzada estratificada.")
     bal = builder.class_balance(cohort)
@@ -737,50 +747,30 @@ else:
         f"**{len(X.columns)}** features disponíveis"
     )
 
-    # ── Amostragem ────────────────────────────────────────────────────────────
-    st.markdown("**Amostragem**")
     use_sample = st.checkbox(
-        "Usar amostra para treinamento",
-        value=False,
-        help="Útil para exploração rápida em coortes grandes. A amostra é estratificada pelo desfecho.",
+        "Usar amostra para treinamento", value=False,
+        help="Útil para exploração rápida em coortes grandes.",
     )
-    if use_sample:
-        max_sample = min(total_n, 50_000)
-        default_sample = min(total_n, 5_000)
-        sample_n = st.slider(
-            "Tamanho da amostra", 500, max_sample, default_sample, 500,
-            help="Número de registros selecionados de forma estratificada para treino.",
-        )
-    else:
-        sample_n = total_n
+    sample_n = (
+        st.slider("Tamanho da amostra", 500, min(total_n, 50_000), min(total_n, 5_000), 500)
+        if use_sample else total_n
+    )
 
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-    # ── Algoritmo e validação ─────────────────────────────────────────────────
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**Algoritmo e validação**")
         algo_label = st.selectbox("Algoritmo", list(ALGORITHMS.keys()))
         algo = ALGORITHMS[algo_label]
         n_folds = st.slider("Folds (cross-validation)", 3, 10, 5)
-        use_smote = st.checkbox(
-            "SMOTE — oversample da classe minoritária",
-            help="Recomendado quando prevalência < 5%",
-        )
+        use_smote = st.checkbox("SMOTE — oversample da classe minoritária",
+                                help="Recomendado quando prevalência < 5%")
         st.markdown("**Modo de hiperparâmetros**")
-        hpo_mode = st.radio(
-            "Modo",
-            ["Manual", "Optuna (automático)"],
-            horizontal=True,
-            label_visibility="collapsed",
-            help="Optuna busca automaticamente os melhores hiperparâmetros via otimização bayesiana.",
+        hpo_mode = st.radio("Modo", ["Manual", "Optuna (automático)"],
+                            horizontal=True, label_visibility="collapsed")
+        n_trials = (
+            st.slider("Tentativas (trials)", 10, 200, 50, 10) if hpo_mode == "Optuna (automático)" else 50
         )
-        if hpo_mode == "Optuna (automático)":
-            n_trials = st.slider(
-                "Tentativas (trials)", 10, 200, 50, 10,
-                help="Mais tentativas = maior chance de encontrar bons parâmetros, mas mais lento.",
-            )
-
     with c2:
         if hpo_mode == "Manual":
             st.markdown("**Hiperparâmetros**")
@@ -789,32 +779,54 @@ else:
                 params["n_estimators"] = st.slider("Árvores (n_estimators)", 50, 1000, 300, 50)
             if algo in ("lgbm", "xgb"):
                 params["learning_rate"] = st.select_slider(
-                    "Learning rate", [0.005, 0.01, 0.02, 0.05, 0.1, 0.2], value=0.05
-                )
+                    "Learning rate", [0.005, 0.01, 0.02, 0.05, 0.1, 0.2], value=0.05)
             if algo in ("lgbm", "xgb", "rf"):
                 params["max_depth"] = st.slider("max_depth (−1 = sem limite)", -1, 15, -1)
             if algo == "logreg":
-                params["C"] = st.select_slider(
-                    "C (regularização)", [0.001, 0.01, 0.1, 1.0, 10.0], value=1.0
-                )
+                params["C"] = st.select_slider("C (regularização)", [0.001, 0.01, 0.1, 1.0, 10.0], value=1.0)
         else:
             params = {}
-            st.markdown("**Optuna**")
-            st.caption(
-                "Os hiperparâmetros serão buscados automaticamente por otimização bayesiana "
-                f"em {n_trials} tentativas com {min(n_folds, 3)}-fold CV interno. "
-                "Os melhores parâmetros encontrados ficam visíveis nos resultados."
-            )
+            st.caption("Optuna buscará automaticamente os melhores hiperparâmetros.")
 
-    # ── Features ──────────────────────────────────────────────────────────────
     selected_features = st.multiselect(
         "Features para o modelo", X.columns.tolist(), default=X.columns.tolist(),
-        help="Por padrão todas as features sugeridas são incluídas.",
     )
     if not selected_features:
         st.warning("Selecione pelo menos uma feature.")
         st.stop()
 
+    # ── Live learning curve chart ─────────────────────────────────────────────
+    def _lc_fig(sizes, val_aucs, train_aucs):
+        import plotly.graph_objects as _go
+        fig = _go.Figure()
+        if sizes:
+            fig.add_trace(_go.Scatter(
+                x=sizes, y=val_aucs, mode="lines+markers", name="Validação",
+                line=dict(color="#1a56db", width=2.5), marker=dict(size=9),
+                fill="tozeroy", fillcolor="rgba(26,86,219,0.07)",
+            ))
+            if train_aucs:
+                fig.add_trace(_go.Scatter(
+                    x=sizes, y=train_aucs, mode="lines+markers", name="Treino",
+                    line=dict(color="#94a3b8", width=1.5, dash="dot"), marker=dict(size=6),
+                ))
+        fig.update_layout(
+            title="Curva de Aprendizado — ROC-AUC por volume de dados",
+            xaxis_title="Registros de treinamento",
+            yaxis=dict(title="ROC-AUC", range=[0.45, 1.0], gridcolor="rgba(0,0,0,0.07)"),
+            xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.07)", zeroline=False),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            height=320,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=60, b=40, l=60, r=20),
+        )
+        return fig
+
+    _lc_chart_ph = st.empty()
+    _lc_status_ph = st.empty()
+    _lc_chart_ph.plotly_chart(_lc_fig([], [], []), use_container_width=True)
+
+    # ── Botão treinar ─────────────────────────────────────────────────────────
     btn_label = (
         f"Otimizar + Treinar {algo_label} com {n_folds}-fold CV"
         if hpo_mode == "Optuna (automático)"
@@ -826,37 +838,68 @@ else:
     if st.button(btn_label, type="primary", use_container_width=True):
         try:
             from sklearn.model_selection import train_test_split
+            from sklearn.metrics import roc_auc_score as _roc_auc
 
             X_train = X[selected_features]
             y_train = y
-
-            # Aplica amostragem estratificada se necessário
             if use_sample and sample_n < total_n:
                 X_train, _, y_train, _ = train_test_split(
-                    X_train, y_train,
-                    train_size=sample_n,
-                    stratify=y_train,
-                    random_state=42,
+                    X_train, y_train, train_size=sample_n,
+                    stratify=y_train, random_state=42,
                 )
 
-            # Otimização Optuna (se selecionada)
+            # ── Learning curve ────────────────────────────────────────────────
+            _lc_sizes, _lc_val, _lc_tr = [], [], []
+            _fracs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]
+            try:
+                _X_lc, _X_hold, _y_lc, _y_hold = train_test_split(
+                    X_train, y_train, test_size=0.2, stratify=y_train, random_state=42,
+                )
+            except Exception:
+                _X_lc, _X_hold = X_train, X_train
+                _y_lc, _y_hold = y_train, y_train
+
+            for _frac in _fracs:
+                _n = max(30, int(len(_X_lc) * _frac))
+                try:
+                    if _frac < 1.0:
+                        _Xs, _, _ys, _ = train_test_split(
+                            _X_lc, _y_lc, train_size=_n, stratify=_y_lc, random_state=42,
+                        )
+                    else:
+                        _Xs, _ys = _X_lc, _y_lc
+                    _qp = build_pipeline(_Xs, algo, params, use_smote=False)
+                    _qp.fit(_Xs, _ys)
+                    _tr_auc = float(_roc_auc(_ys, _qp.predict_proba(_Xs)[:, 1])) if _ys.sum() > 0 else 0.5
+                    _vl_auc = float(_roc_auc(_y_hold, _qp.predict_proba(_X_hold)[:, 1])) if _y_hold.sum() > 0 else 0.5
+                except Exception:
+                    _tr_auc = _vl_auc = 0.5
+                _lc_sizes.append(_n)
+                _lc_tr.append(_tr_auc)
+                _lc_val.append(_vl_auc)
+                _lc_chart_ph.plotly_chart(_lc_fig(_lc_sizes, _lc_val, _lc_tr), use_container_width=True)
+                _lc_status_ph.caption(
+                    f"Fração {int(_frac*100)}% — {_n:,} registros — Val AUC: {_vl_auc:.3f}"
+                )
+
+            _lc_status_ph.caption("Finalizando com validação cruzada completa…")
+
+            # ── Optuna HPO ────────────────────────────────────────────────────
             if hpo_mode == "Optuna (automático)":
                 prog = st.progress(0.0, text="Iniciando Optuna…")
 
                 def _optuna_cb(done, total, best):
-                    pct = done / total
-                    prog.progress(pct, text=f"Optuna: trial {done}/{total} — melhor ROC-AUC {best:.4f}")
+                    prog.progress(done / total,
+                                  text=f"Optuna: trial {done}/{total} — melhor ROC-AUC {best:.4f}")
 
                 params = optimize_hyperparams(
-                    X_train, y_train,
-                    algorithm=algo,
-                    n_trials=n_trials,
-                    n_folds=min(n_folds, 3),
-                    use_smote=use_smote,
-                    progress_callback=_optuna_cb,
+                    X_train, y_train, algorithm=algo,
+                    n_trials=n_trials, n_folds=min(n_folds, 3),
+                    use_smote=use_smote, progress_callback=_optuna_cb,
                 )
                 prog.progress(1.0, text=f"Optuna concluído — {n_trials} trials")
 
+            # ── CV final ──────────────────────────────────────────────────────
             with st.spinner(f"Treinando {algo_label} com {n_folds}-fold CV…"):
                 results = train_cv(
                     X=X_train, y=y_train, algorithm=algo,
@@ -870,157 +913,159 @@ else:
         except Exception as e:
             st.error(f"Erro no treino: {e}")
             st.exception(e)
-    st.stop()
 
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-# ── Lazy: evaluation (só carrega ao chegar na etapa 5) ───────────────────────
-ev = _ev()
-
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 5 — RESULTADOS
-# ═════════════════════════════════════════════════════════════════════════════
-results = ss["model_results"]
-st.markdown(
-    '<p class="ds-section-title">Resultados do Modelo</p>'
-    '<p class="ds-section-caption">Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.</p>',
-    unsafe_allow_html=True,
-)
-
-m = results["mean_metrics"]
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("ROC-AUC", f"{m['roc_auc']:.4f}")
-c2.metric("PR-AUC", f"{m['pr_auc']:.4f}")
-c3.metric("F1-Score", f"{m['f1']:.4f}")
-c4.metric("Recall", f"{m['recall']:.4f}")
-c5.metric("Brier Score", f"{m['brier']:.4f}")
-
-col_exp1, col_exp2 = st.columns(2)
-with col_exp1:
-    with st.expander("Métricas por fold"):
-        st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
-with col_exp2:
-    with st.expander("Hiperparâmetros utilizados"):
-        bp = results.get("best_params") or {}
-        if bp:
-            st.json(bp)
-        else:
-            st.caption("Parâmetros padrão (sem configuração explícita).")
-        if results.get("sample_n"):
-            sn = results["sample_n"]
-            st.caption(f"Treinado com {sn:,} registros (amostra estratificada).")
-        if results.get("hpo_mode") == "Optuna (automático)":
-            st.caption("Hiperparâmetros encontrados via otimização bayesiana (Optuna).")
-
-X_res = X[results["X_columns"]]
-oof = results["oof_probs"]
-y_arr = y.values
-
-st.markdown("#### Curvas de desempenho")
-col1, col2 = st.columns(2)
-with col1:
-    st.plotly_chart(ev.roc_chart(y_arr, oof), use_container_width=True)
-with col2:
-    st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
-
-st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=False)
-
-st.markdown("#### Distribuição dos scores preditos")
-fig_dist = px.histogram(
-    x=oof, color=y_arr.astype(str), nbins=50, barmode="overlay", opacity=0.65,
-    labels={"x": "Score predito", "color": "Desfecho real"},
-    color_discrete_map={"0": "#3b82f6", "1": "#ef4444"},
-    title="Scores por classe real",
-)
-fig_dist.update_layout(margin=dict(t=40, b=0))
-st.plotly_chart(fig_dist, use_container_width=True)
-
-if results.get("feature_importances"):
-    st.markdown("#### Importância das variáveis")
-    st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=False)
-
-st.markdown("#### SHAP — Explicabilidade Global")
-with st.spinner("Calculando SHAP…"):
-    shap_fig = ev.shap_summary(results["model"], X_res.head(500))
-if shap_fig:
-    st.plotly_chart(shap_fig, use_container_width=False)
-else:
-    st.info("SHAP indisponível para este algoritmo.")
-
-# ── SHAP Local ────────────────────────────────────────────────────────────────
-st.markdown("#### SHAP — Explicabilidade Individual")
-st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
-case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
-                            value=0, step=1)
-with st.spinner("Calculando SHAP individual…"):
-    wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
-if wf_fig:
-    st.plotly_chart(wf_fig, use_container_width=True)
-else:
-    st.info("SHAP individual indisponível para este algoritmo.")
-
-# ── Métricas Clínicas por Threshold ──────────────────────────────────────────
-st.markdown("#### Métricas Clínicas por Ponto de Corte")
-st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
-threshold = st.slider(
-    "Threshold", 0.01, 0.99, 0.50, 0.01,
-    help="Ponto de corte para classificar como positivo (alto risco).",
-)
-tm = ev.threshold_metrics(y_arr, oof, threshold)
-mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-mc1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
-mc2.metric("Especificidade", f"{tm['specificity']:.1%}")
-mc3.metric("VPP", f"{tm['ppv']:.1%}")
-mc4.metric("VPN", f"{tm['npv']:.1%}")
-mc5.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
-with st.expander("Matriz de confusão"):
-    cm_df = pd.DataFrame(
-        [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
-        index=["Real Negativo", "Real Positivo"],
-        columns=["Pred Negativo", "Pred Positivo"],
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB VALIDAR
+# ─────────────────────────────────────────────────────────────────────────────
+with _tab_val:
+  if not ss["model_results"]:
+    st.info("Treine o modelo primeiro na aba **Treinar Modelo**.")
+  else:
+    ev = _ev()
+    results = ss["model_results"]
+    st.markdown(
+        '<p class="ds-section-title">Resultados do Modelo</p>'
+        '<p class="ds-section-caption">Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.</p>',
+        unsafe_allow_html=True,
     )
-    st.dataframe(cm_df, use_container_width=False)
-
-# ── Análise de Equidade por Subgrupo ─────────────────────────────────────────
-st.markdown("#### Análise de Equidade por Subgrupo")
-_fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
-_fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
-if _fairness_cols:
-    group_col = st.selectbox("Estratificar por", _fairness_cols,
-                              help="Analisa se o modelo performa igualmente para diferentes grupos.")
-    _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
-    sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
-    if not sub_df.empty:
-        st.dataframe(sub_df, use_container_width=True, hide_index=True)
-        fig_eq = px.bar(
-            sub_df, x="Subgrupo", y="ROC-AUC",
-            color="ROC-AUC", color_continuous_scale="RdYlGn",
-            range_color=[0.5, 1.0], title=f"ROC-AUC por {group_col}",
-            text="ROC-AUC",
-        )
-        fig_eq.update_traces(textposition="outside")
-        fig_eq.update_layout(height=360, showlegend=False)
-        st.plotly_chart(fig_eq, use_container_width=True)
+    
+    m = results["mean_metrics"]
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("ROC-AUC", f"{m['roc_auc']:.4f}")
+    c2.metric("PR-AUC", f"{m['pr_auc']:.4f}")
+    c3.metric("F1-Score", f"{m['f1']:.4f}")
+    c4.metric("Recall", f"{m['recall']:.4f}")
+    c5.metric("Brier Score", f"{m['brier']:.4f}")
+    
+    col_exp1, col_exp2 = st.columns(2)
+    with col_exp1:
+        with st.expander("Métricas por fold"):
+            st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
+    with col_exp2:
+        with st.expander("Hiperparâmetros utilizados"):
+            bp = results.get("best_params") or {}
+            if bp:
+                st.json(bp)
+            else:
+                st.caption("Parâmetros padrão (sem configuração explícita).")
+            if results.get("sample_n"):
+                sn = results["sample_n"]
+                st.caption(f"Treinado com {sn:,} registros (amostra estratificada).")
+            if results.get("hpo_mode") == "Optuna (automático)":
+                st.caption("Hiperparâmetros encontrados via otimização bayesiana (Optuna).")
+    
+    X_res = X[results["X_columns"]]
+    oof = results["oof_probs"]
+    y_arr = y.values
+    
+    st.markdown("#### Curvas de desempenho")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(ev.roc_chart(y_arr, oof), use_container_width=True)
+    with col2:
+        st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
+    
+    st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=False)
+    
+    st.markdown("#### Distribuição dos scores preditos")
+    fig_dist = px.histogram(
+        x=oof, color=y_arr.astype(str), nbins=50, barmode="overlay", opacity=0.65,
+        labels={"x": "Score predito", "color": "Desfecho real"},
+        color_discrete_map={"0": "#3b82f6", "1": "#ef4444"},
+        title="Scores por classe real",
+    )
+    fig_dist.update_layout(margin=dict(t=40, b=0))
+    st.plotly_chart(fig_dist, use_container_width=True)
+    
+    if results.get("feature_importances"):
+        st.markdown("#### Importância das variáveis")
+        st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=False)
+    
+    st.markdown("#### SHAP — Explicabilidade Global")
+    with st.spinner("Calculando SHAP…"):
+        shap_fig = ev.shap_summary(results["model"], X_res.head(500))
+    if shap_fig:
+        st.plotly_chart(shap_fig, use_container_width=False)
     else:
-        st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
-else:
-    st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
-
-st.markdown("#### Exportar predições")
-export_df = pd.DataFrame({
-    "score": oof,
-    "predicao": (oof >= 0.5).astype(int),
-    "real": y_arr,
-})
-st.download_button(
-    label="Baixar predições OOF (CSV)",
-    data=export_df.to_csv(index=False).encode("utf-8"),
-    file_name=f"predicoes_{ss['outcome_key']}.csv",
-    mime="text/csv",
-)
-
+        st.info("SHAP indisponível para este algoritmo.")
+    
+    # ── SHAP Local ────────────────────────────────────────────────────────────────
+    st.markdown("#### SHAP — Explicabilidade Individual")
+    st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
+    case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
+                                value=0, step=1)
+    with st.spinner("Calculando SHAP individual…"):
+        wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
+    if wf_fig:
+        st.plotly_chart(wf_fig, use_container_width=True)
+    else:
+        st.info("SHAP individual indisponível para este algoritmo.")
+    
+    # ── Métricas Clínicas por Threshold ──────────────────────────────────────────
+    st.markdown("#### Métricas Clínicas por Ponto de Corte")
+    st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
+    threshold = st.slider(
+        "Threshold", 0.01, 0.99, 0.50, 0.01,
+        help="Ponto de corte para classificar como positivo (alto risco).",
+    )
+    tm = ev.threshold_metrics(y_arr, oof, threshold)
+    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+    mc1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
+    mc2.metric("Especificidade", f"{tm['specificity']:.1%}")
+    mc3.metric("VPP", f"{tm['ppv']:.1%}")
+    mc4.metric("VPN", f"{tm['npv']:.1%}")
+    mc5.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
+    with st.expander("Matriz de confusão"):
+        cm_df = pd.DataFrame(
+            [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
+            index=["Real Negativo", "Real Positivo"],
+            columns=["Pred Negativo", "Pred Positivo"],
+        )
+        st.dataframe(cm_df, use_container_width=False)
+    
+    # ── Análise de Equidade por Subgrupo ─────────────────────────────────────────
+    st.markdown("#### Análise de Equidade por Subgrupo")
+    _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
+    _fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
+    if _fairness_cols:
+        group_col = st.selectbox("Estratificar por", _fairness_cols,
+                                  help="Analisa se o modelo performa igualmente para diferentes grupos.")
+        _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
+        sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
+        if not sub_df.empty:
+            st.dataframe(sub_df, use_container_width=True, hide_index=True)
+            fig_eq = px.bar(
+                sub_df, x="Subgrupo", y="ROC-AUC",
+                color="ROC-AUC", color_continuous_scale="RdYlGn",
+                range_color=[0.5, 1.0], title=f"ROC-AUC por {group_col}",
+                text="ROC-AUC",
+            )
+            fig_eq.update_traces(textposition="outside")
+            fig_eq.update_layout(height=360, showlegend=False)
+            st.plotly_chart(fig_eq, use_container_width=True)
+        else:
+            st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
+    else:
+        st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
+    
+    st.markdown("#### Exportar predições")
+    export_df = pd.DataFrame({
+        "score": oof,
+        "predicao": (oof >= 0.5).astype(int),
+        "real": y_arr,
+    })
+    st.download_button(
+        label="Baixar predições OOF (CSV)",
+        data=export_df.to_csv(index=False).encode("utf-8"),
+        file_name=f"predicoes_{ss['outcome_key']}.csv",
+        mime="text/csv",
+    )
+    
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
+
+if not ss["model_results"]:
+    st.stop()
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 6 — CALIBRAÇÃO (opcional)
