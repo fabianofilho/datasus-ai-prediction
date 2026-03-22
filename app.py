@@ -191,11 +191,12 @@ st.markdown(
 try:
     sel = st.session_state.outcome_key
 
+    N_COLS = 5
     for group_name, outcomes in OUTCOME_GROUPS.items():
         st.markdown(f'<p class="ds-group">{group_name}</p>', unsafe_allow_html=True)
-        cols = st.columns(len(outcomes))
-        for col, (key, icon, name, source) in zip(cols, outcomes):
-            with col:
+        cols = st.columns(N_COLS)
+        for i, (key, icon, name, source) in enumerate(outcomes):
+            with cols[i]:
                 is_sel = sel == key
                 cls = "ds-card sel" if is_sel else "ds-card"
                 st.markdown(
