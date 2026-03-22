@@ -328,6 +328,9 @@ _defaults: dict = {
     "sel_states": ["SP"],
     "sel_years": [2023],
     "manual_needed": [],
+    "sample_n": 50_000,
+    "sample_seed": 42,
+    "use_sample": True,
 }
 for k, v in _defaults.items():
     if k not in ss:
@@ -485,6 +488,7 @@ else:
     step_title(2, "Baixar Dados",
                f"Fontes necessárias para este desfecho: {', '.join(outcome.data_sources)}")
 
+    # ── Linha 1: Estado + Ano + Botão ─────────────────────────────────────────
     c1, c2, c3 = st.columns([2, 2, 1])
     with c1:
         ss["sel_states"] = st.multiselect("Estados (UF)", STATES, default=ss["sel_states"])
@@ -498,6 +502,46 @@ else:
     with c3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         _download_clicked = st.button("Baixar", type="primary", use_container_width=True)
+
+    # ── Linha 2: Configuração de Amostragem ────────────────────────────────────
+    st.markdown("<div style='margin-top:.75rem'></div>", unsafe_allow_html=True)
+    with st.expander("⚙️ Configuração de Amostragem", expanded=True):
+        sa1, sa2, sa3 = st.columns([1, 1, 2])
+        with sa1:
+            ss["use_sample"] = st.toggle(
+                "Usar amostragem",
+                value=ss["use_sample"],
+                help="Se ativado, limita o dataset ao número de registros abaixo. "
+                     "Recomendado para testes rápidos.",
+            )
+        with sa2:
+            ss["sample_n"] = st.number_input(
+                "Tamanho da amostra",
+                min_value=1_000,
+                max_value=500_000,
+                value=ss["sample_n"],
+                step=5_000,
+                disabled=not ss["use_sample"],
+                help="Número máximo de registros a usar após o download.",
+            )
+        with sa3:
+            ss["sample_seed"] = st.number_input(
+                "Seed (reprodutibilidade)",
+                min_value=0,
+                max_value=99_999,
+                value=ss["sample_seed"],
+                step=1,
+                disabled=not ss["use_sample"],
+                help="Seed aleatória fixa para garantir resultados reproduzíveis.",
+            )
+        if ss["use_sample"]:
+            st.caption(
+                f"Serão usados até **{ss['sample_n']:,}** registros "
+                f"amostrados aleatoriamente com seed **{ss['sample_seed']}**. "
+                "Desative para usar o dataset completo."
+            )
+        else:
+            st.caption("Dataset completo será usado — pode ser lento para grandes estados/anos.")
 
     if _download_clicked:
         raw_data: dict = {}
@@ -513,8 +557,15 @@ else:
                                   lambda p, m, _p=prog: _p.progress(min(p, 1.0), text=m))
                         )
                 df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+
+                # ── Amostragem ─────────────────────────────────────────────────
+                if ss["use_sample"] and len(df) > ss["sample_n"]:
+                    df = df.sample(n=ss["sample_n"], random_state=ss["sample_seed"]).reset_index(drop=True)
+                    prog.progress(1.0, text=f"{source}: {len(df):,} registros (amostra)")
+                else:
+                    prog.progress(1.0, text=f"{source}: {len(df):,} registros")
+
                 raw_data[source] = df
-                prog.progress(1.0, text=f"{source}: {len(df):,} registros")
             except ManualUploadRequired as e:
                 prog.empty()
                 manual_needed.append((source, str(e)))
