@@ -3,8 +3,15 @@
   "configurations": [
     {
       "name": "DataSUS AI Platform (Streamlit)",
-      "runtimeExecutable": "streamlit",
-      "runtimeArgs": ["run", "app.py", "--server.port", "8501"],
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "streamlit",
+        "run",
+        "app.py",
+        "--server.port",
+        "8501"
+      ],
       "port": 8501
     }
   ]
