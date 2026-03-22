@@ -18,7 +18,7 @@ from core.outcomes import OUTCOME_GROUPS, OUTCOMES
 
 st.set_page_config(
     page_title="DataSUS AI Prediction",
-    page_icon=None,
+    page_icon="🏥",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
