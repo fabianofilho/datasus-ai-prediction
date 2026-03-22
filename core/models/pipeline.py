@@ -243,6 +243,59 @@ def train_cv(
     }
 
 
+def calibrate_model(
+    model,
+    X: pd.DataFrame,
+    y: pd.Series,
+    method: str = "sigmoid",
+    cal_fraction: float = 0.25,
+) -> dict:
+    """Post-hoc Platt/isotonic calibration using a held-out calibration set.
+
+    Returns a dict with keys:
+        cal_model     — CalibratedClassifierCV fitted on the calibration split
+        raw_probs     — uncalibrated probabilities on the cal split
+        cal_probs     — calibrated probabilities on the cal split
+        y_eval        — true labels for the cal split
+        brier_before  — Brier score before calibration
+        brier_after   — Brier score after calibration
+        brier_delta   — improvement (positive = better)
+        method        — calibration method used
+    """
+    from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.model_selection import train_test_split
+
+    # Reserve a calibration set that the model has never seen during CV
+    _, X_cal, _, y_cal = train_test_split(
+        X, y, test_size=cal_fraction, stratify=y, random_state=7
+    )
+
+    raw_probs = model.predict_proba(X_cal)[:, 1]
+
+    try:
+        # sklearn >= 1.6: FrozenEstimator is preferred over cv="prefit"
+        from sklearn.frozen import FrozenEstimator
+        cal_clf = CalibratedClassifierCV(estimator=FrozenEstimator(model), method=method)
+    except ImportError:
+        cal_clf = CalibratedClassifierCV(estimator=model, cv="prefit", method=method)
+    cal_clf.fit(X_cal, y_cal)
+    cal_probs = cal_clf.predict_proba(X_cal)[:, 1]
+
+    brier_before = brier_score_loss(y_cal, raw_probs)
+    brier_after = brier_score_loss(y_cal, cal_probs)
+
+    return {
+        "cal_model": cal_clf,
+        "method": method,
+        "raw_probs": raw_probs,
+        "cal_probs": cal_probs,
+        "y_eval": y_cal.values,
+        "brier_before": float(brier_before),
+        "brier_after": float(brier_after),
+        "brier_delta": float(brier_before - brier_after),
+    }
+
+
 def _compute_metrics(y_true, probs, preds) -> dict:
     return {
         "roc_auc": roc_auc_score(y_true, probs),

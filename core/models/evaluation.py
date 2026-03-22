@@ -111,6 +111,124 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
     return fig
 
 
+def calibration_comparison_chart(
+    y_true: np.ndarray,
+    probs_before: np.ndarray,
+    probs_after: np.ndarray,
+    method_label: str = "Calibrado",
+    n_bins: int = 10,
+) -> go.Figure:
+    """Show before/after calibration curves on the same plot."""
+    pb_true, pb_pred = calibration_curve(y_true, probs_before, n_bins=n_bins, strategy="uniform")
+    pa_true, pa_pred = calibration_curve(y_true, probs_after, n_bins=n_bins, strategy="uniform")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=pb_pred, y=pb_true, mode="lines+markers", name="Antes da calibração",
+        line=dict(color="#94a3b8", width=2, dash="dot"),
+    ))
+    fig.add_trace(go.Scatter(
+        x=pa_pred, y=pa_true, mode="lines+markers", name=method_label,
+        line=dict(color="#1a56db", width=2),
+    ))
+    fig.add_trace(go.Scatter(
+        x=[0, 1], y=[0, 1], mode="lines", name="Perfeito",
+        line=dict(dash="dash", color="#059669"),
+    ))
+    fig.update_layout(
+        title="Curva de Calibração — antes e depois",
+        xaxis_title="Probabilidade prevista",
+        yaxis_title="Fração de positivos reais",
+        width=600, height=420,
+    )
+    return fig
+
+
+def shap_comparison_chart(
+    shap_dicts: list[dict],
+    labels: list[str],
+    top_n: int = 15,
+) -> go.Figure:
+    """Grouped bar chart comparing mean |SHAP| per feature across multiple cohorts."""
+    # Union of top features across all groups
+    all_features: dict[str, float] = {}
+    for d in shap_dicts:
+        for feat, val in d.items():
+            all_features[feat] = all_features.get(feat, 0) + val
+    top_features = sorted(all_features, key=all_features.get, reverse=True)[:top_n]
+
+    palette = ["#1a56db", "#059669", "#d97706", "#e11d48", "#7c3aed", "#0891b2"]
+    fig = go.Figure()
+    for i, (label, shap_d) in enumerate(zip(labels, shap_dicts)):
+        vals = [shap_d.get(f, 0.0) for f in top_features]
+        fig.add_trace(go.Bar(
+            name=label,
+            x=vals,
+            y=top_features,
+            orientation="h",
+            marker_color=palette[i % len(palette)],
+        ))
+    fig.update_layout(
+        barmode="group",
+        title=f"Comparação SHAP — top {top_n} variáveis",
+        xaxis_title="|SHAP value| médio",
+        height=max(350, top_n * 28),
+        width=720,
+        margin=dict(l=160),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    return fig
+
+
+def metrics_comparison_table(comparison_results: list[dict]) -> pd.DataFrame:
+    """Build a DataFrame from a list of {label, metrics, n} dicts."""
+    rows = []
+    for r in comparison_results:
+        m = r["metrics"]
+        rows.append({
+            "Coorte": r["label"],
+            "N": f"{r['n']:,}",
+            "ROC-AUC": round(m.get("roc_auc", float("nan")), 4),
+            "PR-AUC": round(m.get("pr_auc", float("nan")), 4),
+            "F1": round(m.get("f1", float("nan")), 4),
+            "Recall": round(m.get("recall", float("nan")), 4),
+            "Brier": round(m.get("brier", float("nan")), 4),
+        })
+    return pd.DataFrame(rows)
+
+
+def shap_values_dict(model, X: pd.DataFrame, max_rows: int = 500) -> dict:
+    """Return {feature: mean_abs_shap} using TreeExplainer or LinearExplainer."""
+    try:
+        import shap
+    except ImportError:
+        return {}
+
+    estimator = model[-1]
+    prep = model[:-1]
+    X_sub = X.head(max_rows)
+    X_transformed = prep.transform(X_sub)
+    if hasattr(X_transformed, "toarray"):
+        X_transformed = X_transformed.toarray()
+    col_names = X_sub.columns.tolist()
+    X_t = pd.DataFrame(X_transformed, columns=col_names[: X_transformed.shape[1]])
+
+    try:
+        explainer = shap.TreeExplainer(estimator)
+        sv = explainer.shap_values(X_t)
+        if isinstance(sv, list):
+            sv = sv[1]
+    except Exception:
+        try:
+            explainer = shap.LinearExplainer(estimator, X_t)
+            sv = explainer.shap_values(X_t)
+        except Exception:
+            return {}
+
+    mean_abs = np.abs(sv).mean(axis=0)
+    n = min(len(col_names), len(mean_abs))
+    return dict(zip(col_names[:n], mean_abs[:n].tolist()))
+
+
 def fold_metrics_table(fold_metrics: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(fold_metrics)
     df = df.rename(columns={"roc_auc": "ROC-AUC", "pr_auc": "PR-AUC", "f1": "F1", "precision": "Precisão", "recall": "Recall", "brier": "Brier", "fold": "Fold"})

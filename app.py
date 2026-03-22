@@ -13,7 +13,7 @@ from core.data.downloader import (
 )
 from core.features.cohort import CohortBuilder
 from core.models import evaluation as ev
-from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams
+from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model
 from core.outcomes import OUTCOME_GROUPS, OUTCOMES
 
 st.set_page_config(
@@ -123,7 +123,8 @@ html, body, .stApp,
 .ds-step-done   { background: var(--success-bg); color: #065f46; }
 .ds-step-active { background: var(--primary); color: #fff; font-weight: 700;
                   box-shadow: 0 0 0 3px var(--primary-ring); }
-.ds-step-locked { background: transparent; color: #9ca3af; }
+.ds-step-locked   { background: transparent; color: #9ca3af; }
+.ds-step-optional { background: transparent; color: #9ca3af; border-style: dashed !important; }
 .ds-step-arrow  { color: #d1d5db; font-size: 0.9rem; padding: 0 2px; }
 
 /* ── Done bar (etapa concluída) ─────────────────────────────── */
@@ -307,6 +308,8 @@ _defaults: dict = {
     "raw_data": {},
     "cohort": None,
     "model_results": None,
+    "calib_results": None,
+    "comparison_results": [],
     "sel_states": ["SP"],
     "sel_years": [2023],
     "manual_needed": [],
@@ -318,6 +321,10 @@ for k, v in _defaults.items():
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def current_step() -> int:
+    if ss.get("comparison_results"):
+        return 7
+    if ss.get("calib_results"):
+        return 6
     if ss["model_results"]:
         return 5
     if ss["cohort"] is not None:
@@ -343,17 +350,20 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Resultados"]
+    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Resultados", "Calibração", "Comparação"]
     parts = []
     for i, lbl in enumerate(labels):
         n = i + 1
+        optional = n >= 6
         if n < step:
             cls, dot = "ds-step ds-step-done", "✓"
         elif n == step:
             cls, dot = "ds-step ds-step-active", str(n)
         else:
-            cls, dot = "ds-step ds-step-locked", str(n)
-        parts.append(f'<span class="{cls}">{dot}. {lbl}</span>')
+            cls = "ds-step ds-step-optional" if optional else "ds-step ds-step-locked"
+            dot = str(n)
+        suffix = " *" if optional else ""
+        parts.append(f'<span class="{cls}">{dot}. {lbl}{suffix}</span>')
         if i < len(labels) - 1:
             parts.append('<span class="ds-step-arrow">›</span>')
     st.markdown(
@@ -609,7 +619,7 @@ if ss["model_results"]:
         f'F1 <strong>{m["f1"]:.3f}</strong> &nbsp;·&nbsp; '
         f'PR-AUC <strong>{m["pr_auc"]:.3f}</strong>{sample_info}',
         "chg_model",
-        ["model_results"],
+        ["model_results", "calib_results", "comparison_results"],
     )
 else:
     step_title(4, "Treinar Modelo",
@@ -841,5 +851,223 @@ st.download_button(
     file_name=f"predicoes_{ss['outcome_key']}.csv",
     mime="text/csv",
 )
+
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ETAPA 6 — CALIBRAÇÃO (opcional)
+# ═════════════════════════════════════════════════════════════════════════════
+step_title(6, "Calibração do Modelo",
+           "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
+
+if ss["calib_results"]:
+    cr = ss["calib_results"]
+    delta = cr["brier_delta"]
+    delta_sign = "-" if delta >= 0 else "+"
+    done_bar(
+        f'Método <strong>{cr["method"].capitalize()}</strong> &nbsp;·&nbsp; '
+        f'Brier antes <strong>{cr["brier_before"]:.4f}</strong> → '
+        f'depois <strong>{cr["brier_after"]:.4f}</strong> &nbsp;·&nbsp; '
+        f'melhora <strong>{delta_sign}{abs(delta):.4f}</strong>',
+        "chg_calib",
+        ["calib_results", "comparison_results"],
+    )
+    col_cal1, col_cal2 = st.columns(2)
+    with col_cal1:
+        st.plotly_chart(
+            ev.calibration_comparison_chart(
+                cr["y_eval"], cr["raw_probs"], cr["cal_probs"],
+                method_label=f'Calibrado ({cr["method"]})',
+            ),
+            use_container_width=True,
+        )
+    with col_cal2:
+        st.metric("Brier antes", f"{cr['brier_before']:.4f}")
+        st.metric("Brier depois", f"{cr['brier_after']:.4f}",
+                  delta=f"{-delta:+.4f}", delta_color="inverse")
+        if delta > 0:
+            st.success("Calibração melhorou as probabilidades.")
+        elif delta < 0:
+            st.warning("Calibração piorou levemente. Considere o método alternativo.")
+        else:
+            st.info("Sem variação significativa.")
+else:
+    c_col1, c_col2 = st.columns([2, 1])
+    with c_col1:
+        calib_method = st.radio(
+            "Método de calibração",
+            ["sigmoid", "isotonic"],
+            format_func=lambda x: "Platt Scaling (sigmoid)" if x == "sigmoid" else "Isotonic Regression",
+            horizontal=True,
+            help=(
+                "Platt Scaling: mais estável com pouco dado, assume forma sigmoide. "
+                "Isotonic: mais flexível, requer pelo menos ~1.000 amostras."
+            ),
+        )
+    with c_col2:
+        st.caption(
+            "A calibração usa 25% dos dados como holdout interno para ajustar "
+            "as probabilidades sem vazar informação do treino."
+        )
+    col_cb1, col_cb2 = st.columns(2)
+    with col_cb1:
+        if st.button("Calibrar modelo", type="primary", use_container_width=True):
+            with st.spinner("Calibrando…"):
+                try:
+                    cr = calibrate_model(
+                        results["model"],
+                        X_res,
+                        y,
+                        method=calib_method,
+                    )
+                    ss["calib_results"] = cr
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro na calibração: {e}")
+    with col_cb2:
+        if st.button("Pular calibração", type="secondary", use_container_width=True):
+            ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
+            st.rerun()
+
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ETAPA 7 — COMPARAÇÃO ENTRE ESTADOS (opcional)
+# ═════════════════════════════════════════════════════════════════════════════
+step_title(7, "Comparação entre Estados",
+           "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e explicabilidade SHAP.")
+
+# Modelo a usar: calibrado (se disponível e não pulado) ou original
+_active_model = results["model"]
+if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
+    _active_model = ss["calib_results"]["cal_model"]
+
+if ss["comparison_results"]:
+    comp = ss["comparison_results"]
+    st.markdown("**Métricas por coorte**")
+    st.dataframe(
+        ev.metrics_comparison_table(comp),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    shap_dicts = [r["shap_dict"] for r in comp if r.get("shap_dict")]
+    shap_labels = [r["label"] for r in comp if r.get("shap_dict")]
+    if len(shap_dicts) >= 2:
+        st.markdown("**Comparação SHAP entre coortes**")
+        st.plotly_chart(
+            ev.shap_comparison_chart(shap_dicts, shap_labels),
+            use_container_width=True,
+        )
+
+    if st.button("Limpar e comparar outros estados", type="secondary"):
+        ss["comparison_results"] = []
+        st.rerun()
+else:
+    st.info(
+        "Selecione estados adicionais para comparar o desempenho do mesmo modelo "
+        "treinado em populações diferentes."
+    )
+    cmp_col1, cmp_col2 = st.columns(2)
+    with cmp_col1:
+        already_used = ss["sel_states"]
+        cmp_states = st.multiselect(
+            "Estados para comparação",
+            [s for s in STATES if s not in already_used],
+            default=[],
+            help="Baixa os dados, constrói a coorte e aplica o modelo treinado.",
+        )
+        include_original = st.checkbox(
+            f"Incluir coorte original ({', '.join(already_used)})",
+            value=True,
+        )
+    with cmp_col2:
+        cmp_years = st.multiselect(
+            "Anos",
+            list(range(2018, 2025)),
+            default=ss["sel_years"],
+        )
+
+    if not cmp_states and not include_original:
+        st.warning("Selecione pelo menos um estado ou mantenha a coorte original.")
+    elif st.button("Rodar comparação", type="primary", use_container_width=True):
+        comp_list = []
+
+        # Helper: run a single state group
+        def _run_state_group(label: str, states: list[str], years: list[int], raw_override=None):
+            try:
+                if raw_override is not None:
+                    raw = raw_override
+                else:
+                    raw = {}
+                    for src in outcome.data_sources:
+                        dfs = []
+                        for st_ in states:
+                            for yr in years:
+                                dfs.append(fetch(src, st_, yr))
+                        raw[src] = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+
+                builder_cmp = CohortBuilder(outcome)
+                cohort_cmp = builder_cmp.build(raw)
+                X_cmp, y_cmp = builder_cmp.get_Xy(cohort_cmp)
+
+                # Align columns to trained model
+                train_cols = results["X_columns"]
+                for col in train_cols:
+                    if col not in X_cmp.columns:
+                        X_cmp[col] = float("nan")
+                X_cmp = X_cmp[train_cols]
+
+                probs_cmp = _active_model.predict_proba(X_cmp)[:, 1]
+                preds_cmp = (probs_cmp >= 0.5).astype(int)
+
+                from sklearn.metrics import (
+                    roc_auc_score, average_precision_score,
+                    f1_score, recall_score, brier_score_loss,
+                )
+                metrics_cmp = {
+                    "roc_auc": roc_auc_score(y_cmp, probs_cmp),
+                    "pr_auc": average_precision_score(y_cmp, probs_cmp),
+                    "f1": f1_score(y_cmp, preds_cmp, zero_division=0),
+                    "recall": recall_score(y_cmp, preds_cmp, zero_division=0),
+                    "brier": brier_score_loss(y_cmp, probs_cmp),
+                }
+
+                shap_d = ev.shap_values_dict(_active_model, X_cmp)
+
+                return {
+                    "label": label,
+                    "n": len(y_cmp),
+                    "metrics": metrics_cmp,
+                    "shap_dict": shap_d,
+                }
+            except Exception as exc:
+                st.error(f"Erro em {label}: {exc}")
+                return None
+
+        prog_cmp = st.progress(0.0, text="Iniciando comparação…")
+        all_groups = []
+        if include_original:
+            all_groups.append(
+                (f"{'+'.join(already_used)} · {'+'.join(map(str, ss['sel_years']))}",
+                 already_used, ss["sel_years"], ss["raw_data"])
+            )
+        for st_ in cmp_states:
+            all_groups.append(
+                (f"{st_} · {'+'.join(map(str, cmp_years))}",
+                 [st_], cmp_years, None)
+            )
+
+        for idx, (lbl, sts, yrs, raw_ov) in enumerate(all_groups):
+            prog_cmp.progress((idx) / len(all_groups), text=f"Processando {lbl}…")
+            r = _run_state_group(lbl, sts, yrs, raw_ov)
+            if r:
+                comp_list.append(r)
+
+        prog_cmp.progress(1.0, text="Comparação concluída.")
+        ss["comparison_results"] = comp_list
+        st.rerun()
 
 st.markdown('</div>', unsafe_allow_html=True)  # fecha ds-page
