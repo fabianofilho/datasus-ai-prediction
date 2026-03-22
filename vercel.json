@@ -1,0 +1,9 @@
+{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "destination": "https://huggingface.co/spaces/fabianofilho/datasus-ai-prediction",
+      "permanent": false
+    }
+  ]
+}

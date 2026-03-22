@@ -1,3 +1,15 @@
+---
+title: DataSUS AI Prediction
+emoji: 🏥
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: 1.32.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # DataSUS para IA: Um Guia de Fontes de Dados para Modelagem Preditiva
 
 ## Visão Geral
