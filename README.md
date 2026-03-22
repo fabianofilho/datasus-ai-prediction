@@ -10,47 +10,174 @@ pinned: false
 license: mit
 ---
 
-# DataSUS para IA: Um Guia de Fontes de Dados para Modelagem Preditiva
+# DataSUS AI Prediction
 
-## Visão Geral
+Plataforma interativa de modelagem preditiva em saúde pública usando microdados do DataSUS — sem código, direto no navegador.
 
-O DataSUS, departamento de informática do Sistema Único de Saúde (SUS) do Brasil, disponibiliza um vasto volume de dados de saúde, abrangendo desde registros de nascimentos e óbitos até internações hospitalares, procedimentos ambulatoriais e vigilância de doenças. Esses dados representam uma oportunidade única para a pesquisa em saúde e o desenvolvimento de modelos de inteligência artificial capazes de prever desfechos, otimizar a alocação de recursos e melhorar a gestão do cuidado.
+[![Hugging Face Spaces](https://img.shields.io/badge/HuggingFace-Spaces-yellow?logo=huggingface)](https://huggingface.co/spaces/fabianonbfilho/datasus-ai-prediction)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.32-red?logo=streamlit)](https://streamlit.io)
+[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://python.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-Este repositório serve como um guia abrangente para pesquisadores, cientistas de dados e desenvolvedores que desejam utilizar os microdados do DataSUS para projetos de machine learning. Aqui, você encontrará uma análise detalhada dos principais sistemas de informação, suas potencialidades, limitações e as estratégias necessárias para transformá-los em datasets acionáveis para IA.
+---
 
-## Índice de Datasets Documentados
+## O que e esta plataforma
 
-A seguir, uma lista dos sistemas de informação documentados neste repositório, com links para suas respectivas análises detalhadas:
+DataSUS AI Prediction e uma ferramenta de pesquisa que permite a qualquer epidemiologista, residente medico ou cientista de dados:
 
-*   **Sistemas de Informação de Mortalidade e Nascimentos:**
-    *   [SIH - Sistema de Informações Hospitalares](./docs/sih.md)
-    *   [SIM - Sistema de Informações sobre Mortalidade](./docs/sim.md)
-    *   [SINASC - Sistema de Informações sobre Nascidos Vivos](./docs/sinasc.md)
-*   **Sistemas de Vigilância em Saúde:**
-    *   [SINAN - Sistema de Informação de Agravos de Notificação](./docs/sinan.md)
-    *   [SIVEP-Gripe - Sistema de Informação da Vigilância Epidemiológica da Gripe](./docs/sivep_gripe.md)
-    *   [e-SUS Vigilância em Saúde (e-SUS VS)](./docs/esus_vs.md)
-*   **Sistemas de Informação Ambulatorial e de Atenção Primária:**
-    *   [SIA - Sistema de Informações Ambulatoriais (incluindo APAC)](./docs/sia.md)
-    *   [e-SUS Atenção Primária (e-SUS AB / SISAB)](./docs/esus_ab.md)
-    *   [SI-PNI - Sistema de Informação do Programa Nacional de Imunizações](./docs/si_pni.md)
-*   **Sistemas de Acompanhamento Específico:**
-    *   [HIPERDIA - Sistema de Cadastramento e Acompanhamento de Hipertensos e Diabéticos](./docs/hiperdia.md)
-    *   [SISVAN - Sistema de Vigilância Alimentar e Nutricional](./docs/sisvan.md)
-    *   [SIS-Pré-Natal (SISPRENATAL)](./docs/sisprenatal.md)
-*   **Sistemas de Cadastro e Estrutura:**
-    *   [CNES - Cadastro Nacional de Estabelecimentos de Saúde](./docs/cnes.md)
-    *   [CIHA - Comunicação de Informação Hospitalar e Ambulatorial](./docs/ciha.md)
+1. Selecionar um desfecho clinico de interesse (readmissao, mortalidade, dengue grave, etc.)
+2. Baixar automaticamente os microdados do DataSUS (SIH, SIM, SINASC, SINAN)
+3. Construir uma coorte analítica com janelas de observacao e predicao bem definidas
+4. Treinar modelos de machine learning com validacao cruzada estratificada
+5. Interpretar os resultados com graficos de SHAP, curvas ROC e calibracao
 
-## Documentação Adicional
+Nao e necessario escrever uma linha de codigo.
 
-Para facilitar o uso prático desses dados, o repositório também inclui:
+---
 
-*   [**Tabela Comparativa de Datasets**](./docs/comparative_table.md): Uma visão consolidada das características de cada sistema, facilitando a escolha do dataset mais adequado para sua necessidade.
-*   [**Guia de Record Linkage**](./docs/record_linkage_guide.md): Um guia metodológico para realizar o pareamento de registros entre as diferentes bases do DataSUS, uma etapa crucial para a construção de uma visão longitudinal do paciente.
-*   [**Exemplos de Construção de Cohorts**](./docs/cohort_building_examples.md): Demonstrações práticas de como estruturar janelas de observação e predição para diferentes desfechos de saúde.
-*   [**Referências de Estudos**](./docs/references.md): Uma lista de publicações científicas que utilizaram dados do DataSUS para modelagem preditiva, servindo como inspiração e base metodológica.
+## 17 desfechos prontos para modelar
 
-## Como Contribuir
+### Internacao Hospitalar (SIH)
+| Desfecho | Fonte |
+|---|---|
+| Readmissao Hospitalar em 30 dias | SIH |
+| Mortalidade Hospitalar | SIH + SIM |
+| Permanencia Hospitalar Prolongada | SIH |
+| Custo Hospitalar Elevado | SIH |
+| Infeccao Hospitalar | SIH |
 
-Este é um projeto em constante evolução. Se você tiver sugestões, correções ou desejar adicionar a análise de um novo dataset, sinta-se à vontade para abrir uma *issue* ou enviar um *pull request*.
+### Nascimentos e Perinatal (SINASC)
+| Desfecho | Fonte |
+|---|---|
+| Mortalidade Neonatal | SINASC + SIM |
+| Prematuridade | SINASC |
+| Baixo Peso ao Nascer | SINASC |
+| Apgar Baixo no 5 Minuto | SINASC |
+
+### Doencas Infecciosas (SINAN)
+| Desfecho | Fonte |
+|---|---|
+| Dengue com Sinais de Alarme ou Grave | SINAN Dengue |
+| Hospitalizacao por Chikungunya | SINAN Chikungunya |
+| Abandono de Tratamento TB | SINAN Tuberculose |
+| Abandono de Tratamento Hanseniase | SINAN Hanseniase |
+| Obito por AIDS | SINAN AIDS |
+| Nao-Cura de Sifilis Adquirida | SINAN Sifilis |
+
+### Saude Mental e Violencia (SINAN)
+| Desfecho | Fonte |
+|---|---|
+| Risco de Violencia Autoprovocada / Suicidio | SINAN Violencia |
+| Desfecho Adverso em Intoxicacao Exogena | SINAN Intoxicacao |
+
+---
+
+## Arquitetura tecnica
+
+```
+datasus-ai-prediction/
+├── app.py                        # Home Streamlit
+├── pages/
+│   └── 0_Analise.py              # Wizard unico de 5 etapas
+├── core/
+│   ├── data/
+│   │   ├── downloader.py         # Download automatico: HTTP mirror > FTP > upload manual
+│   │   ├── sih.py / sim.py / sinasc.py / sinan*.py   # Pre-processadores por sistema
+│   │   └── linker.py             # Record linkage deterministico + probabilistico
+│   ├── features/
+│   │   └── cohort.py             # CohortBuilder com janelas temporais
+│   ├── models/
+│   │   ├── pipeline.py           # train_cv() com StratifiedKFold + Optuna HPO
+│   │   └── evaluation.py        # ROC, PR, calibracao, SHAP (Plotly)
+│   └── outcomes/
+│       ├── base.py               # OutcomeConfig (ABC)
+│       └── *.py                  # 17 desfechos implementados
+```
+
+### Stack
+- **Download:** `datasus-dbc` (DBC → DBF sem compilador C) + mirror HTTP DigitalOcean + FTP DataSUS
+- **ML:** LightGBM, XGBoost, Logistic Regression, Random Forest
+- **Otimizacao:** Optuna (hyperparameter search automatico)
+- **Explicabilidade:** SHAP values com graficos interativos
+- **Validacao:** StratifiedKFold(5) + amostragem estratificada
+- **Calibracao:** Platt Scaling, comparacao entre estados/periodos
+
+---
+
+## Como usar
+
+### Na plataforma web
+
+Acesse [datasus-ai-prediction.vercel.app](https://datasus-ai-prediction.vercel.app) e siga as 5 etapas:
+
+```
+1. Desfecho   → escolha o que quer prever
+2. Dados      → selecione estado(s) e ano(s), download automatico
+3. Coorte     → revise distribuicao, balanceamento, features
+4. Modelo     → escolha algoritmo e treine com validacao cruzada
+5. Resultados → curvas ROC, SHAP, calibracao, comparacao entre grupos
+```
+
+### Localmente
+
+```bash
+git clone https://github.com/fabianofilho/datasus-ai-prediction
+cd datasus-ai-prediction
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+---
+
+## Estrategia de download de dados
+
+O downloader tenta automaticamente em cascata:
+
+```
+1. Cache local (parquet)         → instantaneo se ja baixou antes
+2. Mirror HTTP (DigitalOcean)    → rapido, sem autenticacao
+3. FTP direto (ftp.datasus.gov.br) → fallback oficial
+4. Upload manual (CSV)           → instrucoes do TABNET + uploader na UI
+```
+
+Funciona em Windows, Linux e Mac sem necessidade de compilador C.
+
+---
+
+## Sistemas de informacao suportados
+
+| Sistema | Descricao | Cobertura |
+|---|---|---|
+| **SIH** | Sistema de Informacoes Hospitalares | 2008–atual, mensal por UF |
+| **SIM** | Sistema de Informacoes sobre Mortalidade | 1996–atual, anual por UF |
+| **SINASC** | Sistema de Informacoes sobre Nascidos Vivos | 1996–atual, anual por UF |
+| **SINAN** | Sistema de Informacao de Agravos de Notificacao | Dengue, TB, Hanseniase, AIDS, Sifilis, Chikungunya, Violencia, Intoxicacao |
+
+---
+
+## Requisitos
+
+```
+streamlit>=1.32
+pandas>=2.0
+lightgbm>=4.0
+xgboost>=2.0
+scikit-learn>=1.4
+optuna>=3.6
+shap>=0.44
+plotly>=5.0
+datasus-dbc>=0.1.3
+recordlinkage>=0.15
+```
+
+---
+
+## Contribuindo
+
+Pull requests sao bem-vindos. Para novos desfechos, implemente uma subclasse de `OutcomeConfig` em `core/outcomes/` seguindo os exemplos existentes.
+
+---
+
+## Licenca
+
+MIT — use livremente para pesquisa e ensino.
