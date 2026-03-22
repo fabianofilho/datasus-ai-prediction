@@ -1,8 +1,8 @@
 """DataSUS AI Prediction — aplicação principal (página única, sem sidebar)."""
 from __future__ import annotations
 
-import pandas as pd
-import plotly.express as px
+import threading
+
 import streamlit as st
 
 # Leve — apenas metadados, sem importar os 17 módulos de desfecho
@@ -10,32 +10,49 @@ from core.outcomes import OUTCOME_GROUPS, OUTCOMES
 
 
 # ── Lazy loaders com cache de processo ───────────────────────────────────────
-# Cada função é chamada apenas no passo onde o módulo é necessário.
-# @st.cache_resource garante importação única por processo (não por sessão).
 
 @st.cache_resource(show_spinner=False)
 def _dl():
-    """Downloader: fetch, STATES, ManualUploadRequired, load_from_csv."""
     from core.data.downloader import STATES, ManualUploadRequired, fetch, load_from_csv
     return STATES, ManualUploadRequired, fetch, load_from_csv
 
 @st.cache_resource(show_spinner=False)
 def _cohort():
-    """CohortBuilder."""
     from core.features.cohort import CohortBuilder
     return CohortBuilder
 
 @st.cache_resource(show_spinner=False)
 def _pipeline():
-    """ML pipeline: ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model."""
     from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model
     return ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model
 
 @st.cache_resource(show_spinner=False)
 def _ev():
-    """Evaluation module (ROC, PR, SHAP, calibration charts)."""
     from core.models import evaluation
     return evaluation
+
+@st.cache_resource(show_spinner=False)
+def _px():
+    import plotly.express as px
+    return px
+
+@st.cache_resource(show_spinner=False)
+def _pd():
+    import pandas as pd
+    return pd
+
+# ── Pre-warm em background: carrega tudo enquanto o usuário lê a tela ────────
+@st.cache_resource(show_spinner=False)
+def _start_prewarm():
+    def _warm():
+        try:
+            _dl(); _cohort(); _pipeline(); _ev(); _px(); _pd()
+        except Exception:
+            pass
+    threading.Thread(target=_warm, daemon=True).start()
+    return True
+
+_start_prewarm()
 
 st.set_page_config(
     page_title="DataSUS AI Prediction",
@@ -469,7 +486,9 @@ else:
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 outcome = OUTCOMES[ss["outcome_key"]]
 
-# ── Lazy: downloader (só carrega ao chegar na etapa 2) ───────────────────────
+# ── Lazy: módulos de dados e visualização (step 2+) ──────────────────────────
+pd = _pd()
+px = _px()
 STATES, ManualUploadRequired, fetch, load_from_csv = _dl()
 
 # ═════════════════════════════════════════════════════════════════════════════
