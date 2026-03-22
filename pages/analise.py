@@ -222,13 +222,22 @@ html, body, .stApp,
 }
 
 /* ── Botões minimalistas ─────────────────────────────────────── */
+/* Container do botão: alinha à esquerda */
+.stButton {
+  display: flex !important;
+  justify-content: flex-start !important;
+}
 .stButton > button {
+  width: auto !important;
+  min-width: 0 !important;
+  padding: 6px 18px !important;
   border-radius: var(--radius) !important;
-  font-size: 0.85rem !important;
+  font-size: 0.84rem !important;
   font-weight: 500 !important;
   transition: all .15s !important;
   cursor: pointer !important;
   letter-spacing: .01em !important;
+  white-space: nowrap !important;
 }
 /* Primário — azul sólido */
 .stButton > button[kind="primary"] {
@@ -472,7 +481,7 @@ else:
                 if st.button(
                     "Selecionado" if is_sel else "Selecionar",
                     key=f"sel_{key}",
-                    use_container_width=True,
+                    
                     type="primary" if is_sel else "secondary",
                 ):
                     for k in ["raw_data", "cohort", "model_results", "manual_needed"]:
@@ -519,7 +528,7 @@ else:
 
     with c3:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        _download_clicked = st.button("Baixar", type="primary", use_container_width=True)
+        _download_clicked = st.button("Baixar", type="primary")
 
     # ── Linha 2: Configuração de Amostragem ────────────────────────────────────
     st.markdown("<div style='margin-top:.75rem'></div>", unsafe_allow_html=True)
@@ -687,7 +696,7 @@ if ss["cohort"] is not None:
 else:
     step_title(3, "Construir Coorte",
                "Filtra casos elegíveis, cria features e define o target para o modelo.")
-    if st.button("Construir Coorte", type="primary", use_container_width=True):
+    if st.button("Construir Coorte", type="primary"):
         with st.spinner("Construindo coorte…"):
             try:
                 builder = CohortBuilder(outcome)
@@ -835,7 +844,7 @@ with _tab_train:
     if use_sample and sample_n < total_n:
         btn_label += f" (amostra {sample_n:,})"
 
-    if st.button(btn_label, type="primary", use_container_width=True):
+    if st.button(btn_label, type="primary"):
         try:
             from sklearn.model_selection import train_test_split
             from sklearn.metrics import roc_auc_score as _roc_auc
@@ -1124,7 +1133,7 @@ else:
         )
     col_cb1, col_cb2 = st.columns(2)
     with col_cb1:
-        if st.button("Executar Calibração", type="primary", use_container_width=True):
+        if st.button("Executar Calibração", type="primary"):
             with st.spinner("Executando calibração…"):
                 try:
                     cr = calibrate_model(
@@ -1138,7 +1147,7 @@ else:
                 except Exception as e:
                     st.error(f"Erro no benchmark: {e}")
     with col_cb2:
-        if st.button("Pular benchmark", type="secondary", use_container_width=True):
+        if st.button("Pular benchmark", type="secondary"):
             ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
             st.rerun()
 
@@ -1204,7 +1213,7 @@ else:
 
     if not cmp_states and not include_original:
         st.warning("Selecione pelo menos um estado ou mantenha a coorte original.")
-    elif st.button("Rodar comparação", type="primary", use_container_width=True):
+    elif st.button("Rodar comparação", type="primary"):
         comp_list = []
 
         # Helper: run a single state group
