@@ -2,7 +2,7 @@
   "redirects": [
     {
       "source": "/(.*)",
-      "destination": "https://huggingface.co/spaces/fabianofilho/datasus-ai-prediction",
+      "destination": "https://huggingface.co/spaces/fabianonbfilho/datasus-ai-prediction",
       "permanent": false
     }
   ]
