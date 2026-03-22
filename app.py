@@ -8,37 +8,37 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ── Metadados dos desfechos (hardcoded — zero imports) ────────────────────────
+# ── Metadados dos desfechos — ícone = nome Material Symbol ───────────────────
 
 OUTCOME_GROUPS = {
     "Internacao Hospitalar": [
-        ("readmissao_30d",        "🔁", "Readmissao Hospitalar 30 dias",         "SIH"),
-        ("mortalidade_hospitalar","💀", "Mortalidade Hospitalar",                 "SIH + SIM"),
-        ("permanencia_prolongada","🛏️", "Permanencia Prolongada",                 "SIH"),
-        ("infeccao_hospitalar",   "🦠", "Infeccao Hospitalar",                    "SIH"),
-        ("custo_elevado",         "💰", "Custo Hospitalar Elevado",               "SIH"),
+        ("readmissao_30d",           "sync",                "Readmissao Hospitalar 30 dias",          "SIH"),
+        ("mortalidade_hospitalar",   "monitor_heart",       "Mortalidade Hospitalar",                  "SIH + SIM"),
+        ("permanencia_prolongada",   "bed",                 "Permanencia Prolongada",                  "SIH"),
+        ("infeccao_hospitalar",      "coronavirus",         "Infeccao Hospitalar",                     "SIH"),
+        ("custo_elevado",            "payments",            "Custo Hospitalar Elevado",                "SIH"),
     ],
     "Saude Materno-Infantil": [
-        ("mortalidade_neonatal",  "👶", "Mortalidade Neonatal",                   "SINASC + SIM"),
-        ("baixo_peso_nascer",     "⚖️", "Baixo Peso ao Nascer",                   "SINASC"),
-        ("prematuridade",         "🍼", "Prematuridade",                           "SINASC"),
-        ("apgar_baixo",           "❤️", "Apgar Baixo no 5 Minuto",               "SINASC"),
+        ("mortalidade_neonatal",     "child_care",          "Mortalidade Neonatal",                    "SINASC + SIM"),
+        ("baixo_peso_nascer",        "scale",               "Baixo Peso ao Nascer",                    "SINASC"),
+        ("prematuridade",            "baby_changing_station","Prematuridade",                          "SINASC"),
+        ("apgar_baixo",              "cardiology",          "Apgar Baixo no 5 Minuto",                "SINASC"),
     ],
     "Tuberculose e Hanseniase": [
-        ("abandono_tb",           "🫀", "Abandono de Tratamento TB",              "SINAN"),
-        ("abandono_hanseniase",   "🩺", "Abandono de Tratamento Hanseniase",      "SINAN"),
+        ("abandono_tb",              "pulmonology",         "Abandono de Tratamento TB",               "SINAN"),
+        ("abandono_hanseniase",      "stethoscope",         "Abandono de Tratamento Hanseniase",       "SINAN"),
     ],
     "Arboviroses": [
-        ("dengue_grave",          "🦟", "Dengue Grave ou com Sinais de Alarme",   "SINAN"),
-        ("chikungunya_hospitalizado","🦟","Hospitalizacao por Chikungunya",        "SINAN"),
+        ("dengue_grave",             "pest_control",        "Dengue Grave ou com Sinais de Alarme",    "SINAN"),
+        ("chikungunya_hospitalizado","local_hospital",      "Hospitalizacao por Chikungunya",          "SINAN"),
     ],
     "HIV e ISTs": [
-        ("obito_aids",            "🎗️", "Obito por AIDS",                         "SINAN"),
-        ("sifilis_nao_cura",      "💊", "Nao-Cura de Sifilis Adquirida",          "SINAN"),
+        ("obito_aids",               "medical_information", "Obito por AIDS",                          "SINAN"),
+        ("sifilis_nao_cura",         "medication",          "Nao-Cura de Sifilis Adquirida",           "SINAN"),
     ],
     "Violencia e Intoxicacoes": [
-        ("violencia_autoprovocada","🧠", "Risco de Violencia Autoprovocada",      "SINAN"),
-        ("intoxicacao_grave",     "⚠️", "Desfecho Adverso em Intoxicacao Exogena","SINAN"),
+        ("violencia_autoprovocada",  "psychology",          "Risco de Violencia Autoprovocada",        "SINAN"),
+        ("intoxicacao_grave",        "warning",             "Desfecho Adverso em Intoxicacao Exogena", "SINAN"),
     ],
 }
 
@@ -46,8 +46,10 @@ OUTCOME_GROUPS = {
 if "outcome_key" not in st.session_state:
     st.session_state.outcome_key = None
 
-# ── CSS ───────────────────────────────────────────────────────────────────────
+# ── CSS + Material Symbols ────────────────────────────────────────────────────
 st.markdown("""
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
+
 <style>
 /* Oculta elementos desnecessários */
 header, footer,
@@ -55,7 +57,7 @@ header, footer,
 [data-testid="stHeader"], [data-testid="stToolbar"],
 [data-testid="stDecoration"], #MainMenu { display: none !important; }
 
-/* Forca fundo branco em toda a app */
+/* Fundo branco em toda a app */
 html, body, [data-testid="stAppViewContainer"],
 [data-testid="stMain"], .main, .block-container {
     background-color: #ffffff !important;
@@ -67,12 +69,31 @@ html, body, [data-testid="stAppViewContainer"],
     max-width: 1100px !important;
 }
 
+/* Material Symbols */
+.ms {
+    font-family: 'Material Symbols Outlined';
+    font-style: normal;
+    font-weight: normal;
+    font-size: 1.1rem;
+    line-height: 1;
+    vertical-align: middle;
+    display: inline-block;
+    color: #1a56db;
+}
+.ms-lg {
+    font-size: 1.6rem;
+    margin-right: .3rem;
+}
+
 /* Tipografia */
 .ds-title {
-    font-size: 2rem;
+    font-size: 1.9rem;
     font-weight: 700;
     color: #1e2d4a !important;
     margin-bottom: .2rem;
+    display: flex;
+    align-items: center;
+    gap: .4rem;
 }
 .ds-sub {
     font-size: 1rem;
@@ -100,21 +121,24 @@ html, body, [data-testid="stAppViewContainer"],
 .ds-card strong {
     font-size: .85rem;
     color: #1e2d4a !important;
-    display: block;
-    margin-bottom: .2rem;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    margin-bottom: .25rem;
     line-height: 1.35;
 }
 .ds-card.sel {
     border-color: #1a56db;
     background: #eff6ff !important;
 }
+.ds-card.sel .ms { color: #1a56db; }
 .ds-badge {
     font-size: .68rem;
     color: #6b7d9b !important;
     font-weight: 500;
 }
 
-/* Todos os botoes — base branca com borda */
+/* Botoes — base branca */
 div[data-testid="stButton"] > button {
     background-color: #ffffff !important;
     color: #1e2d4a !important;
@@ -128,8 +152,6 @@ div[data-testid="stButton"] > button:hover {
     border-color: #1a56db !important;
     color: #1a56db !important;
 }
-
-/* Botao primario — azul solido */
 div[data-testid="stButton"] > button[data-testid="baseButton-primary"] {
     background-color: #1a56db !important;
     color: #ffffff !important;
@@ -144,8 +166,17 @@ div[data-testid="stButton"] > button[data-testid="baseButton-primary"]:hover {
 """, unsafe_allow_html=True)
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.markdown('<p class="ds-title">🏥 DataSUS AI Prediction</p>', unsafe_allow_html=True)
-st.markdown('<p class="ds-sub">Modelagem preditiva em saude publica — selecione o desfecho para comecar</p>', unsafe_allow_html=True)
+st.markdown(
+    '<p class="ds-title">'
+    '<span class="ms ms-lg">local_hospital</span>'
+    'DataSUS AI Prediction'
+    '</p>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<p class="ds-sub">Modelagem preditiva em saude publica — selecione o desfecho para comecar</p>',
+    unsafe_allow_html=True,
+)
 
 # ── Selecao de desfecho ───────────────────────────────────────────────────────
 sel = st.session_state.outcome_key
@@ -159,12 +190,12 @@ for group_name, outcomes in OUTCOME_GROUPS.items():
             cls = "ds-card sel" if is_sel else "ds-card"
             st.markdown(
                 f'<div class="{cls}">'
-                f'<strong>{icon} {name}</strong>'
+                f'<strong><span class="ms">{icon}</span>{name}</strong>'
                 f'<span class="ds-badge">{source}</span>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
-            label = "✓ Selecionado" if is_sel else "Selecionar"
+            label = "Selecionado" if is_sel else "Selecionar"
             if st.button(label, key=f"sel_{key}",
                          type="primary" if is_sel else "secondary",
                          use_container_width=True):
@@ -174,8 +205,8 @@ for group_name, outcomes in OUTCOME_GROUPS.items():
 # ── CTA ───────────────────────────────────────────────────────────────────────
 st.markdown("---")
 if sel:
-    st.success(f"Desfecho selecionado. Clique abaixo para iniciar a analise.")
-    if st.button("Iniciar Analise →", type="primary", use_container_width=False):
+    st.success("Desfecho selecionado. Clique abaixo para iniciar a analise.")
+    if st.button("Iniciar Analise", type="primary", use_container_width=False):
         st.switch_page("pages/analise.py")
 else:
     st.info("Selecione um desfecho acima para comecar a modelagem.")

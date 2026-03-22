@@ -39,10 +39,24 @@ def _pd():
     return pd
 
 st.markdown("""
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
+
 <style>
 /* ════════════════════════════════════════════════════════════════
    DESIGN SYSTEM — DataSUS AI  (baseado em review-ai-hub)
    ════════════════════════════════════════════════════════════════ */
+
+/* Material Symbols */
+.ms {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: normal;
+  font-size: 1rem;
+  line-height: 1;
+  vertical-align: middle;
+  display: inline-block;
+  color: var(--primary);
+}
 
 /* ── Tokens ─────────────────────────────────────────────────── */
 :root {
@@ -358,6 +372,7 @@ def render_topbar() -> None:
     st.markdown(
         '<div class="ds-topbar">'
         '<div class="ds-topbar-logo">'
+        '<span class="ms" style="font-size:1.3rem;color:#1a56db">local_hospital</span>'
         'DataSUS AI'
         '<span class="ds-topbar-badge">PREDICTION</span>'
         '</div>'
@@ -505,7 +520,7 @@ else:
 
     # ── Linha 2: Configuração de Amostragem ────────────────────────────────────
     st.markdown("<div style='margin-top:.75rem'></div>", unsafe_allow_html=True)
-    with st.expander("⚙️ Configuração de Amostragem", expanded=True):
+    with st.expander("Configuracao de Amostragem", expanded=True):
         sa1, sa2, sa3 = st.columns([1, 1, 2])
         with sa1:
             ss["use_sample"] = st.toggle(
