@@ -37,12 +37,6 @@ def _px():
 def _pd():
     import pandas as pd
     return pd
-st.set_page_config(
-    page_title="DataSUS AI — Analise",
-    page_icon="🏥",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
 st.markdown("""
 <style>
