@@ -232,6 +232,130 @@ def shap_values_dict(model, X: pd.DataFrame, max_rows: int = 500) -> dict:
     return dict(zip(col_names[:n], mean_abs[:n].tolist()))
 
 
+def threshold_metrics(y_true: np.ndarray, oof_probs: np.ndarray, threshold: float = 0.5) -> dict:
+    """Sensitivity, Specificity, PPV, NPV, NNT at a given threshold."""
+    pred = (oof_probs >= threshold).astype(int)
+    tp = int(((pred == 1) & (y_true == 1)).sum())
+    fp = int(((pred == 1) & (y_true == 0)).sum())
+    tn = int(((pred == 0) & (y_true == 0)).sum())
+    fn = int(((pred == 0) & (y_true == 1)).sum())
+    sens = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    spec = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    ppv  = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    npv  = tn / (tn + fn) if (tn + fn) > 0 else 0.0
+    nnt  = round(1 / ppv, 1) if ppv > 0 else float("inf")
+    return dict(tp=tp, fp=fp, tn=tn, fn=fn,
+                sensitivity=sens, specificity=spec, ppv=ppv, npv=npv, nnt=nnt)
+
+
+def threshold_curve_chart(y_true: np.ndarray, oof_probs: np.ndarray) -> go.Figure:
+    """Multi-metric curve across thresholds (Sensitivity, Specificity, PPV, NPV)."""
+    thresholds = np.linspace(0.01, 0.99, 99)
+    rows = [threshold_metrics(y_true, oof_probs, float(t)) for t in thresholds]
+    palette = {"Sensibilidade": "#ef4444", "Especificidade": "#3b82f6",
+               "VPP (Precisão)": "#059669", "VPN": "#d97706"}
+    keys    = {"Sensibilidade": "sensitivity", "Especificidade": "specificity",
+               "VPP (Precisão)": "ppv",       "VPN": "npv"}
+    fig = go.Figure()
+    for name, color in palette.items():
+        fig.add_trace(go.Scatter(
+            x=thresholds, y=[r[keys[name]] for r in rows],
+            mode="lines", name=name, line=dict(width=2, color=color),
+        ))
+    fig.update_layout(
+        title="Métricas Clínicas por Ponto de Corte",
+        xaxis_title="Threshold",
+        yaxis=dict(title="Valor", range=[0, 1]),
+        height=360,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        margin=dict(t=60, b=40),
+    )
+    return fig
+
+
+def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure | None:
+    """Waterfall SHAP chart for a single case."""
+    try:
+        import shap
+    except ImportError:
+        return None
+
+    estimator = model[-1]
+    prep = model[:-1]
+    row = X.iloc[[case_idx]]
+    X_t_raw = prep.transform(row)
+    if hasattr(X_t_raw, "toarray"):
+        X_t_raw = X_t_raw.toarray()
+    col_names = X.columns.tolist()
+    X_t = pd.DataFrame(X_t_raw, columns=col_names[: X_t_raw.shape[1]])
+
+    try:
+        explainer = shap.TreeExplainer(estimator)
+        sv = explainer.shap_values(X_t)
+        if isinstance(sv, list):
+            sv = sv[1]
+        base = explainer.expected_value
+        if isinstance(base, (list, np.ndarray)):
+            base = float(base[-1])
+    except Exception:
+        return None
+
+    sv_flat = sv[0]
+    n = min(len(col_names), len(sv_flat))
+    contributions = pd.Series(sv_flat[:n], index=col_names[:n])
+    top = contributions.abs().nlargest(15).index
+    contributions = contributions[top].sort_values()
+
+    colors = ["#ef4444" if v > 0 else "#3b82f6" for v in contributions.values]
+    final = float(base) + float(sv_flat.sum())
+    fig = go.Figure(go.Bar(
+        x=contributions.values, y=contributions.index,
+        orientation="h", marker_color=colors,
+    ))
+    fig.update_layout(
+        title=f"SHAP Individual — Caso #{case_idx} (score predito: {final:.3f})",
+        xaxis_title="Contribuição SHAP (vermelho = aumenta risco, azul = reduz)",
+        height=max(320, len(contributions) * 26),
+        margin=dict(l=170, t=50),
+    )
+    return fig
+
+
+def subgroup_metrics_table(
+    y_true: np.ndarray, oof_probs: np.ndarray, groups: pd.Series
+) -> pd.DataFrame:
+    """Performance metrics stratified by a categorical demographic column."""
+    from sklearn.metrics import roc_auc_score, average_precision_score
+    rows = []
+    for g in sorted(groups.unique()):
+        mask = (groups == g).values
+        yt, yp = y_true[mask], oof_probs[mask]
+        n = int(mask.sum())
+        if n < 20 or yt.sum() == 0 or yt.sum() == n:
+            continue
+        try:
+            auc = round(roc_auc_score(yt, yp), 3)
+        except Exception:
+            auc = float("nan")
+        try:
+            prauc = round(average_precision_score(yt, yp), 3)
+        except Exception:
+            prauc = float("nan")
+        rows.append({
+            "Subgrupo": str(g),
+            "N": n,
+            "Positivos": int(yt.sum()),
+            "Prevalência": f"{yt.mean():.1%}",
+            "ROC-AUC": auc,
+            "PR-AUC": prauc,
+        })
+    if not rows:
+        return pd.DataFrame()
+    return (pd.DataFrame(rows)
+            .sort_values("N", ascending=False)
+            .reset_index(drop=True))
+
+
 def fold_metrics_table(fold_metrics: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(fold_metrics)
     df = df.rename(columns={"roc_auc": "ROC-AUC", "pr_auc": "PR-AUC", "f1": "F1", "precision": "Precisão", "recall": "Recall", "brier": "Brier", "fold": "Fold"})

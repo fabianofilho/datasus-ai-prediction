@@ -939,13 +939,72 @@ if results.get("feature_importances"):
     st.markdown("#### Importância das variáveis")
     st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=False)
 
-st.markdown("#### SHAP — Explicabilidade")
+st.markdown("#### SHAP — Explicabilidade Global")
 with st.spinner("Calculando SHAP…"):
     shap_fig = ev.shap_summary(results["model"], X_res.head(500))
 if shap_fig:
     st.plotly_chart(shap_fig, use_container_width=False)
 else:
-    st.info("SHAP indisponível para este algoritmo. Instale: `pip install shap`")
+    st.info("SHAP indisponível para este algoritmo.")
+
+# ── SHAP Local ────────────────────────────────────────────────────────────────
+st.markdown("#### SHAP — Explicabilidade Individual")
+st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
+case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
+                            value=0, step=1)
+with st.spinner("Calculando SHAP individual…"):
+    wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
+if wf_fig:
+    st.plotly_chart(wf_fig, use_container_width=True)
+else:
+    st.info("SHAP individual indisponível para este algoritmo.")
+
+# ── Métricas Clínicas por Threshold ──────────────────────────────────────────
+st.markdown("#### Métricas Clínicas por Ponto de Corte")
+st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
+threshold = st.slider(
+    "Threshold", 0.01, 0.99, 0.50, 0.01,
+    help="Ponto de corte para classificar como positivo (alto risco).",
+)
+tm = ev.threshold_metrics(y_arr, oof, threshold)
+mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+mc1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
+mc2.metric("Especificidade", f"{tm['specificity']:.1%}")
+mc3.metric("VPP", f"{tm['ppv']:.1%}")
+mc4.metric("VPN", f"{tm['npv']:.1%}")
+mc5.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
+with st.expander("Matriz de confusão"):
+    cm_df = pd.DataFrame(
+        [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
+        index=["Real Negativo", "Real Positivo"],
+        columns=["Pred Negativo", "Pred Positivo"],
+    )
+    st.dataframe(cm_df, use_container_width=False)
+
+# ── Análise de Equidade por Subgrupo ─────────────────────────────────────────
+st.markdown("#### Análise de Equidade por Subgrupo")
+_fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
+_fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
+if _fairness_cols:
+    group_col = st.selectbox("Estratificar por", _fairness_cols,
+                              help="Analisa se o modelo performa igualmente para diferentes grupos.")
+    _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
+    sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
+    if not sub_df.empty:
+        st.dataframe(sub_df, use_container_width=True, hide_index=True)
+        fig_eq = px.bar(
+            sub_df, x="Subgrupo", y="ROC-AUC",
+            color="ROC-AUC", color_continuous_scale="RdYlGn",
+            range_color=[0.5, 1.0], title=f"ROC-AUC por {group_col}",
+            text="ROC-AUC",
+        )
+        fig_eq.update_traces(textposition="outside")
+        fig_eq.update_layout(height=360, showlegend=False)
+        st.plotly_chart(fig_eq, use_container_width=True)
+    else:
+        st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
+else:
+    st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
 
 st.markdown("#### Exportar predições")
 export_df = pd.DataFrame({
