@@ -109,23 +109,31 @@ html, body, [data-testid="stAppViewContainer"],
     margin: 1.5rem 0 .4rem;
 }
 
-/* Cards */
+/* Cards — altura fixa + flex para badge sempre na base */
 .ds-card {
     border: 1.5px solid #dce3ed;
     border-radius: 10px;
-    padding: .8rem 1rem;
+    padding: .75rem 1rem;
     margin-bottom: .5rem;
     background: #ffffff !important;
-    min-height: 72px;
+    height: 88px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
 }
 .ds-card strong {
-    font-size: .85rem;
+    font-size: .82rem;
     color: #1e2d4a !important;
     display: flex;
-    align-items: center;
-    gap: .35rem;
-    margin-bottom: .25rem;
-    line-height: 1.35;
+    align-items: flex-start;
+    gap: .3rem;
+    line-height: 1.3;
+    flex: 1;
+}
+.ds-card strong .ms {
+    flex-shrink: 0;
+    margin-top: .05rem;
 }
 .ds-card.sel {
     border-color: #1a56db;
@@ -136,6 +144,7 @@ html, body, [data-testid="stAppViewContainer"],
     font-size: .68rem;
     color: #6b7d9b !important;
     font-weight: 500;
+    margin-top: .2rem;
 }
 
 /* Botoes — base branca */
