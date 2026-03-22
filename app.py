@@ -116,7 +116,7 @@ html, body, [data-testid="stAppViewContainer"],
     padding: .75rem 1rem;
     margin-bottom: .5rem;
     background: #ffffff !important;
-    height: 88px;
+    height: 96px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -205,30 +205,20 @@ try:
                     f'</div>',
                     unsafe_allow_html=True,
                 )
-                label = "Selecionado" if is_sel else "Selecionar"
                 try:
-                    clicked = st.button(label, key=f"sel_{key}",
-                                        type="primary" if is_sel else "secondary",
-                                        use_container_width=True)
+                    clicked = st.button(
+                        "Selecionar", key=f"sel_{key}",
+                        type="primary" if is_sel else "secondary",
+                        use_container_width=True,
+                    )
                 except TypeError:
-                    clicked = st.button(label, key=f"sel_{key}",
-                                        type="primary" if is_sel else "secondary")
+                    clicked = st.button(
+                        "Selecionar", key=f"sel_{key}",
+                        type="primary" if is_sel else "secondary",
+                    )
                 if clicked:
                     st.session_state.outcome_key = key
-                    st.rerun()
-
-    # ── CTA ───────────────────────────────────────────────────────────────────
-    st.markdown("---")
-    if sel:
-        st.success("Desfecho selecionado. Clique abaixo para iniciar a analise.")
-        try:
-            cta = st.button("Iniciar Analise", type="primary", use_container_width=False)
-        except TypeError:
-            cta = st.button("Iniciar Analise", type="primary")
-        if cta:
-            st.switch_page("pages/analise.py")
-    else:
-        st.info("Selecione um desfecho acima para comecar a modelagem.")
+                    st.switch_page("pages/analise.py")
 
 except Exception as e:
     import traceback
