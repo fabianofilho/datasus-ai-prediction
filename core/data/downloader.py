@@ -28,8 +28,16 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-RAW_DIR = Path(__file__).parent.parent.parent / "data" / "raw"
-RAW_DIR.mkdir(parents=True, exist_ok=True)
+# Usa /tmp no Streamlit Cloud (filesystem read-only fora de /tmp)
+# e data/raw localmente para persistência entre sessões.
+_local_dir = Path(__file__).parent.parent.parent / "data" / "raw"
+_tmp_dir   = Path("/tmp/datasus_raw")
+try:
+    _local_dir.mkdir(parents=True, exist_ok=True)
+    RAW_DIR = _local_dir
+except (PermissionError, OSError):
+    _tmp_dir.mkdir(parents=True, exist_ok=True)
+    RAW_DIR = _tmp_dir
 
 STATES = [
     "AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO",
