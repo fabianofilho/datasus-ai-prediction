@@ -756,46 +756,8 @@ if ss["cohort"] is None:
             _miss_pct = _miss_total / max(_n * _k, 1)
             _c3.metric("Completude geral", f"{1 - _miss_pct:.1%}")
 
-            # Completude por coluna
-            with st.expander("Completude por coluna", expanded=True):
-                import plotly.express as _px_c
-                _miss_s = _df.isna().mean().sort_values(ascending=False)
-                _miss_df = pd.DataFrame({
-                    "Coluna": _miss_s.index,
-                    "Preenchido (%)": ((1 - _miss_s.values) * 100).round(1),
-                    "Missing (%)": (_miss_s.values * 100).round(1),
-                }).reset_index(drop=True)
-                _high = _miss_df["Missing (%)"] > 50
-
-                # gráfico de barras horizontais empilhadas
-                _fig_comp = _px_c.bar(
-                    _miss_df,
-                    y="Coluna",
-                    x=["Preenchido (%)", "Missing (%)"],
-                    orientation="h",
-                    color_discrete_map={"Preenchido (%)": "#22c55e", "Missing (%)": "#f97316"},
-                    labels={"value": "%", "variable": ""},
-                    height=max(300, _k * 22),
-                )
-                _fig_comp.update_layout(
-                    barmode="stack",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                    margin=dict(l=0, r=0, t=30, b=0),
-                    plot_bgcolor="white",
-                    paper_bgcolor="white",
-                    xaxis=dict(range=[0, 100], ticksuffix="%"),
-                    yaxis=dict(autorange="reversed"),
-                    font=dict(size=12),
-                )
-                st.plotly_chart(_fig_comp, use_container_width=True)
-                if _high.any():
-                    st.caption(
-                        f"⚠ {int(_high.sum())} coluna(s) com mais de 50% de missing — "
-                        "serão imputadas pela mediana no pipeline."
-                    )
-
             # Sumário estatístico
-            with st.expander("Sumário estatístico"):
+            with st.expander("Sumário estatístico", expanded=False):
                 import plotly.express as _px_s
                 import math as _math
 
@@ -847,6 +809,44 @@ if ss["cohort"] is None:
 
                 if _num.empty and _cat.empty:
                     st.caption("Nenhuma coluna encontrada.")
+
+            # Completude por coluna
+            with st.expander("Completude por coluna", expanded=False):
+                import plotly.express as _px_c
+                _miss_s = _df.isna().mean().sort_values(ascending=False)
+                _miss_df = pd.DataFrame({
+                    "Coluna": _miss_s.index,
+                    "Preenchido (%)": ((1 - _miss_s.values) * 100).round(1),
+                    "Missing (%)": (_miss_s.values * 100).round(1),
+                }).reset_index(drop=True)
+                _high = _miss_df["Missing (%)"] > 50
+
+                # gráfico de barras horizontais empilhadas
+                _fig_comp = _px_c.bar(
+                    _miss_df,
+                    y="Coluna",
+                    x=["Preenchido (%)", "Missing (%)"],
+                    orientation="h",
+                    color_discrete_map={"Preenchido (%)": "#22c55e", "Missing (%)": "#f97316"},
+                    labels={"value": "%", "variable": ""},
+                    height=max(300, _k * 22),
+                )
+                _fig_comp.update_layout(
+                    barmode="stack",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    margin=dict(l=0, r=0, t=30, b=0),
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    xaxis=dict(range=[0, 100], ticksuffix="%"),
+                    yaxis=dict(autorange="reversed"),
+                    font=dict(size=12),
+                )
+                st.plotly_chart(_fig_comp, use_container_width=True)
+                if _high.any():
+                    st.caption(
+                        f"⚠ {int(_high.sum())} coluna(s) com mais de 50% de missing — "
+                        "serão imputadas pela mediana no pipeline."
+                    )
 
             # Amostra
             with st.expander("Amostra dos dados (10 linhas)"):
