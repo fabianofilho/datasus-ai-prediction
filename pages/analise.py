@@ -279,16 +279,17 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   line-height: 1.5;
 }
 .ds-warn-box {
-  background: #fafaf9;
-  border: 1px solid #e5e7eb;
-  border-left: 3px solid #d97706;
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  margin: 4px 0 12px;
-  font-size: 0.85rem;
-  color: #374151;
-  line-height: 1.5;
+  background: #f9fafb !important;
+  border: 1px solid #e5e7eb !important;
+  border-left: 3px solid #d1d5db !important;
+  border-radius: var(--radius) !important;
+  padding: 12px 16px !important;
+  margin: 4px 0 12px !important;
+  font-size: 0.85rem !important;
+  color: #374151 !important;
+  line-height: 1.5 !important;
 }
+.ds-warn-box * { color: #374151 !important; }
 
 /* ── Expander ───────────────────────────────────────────────── */
 [data-testid="stExpander"] {
