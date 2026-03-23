@@ -1056,6 +1056,11 @@ if not ss.get("treatment_config"):
             label_visibility="collapsed",
         )
         _num_default_key = _num_map[_num_opt]
+        # Reset individual overrides when default changes
+        if ss.get("_prev_num_default") != _num_default_key:
+            for _c in _num_cols:
+                ss.pop(f"treat_n_{_c}", None)
+        ss["_prev_num_default"] = _num_default_key
         if _num_cols:
             with st.expander(f"Ajustar por variável ({len(_num_cols)})", expanded=False):
                 for _col in _num_cols:
@@ -1094,6 +1099,11 @@ if not ss.get("treatment_config"):
             ),
         )
         _cat_default_key = _cat_map[_cat_opt]
+        # Reset individual overrides when default changes
+        if ss.get("_prev_cat_default") != _cat_default_key:
+            for _c in _cat_cols:
+                ss.pop(f"treat_c_{_c}", None)
+        ss["_prev_cat_default"] = _cat_default_key
         if _cat_cols:
             with st.expander(f"Ajustar por variável ({len(_cat_cols)})", expanded=False):
                 for _col in _cat_cols:
