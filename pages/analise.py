@@ -557,7 +557,6 @@ render_topbar()
 render_sidebar()
 st.markdown('<div class="ds-page">', unsafe_allow_html=True)
 render_step_bar(current_step())
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════

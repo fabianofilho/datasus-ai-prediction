@@ -393,16 +393,13 @@ if not ss["model_results"] or not ss["outcome_key"] or ss["cohort"] is None:
         st.switch_page("pages/analise.py")
     st.stop()
 
-# ── Stepbar ────────────────────────────────────────────────────────────────────
-_step = 9 if ss.get("comparison_results") else 8
-render_step_bar(_step)
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-# ── Voltar ao modelo ───────────────────────────────────────────────────────────
+# ── Voltar ao modelo (acima do step bar) ───────────────────────────────────────
 if st.button("← Voltar ao Modelo", type="secondary"):
     st.switch_page("pages/analise.py")
 
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+# ── Stepbar ────────────────────────────────────────────────────────────────────
+_step = 9 if ss.get("comparison_results") else 8
+render_step_bar(_step)
 
 # ── Lazy modules ───────────────────────────────────────────────────────────────
 pd = _pd()

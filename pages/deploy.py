@@ -125,6 +125,10 @@ if not ss.get("model_results") or not ss.get("outcome_key") or ss.get("cohort") 
         st.switch_page("pages/analise.py")
     st.stop()
 
+# ── Voltar (acima do step bar) ─────────────────────────────────────────────────
+if st.button("← Voltar", type="secondary"):
+    st.switch_page("pages/analise.py")
+
 # ── Step bar ───────────────────────────────────────────────────────────────────
 labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark", "Deploy"]
 optionals = {8, 9, 10}
@@ -140,12 +144,6 @@ for i, lbl in enumerate(labels, 1):
     if i < len(labels):
         parts.append('<span class="ds-step-arrow">›</span>')
 st.markdown('<div class="ds-stepbar">' + "".join(parts) + "</div>", unsafe_allow_html=True)
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-if st.button("← Voltar", type="secondary"):
-    st.switch_page("pages/analise.py")
-
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Lazy imports ───────────────────────────────────────────────────────────────
 pd = _pd()
