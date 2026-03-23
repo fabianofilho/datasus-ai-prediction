@@ -243,6 +243,7 @@ _defaults: dict = {
     "outcome_key": None,
     "raw_data": {},
     "cohort": None,
+    "model_config": None,
     "model_results": None,
     "calib_results": None,
     "comparison_results": [],
@@ -260,10 +261,12 @@ for k, v in _defaults.items():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def current_step() -> int:
     if ss.get("comparison_results"):
-        return 7
+        return 8
     if ss.get("calib_results"):
-        return 6
+        return 7
     if ss["model_results"]:
+        return 6
+    if ss.get("model_config"):
         return 5
     if ss["cohort"] is not None:
         return 4
@@ -289,11 +292,12 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Resultados", "Calibração", "Benchmark"]
+    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
+    optionals = {7, 8}
     parts = []
     for i, lbl in enumerate(labels):
         n = i + 1
-        optional = n >= 6
+        optional = n in optionals
         if n < step:
             cls, dot = "ds-step ds-step-done", "✓"
         elif n == step:
@@ -348,7 +352,7 @@ if ss["outcome_key"]:
     done_bar(
         f'<strong>{o.name}</strong> &nbsp;·&nbsp; {", ".join(o.data_sources)}',
         "chg_outcome",
-        ["outcome_key", "raw_data", "cohort", "model_results", "manual_needed"],
+        ["outcome_key", "raw_data", "cohort", "model_config", "model_results", "manual_needed"],
     )
 else:
     step_title(1, "Selecionar Desfecho",
@@ -375,16 +379,15 @@ else:
                 if st.button(
                     "Selecionado" if is_sel else "Selecionar",
                     key=f"sel_{key}",
-                    
+
                     type="primary" if is_sel else "secondary",
                 ):
-                    for k in ["raw_data", "cohort", "model_results", "manual_needed"]:
+                    for k in ["raw_data", "cohort", "model_config", "model_results", "manual_needed"]:
                         ss[k] = _defaults[k]
                     ss["outcome_key"] = key
                     st.rerun()
     st.stop()
 
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 outcome = OUTCOMES[ss["outcome_key"]]
 
 # ── Lazy: módulos de dados e visualização (step 2+) ──────────────────────────
@@ -392,189 +395,148 @@ pd = _pd()
 px = _px()
 STATES, ManualUploadRequired, fetch, load_from_csv = _dl()
 
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 2 — DADOS
-# ═════════════════════════════════════════════════════════════════════════════
-if ss["raw_data"]:
-    summary = " &nbsp;·&nbsp; ".join(
-        f"{src}: <strong>{len(df):,}</strong>" for src, df in ss["raw_data"].items()
-    )
-    done_bar(summary, "chg_data",
-             ["raw_data", "cohort", "model_results", "manual_needed"])
-    with st.expander("Ver preview dos dados"):
-        for src, df in ss["raw_data"].items():
-            st.caption(f"**{src}** — {len(df):,} registros, {df.shape[1]} colunas")
-            st.dataframe(df.head(8), use_container_width=True)
-else:
-    step_title(2, "Baixar Dados",
-               f"Fontes necessárias para este desfecho: {', '.join(outcome.data_sources)}")
+# ─── Steps 2-3: apenas quando coorte ainda não foi construída ────────────────
+if ss["cohort"] is None:
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-    # ── Linha 1: Estado + Ano + Botão ─────────────────────────────────────────
-    c1, c2, c3 = st.columns([2, 2, 1])
-    with c1:
-        ss["sel_states"] = st.multiselect("Estados (UF)", STATES, default=ss["sel_states"])
-    with c2:
-        ss["sel_years"] = st.multiselect("Anos", list(range(2018, 2025)), default=ss["sel_years"])
+    # ═════════════════════════════════════════════════════════════════════════
+    # ETAPA 2 — DADOS
+    # ═════════════════════════════════════════════════════════════════════════
+    if ss["raw_data"]:
+        summary = " &nbsp;·&nbsp; ".join(
+            f"{src}: <strong>{len(df):,}</strong>" for src, df in ss["raw_data"].items()
+        )
+        done_bar(summary, "chg_data",
+                 ["raw_data", "cohort", "model_config", "model_results", "manual_needed"])
+        with st.expander("Ver preview dos dados"):
+            for src, df in ss["raw_data"].items():
+                st.caption(f"**{src}** — {len(df):,} registros, {df.shape[1]} colunas")
+                st.dataframe(df.head(8), use_container_width=True)
+    else:
+        step_title(2, "Baixar Dados",
+                   f"Fontes necessárias para este desfecho: {', '.join(outcome.data_sources)}")
 
-    if not ss["sel_states"] or not ss["sel_years"]:
-        st.info("Selecione pelo menos um estado e um ano para continuar.")
+        # ── Linha 1: Estado + Ano + Botão ─────────────────────────────────────────
+        c1, c2, c3 = st.columns([2, 2, 1])
+        with c1:
+            ss["sel_states"] = st.multiselect("Estados (UF)", STATES, default=ss["sel_states"])
+        with c2:
+            ss["sel_years"] = st.multiselect("Anos", list(range(2018, 2025)), default=ss["sel_years"])
+
+        if not ss["sel_states"] or not ss["sel_years"]:
+            st.info("Selecione pelo menos um estado e um ano para continuar.")
+            st.stop()
+
+        with c3:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            _download_clicked = st.button("Baixar", type="primary")
+
+        # ── Linha 2: Limite de registros ───────────────────────────────────────────
+        st.markdown("<div style='margin-top:.75rem'></div>", unsafe_allow_html=True)
+        with st.expander("Limite de registros por download", expanded=False):
+            sa1, sa2 = st.columns(2)
+            with sa1:
+                ss["sample_n"] = st.number_input(
+                    "Máximo de registros",
+                    min_value=1_000,
+                    max_value=500_000,
+                    value=ss["sample_n"],
+                    step=5_000,
+                    help="Limita o download para evitar falta de memória. Padrão: 10.000. Use 500.000 para dados completos.",
+                )
+            with sa2:
+                ss["sample_seed"] = st.number_input(
+                    "Seed (reprodutibilidade)",
+                    min_value=0, max_value=99_999,
+                    value=ss["sample_seed"], step=1,
+                    help="Seed aleatória para garantir resultados reproduzíveis.",
+                )
+            st.caption(
+                f"Serão baixados até **{ss['sample_n']:,}** registros com seed **{ss['sample_seed']}**. "
+                "O limite é aplicado durante a leitura dos arquivos para economizar memória."
+            )
+
+        if _download_clicked:
+            raw_data: dict = {}
+            manual_needed: list = []
+            _sample_n    = int(ss["sample_n"])
+            _sample_seed = int(ss["sample_seed"])
+            # Quota por arquivo para não estourar memória antes do concat
+            _quota_per_file = max(1_000, _sample_n // max(len(ss["sel_states"]) * len(ss["sel_years"]), 1))
+
+            for source in outcome.data_sources:
+                prog = st.progress(0.0, text=f"Baixando {source}…")
+                try:
+                    dfs = []
+                    for state in ss["sel_states"]:
+                        for year in ss["sel_years"]:
+                            # max_rows limita leitura dentro do _dbc_to_df (evita OOM)
+                            part = fetch(
+                                source, state, year,
+                                progress_callback=lambda p, m, _p=prog: _p.progress(min(p, 1.0), text=m),
+                                max_rows=_quota_per_file,
+                            )
+                            dfs.append(part)
+
+                    df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+
+                    # ── Garante o total exato após concat ──────────────────────────
+                    if len(df) > _sample_n:
+                        df = df.sample(n=_sample_n, random_state=_sample_seed).reset_index(drop=True)
+                        prog.progress(1.0, text=f"{source}: {len(df):,} registros (limitado a {_sample_n:,})")
+                    else:
+                        prog.progress(1.0, text=f"{source}: {len(df):,} registros")
+
+                    raw_data[source] = df
+                except ManualUploadRequired as e:
+                    prog.empty()
+                    manual_needed.append((source, str(e)))
+                except Exception as e:
+                    prog.empty()
+                    st.error(f"Erro ao baixar {source}: {e}")
+
+            ss["raw_data"] = raw_data
+            ss["cohort"] = None
+            ss["model_config"] = None
+            ss["model_results"] = None
+            ss["manual_needed"] = manual_needed
+            if raw_data and not manual_needed:
+                st.rerun()
+
+        if ss["manual_needed"]:
+            st.warning("Upload manual necessário para alguns arquivos.")
+            raw_data = ss.get("raw_data", {})
+            for source, msg in ss["manual_needed"]:
+                with st.expander(f"Upload: {source}", expanded=True):
+                    st.caption(msg)
+                    uploaded = st.file_uploader(
+                        f"CSV do {source}", type=["csv", "txt"], key=f"up_{source}"
+                    )
+                    if uploaded:
+                        try:
+                            s0 = ss["sel_states"][0] if len(ss["sel_states"]) == 1 else "BR"
+                            y0 = ss["sel_years"][0] if len(ss["sel_years"]) == 1 else 0
+                            df = load_from_csv(uploaded.read(), source, s0, y0)
+                            raw_data[source] = df
+                            ss["raw_data"] = raw_data
+                            ss["cohort"] = None
+                            st.success(f"{source}: {len(df):,} registros.")
+                        except Exception as e:
+                            st.error(f"Erro: {e}")
+            if set(outcome.data_sources) <= set(raw_data.keys()):
+                ss["manual_needed"] = []
+                st.rerun()
+
         st.stop()
 
-    with c3:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        _download_clicked = st.button("Baixar", type="primary")
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-    # ── Linha 2: Limite de registros ───────────────────────────────────────────
-    st.markdown("<div style='margin-top:.75rem'></div>", unsafe_allow_html=True)
-    with st.expander("Limite de registros por download", expanded=False):
-        sa1, sa2 = st.columns(2)
-        with sa1:
-            ss["sample_n"] = st.number_input(
-                "Máximo de registros",
-                min_value=1_000,
-                max_value=500_000,
-                value=ss["sample_n"],
-                step=5_000,
-                help="Limita o download para evitar falta de memória. Padrão: 10.000. Use 500.000 para dados completos.",
-            )
-        with sa2:
-            ss["sample_seed"] = st.number_input(
-                "Seed (reprodutibilidade)",
-                min_value=0, max_value=99_999,
-                value=ss["sample_seed"], step=1,
-                help="Seed aleatória para garantir resultados reproduzíveis.",
-            )
-        st.caption(
-            f"Serão baixados até **{ss['sample_n']:,}** registros com seed **{ss['sample_seed']}**. "
-            "O limite é aplicado durante a leitura dos arquivos para economizar memória."
-        )
+    # ── Lazy: CohortBuilder (só carrega ao chegar na etapa 3) ────────────────
+    CohortBuilder = _cohort()
 
-    if _download_clicked:
-        raw_data: dict = {}
-        manual_needed: list = []
-        _sample_n    = int(ss["sample_n"])
-        _sample_seed = int(ss["sample_seed"])
-        # Quota por arquivo para não estourar memória antes do concat
-        _quota_per_file = max(1_000, _sample_n // max(len(ss["sel_states"]) * len(ss["sel_years"]), 1))
-
-        for source in outcome.data_sources:
-            prog = st.progress(0.0, text=f"Baixando {source}…")
-            try:
-                dfs = []
-                for state in ss["sel_states"]:
-                    for year in ss["sel_years"]:
-                        # max_rows limita leitura dentro do _dbc_to_df (evita OOM)
-                        part = fetch(
-                            source, state, year,
-                            progress_callback=lambda p, m, _p=prog: _p.progress(min(p, 1.0), text=m),
-                            max_rows=_quota_per_file,
-                        )
-                        dfs.append(part)
-
-                df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-
-                # ── Garante o total exato após concat ──────────────────────────
-                if len(df) > _sample_n:
-                    df = df.sample(n=_sample_n, random_state=_sample_seed).reset_index(drop=True)
-                    prog.progress(1.0, text=f"{source}: {len(df):,} registros (limitado a {_sample_n:,})")
-                else:
-                    prog.progress(1.0, text=f"{source}: {len(df):,} registros")
-
-                raw_data[source] = df
-            except ManualUploadRequired as e:
-                prog.empty()
-                manual_needed.append((source, str(e)))
-            except Exception as e:
-                prog.empty()
-                st.error(f"Erro ao baixar {source}: {e}")
-
-        ss["raw_data"] = raw_data
-        ss["cohort"] = None
-        ss["model_results"] = None
-        ss["manual_needed"] = manual_needed
-        if raw_data and not manual_needed:
-            st.rerun()
-
-    if ss["manual_needed"]:
-        st.warning("Upload manual necessário para alguns arquivos.")
-        raw_data = ss.get("raw_data", {})
-        for source, msg in ss["manual_needed"]:
-            with st.expander(f"Upload: {source}", expanded=True):
-                st.caption(msg)
-                uploaded = st.file_uploader(
-                    f"CSV do {source}", type=["csv", "txt"], key=f"up_{source}"
-                )
-                if uploaded:
-                    try:
-                        s0 = ss["sel_states"][0] if len(ss["sel_states"]) == 1 else "BR"
-                        y0 = ss["sel_years"][0] if len(ss["sel_years"]) == 1 else 0
-                        df = load_from_csv(uploaded.read(), source, s0, y0)
-                        raw_data[source] = df
-                        ss["raw_data"] = raw_data
-                        ss["cohort"] = None
-                        st.success(f"{source}: {len(df):,} registros.")
-                    except Exception as e:
-                        st.error(f"Erro: {e}")
-        if set(outcome.data_sources) <= set(raw_data.keys()):
-            ss["manual_needed"] = []
-            st.rerun()
-
-    st.stop()
-
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-# ── Lazy: CohortBuilder (só carrega ao chegar na etapa 3) ────────────────────
-CohortBuilder = _cohort()
-
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 3 — COORTE
-# ═════════════════════════════════════════════════════════════════════════════
-if ss["cohort"] is not None:
-    cohort = ss["cohort"]
-    builder = CohortBuilder(outcome)
-    # Mostrar done_bar + detalhes da coorte apenas antes do modelo ser treinado
-    if not ss["model_results"]:
-        bal = builder.class_balance(cohort)
-        done_bar(
-            f'<strong>{bal["total"]:,}</strong> registros &nbsp;·&nbsp; '
-            f'prevalência <strong>{bal["prevalence"]:.1%}</strong>',
-            "chg_cohort",
-            ["cohort", "model_results"],
-        )
-    if not ss["model_results"]:
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total", f"{bal['total']:,}")
-        c2.metric("Positivos", f"{bal['positive']:,}")
-        c3.metric("Negativos", f"{bal['negative']:,}")
-        c4.metric("Prevalência", f"{bal['prevalence']:.1%}")
-
-        with st.expander("Distribuição e dados faltantes"):
-            ca, cb = st.columns(2)
-            with ca:
-                fig_pie = px.pie(
-                    values=[bal["positive"], bal["negative"]],
-                    names=["Positivo (1)", "Negativo (0)"],
-                    color_discrete_sequence=["#ef4444", "#3b82f6"],
-                    title="Distribuição do desfecho",
-                )
-                fig_pie.update_layout(margin=dict(t=40, b=0, l=0, r=0), height=260)
-                st.plotly_chart(fig_pie, use_container_width=True)
-            with cb:
-                missing = (cohort.isnull().mean() * 100).sort_values(ascending=False)
-                missing = missing[missing > 0].head(15)
-                if not missing.empty:
-                    fig_miss = px.bar(
-                        x=missing.values, y=missing.index, orientation="h",
-                        labels={"x": "% faltante", "y": ""},
-                        title="Dados faltantes por coluna",
-                        color=missing.values, color_continuous_scale="Reds",
-                    )
-                    fig_miss.update_layout(margin=dict(t=40, b=0, l=0, r=0), height=260, showlegend=False)
-                    st.plotly_chart(fig_miss, use_container_width=True)
-                else:
-                    st.success("Sem dados faltantes.")
-            st.dataframe(cohort.head(50), use_container_width=True)
-else:
+    # ═════════════════════════════════════════════════════════════════════════
+    # ETAPA 3 — COORTE
+    # ═════════════════════════════════════════════════════════════════════════
     step_title(3, "Construir Coorte",
                "Filtra casos elegíveis, cria features e define o target para o modelo.")
     if st.button("Construir Coorte", type="primary"):
@@ -582,6 +544,7 @@ else:
             try:
                 builder = CohortBuilder(outcome)
                 ss["cohort"] = builder.build(ss["raw_data"])
+                ss["model_config"] = None
                 ss["model_results"] = None
                 st.rerun()
             except Exception as e:
@@ -589,50 +552,35 @@ else:
                 st.exception(e)
     st.stop()
 
+# ─── COHORT BUILT: Steps 4-6 ────────────────────────────────────────────────
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-# ── Lazy: pipeline ML (só carrega ao chegar na etapa 4) ──────────────────────
+# ── Lazy: CohortBuilder e pipeline ML ────────────────────────────────────────
+CohortBuilder = _cohort()
 ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline = _pipeline()
 
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 4 — MODELO
-# ═════════════════════════════════════════════════════════════════════════════
 cohort = ss["cohort"]
 builder = CohortBuilder(outcome)
 X, y = builder.get_Xy(cohort)
 
-if ss["model_results"]:
-    results = ss["model_results"]
-    m = results["mean_metrics"]
-    sample_info = ""
-    if results.get("sample_n") and results["sample_n"] < len(cohort):
-        sample_info = f' &nbsp;·&nbsp; amostra <strong>{results["sample_n"]:,}</strong>'
-    hpo_tag = " · Optuna" if results.get("hpo_mode") == "Optuna (automático)" else ""
-    if results.get("validation_strategy") == "holdout":
-        val_tag = f' · Holdout {results.get("holdout_size", 0.2):.0%}'
-    else:
-        val_tag = ""
-    done_bar(
-        f'<strong>{results["algorithm"].upper()}</strong>{hpo_tag}{val_tag} &nbsp;·&nbsp; '
-        f'AUC <strong>{m["roc_auc"]:.3f}</strong> &nbsp;·&nbsp; '
-        f'F1 <strong>{m["f1"]:.3f}</strong> &nbsp;·&nbsp; '
-        f'PR-AUC <strong>{m["pr_auc"]:.3f}</strong>{sample_info}',
-        "chg_model",
-        ["model_results", "calib_results", "comparison_results"],
+# ═════════════════════════════════════════════════════════════════════════════
+# ETAPA 4 — CONFIGURAR MODELO
+# ═════════════════════════════════════════════════════════════════════════════
+if ss.get("model_config"):
+    cfg = ss["model_config"]
+    _n_feat = len(cfg["selected_features"])
+    _val_short = (
+        f"{cfg['n_folds']}-fold CV"
+        if cfg["val_strategy"] == "Validação cruzada (k-fold)"
+        else f"Holdout {cfg['holdout_size']:.0%}"
     )
-
-# ── Tabs: Treinar / Validar ───────────────────────────────────────────────────
-_tab_train, _tab_val = st.tabs(["Treinar Modelo", "Validação e Resultados"])
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB TREINAR
-# ─────────────────────────────────────────────────────────────────────────────
-with _tab_train:
-  if ss["model_results"]:
-    st.success("Modelo treinado. Confira a aba **Validação e Resultados**.")
-  else:
-    # ── config ────────────────────────────────────────────────────────────────
-    step_title(4, "Treinar Modelo",
+    done_bar(
+        f'<strong>{cfg["algo_label"]}</strong> &nbsp;·&nbsp; {_val_short} &nbsp;·&nbsp; {_n_feat} features',
+        "chg_model_config",
+        ["model_config", "model_results", "calib_results", "comparison_results"],
+    )
+else:
+    step_title(4, "Configurar Modelo",
                "Configure o algoritmo, validação e hiperparâmetros.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
@@ -641,7 +589,6 @@ with _tab_train:
         f"**{len(X.columns)}** features disponíveis"
     )
 
-    sample_n = total_n
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
@@ -655,7 +602,7 @@ with _tab_train:
         )
         if val_strategy == "Validação cruzada (k-fold)":
             n_folds = st.slider("Folds", 3, 10, 5)
-            holdout_size = None
+            holdout_size = 0.20
         else:
             holdout_size = st.select_slider(
                 "Proporção de teste",
@@ -696,7 +643,80 @@ with _tab_train:
         st.warning("Selecione pelo menos uma feature.")
         st.stop()
 
-    # ── Live learning curve chart ─────────────────────────────────────────────
+    if st.button("Confirmar Configuração", type="primary"):
+        ss["model_config"] = {
+            "algo": algo,
+            "algo_label": algo_label,
+            "val_strategy": val_strategy,
+            "n_folds": n_folds,
+            "holdout_size": holdout_size,
+            "use_smote": use_smote,
+            "hpo_mode": hpo_mode,
+            "n_trials": n_trials,
+            "params": params,
+            "selected_features": selected_features,
+        }
+        ss["model_results"] = None
+        ss["calib_results"] = None
+        ss["comparison_results"] = []
+        st.rerun()
+    st.stop()
+
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ETAPA 5 — TREINAR
+# ═════════════════════════════════════════════════════════════════════════════
+cfg = ss["model_config"]
+algo = cfg["algo"]
+algo_label = cfg["algo_label"]
+val_strategy = cfg["val_strategy"]
+n_folds = cfg["n_folds"]
+holdout_size = cfg["holdout_size"]
+use_smote = cfg["use_smote"]
+hpo_mode = cfg["hpo_mode"]
+n_trials = cfg["n_trials"]
+params = cfg["params"]
+selected_features = cfg["selected_features"]
+
+if ss["model_results"]:
+    results = ss["model_results"]
+    m = results["mean_metrics"]
+    sample_info = ""
+    if results.get("sample_n") and results["sample_n"] < len(cohort):
+        sample_info = f' &nbsp;·&nbsp; amostra <strong>{results["sample_n"]:,}</strong>'
+    hpo_tag = " · Optuna" if results.get("hpo_mode") == "Optuna (automático)" else ""
+    if results.get("validation_strategy") == "holdout":
+        val_tag = f' · Holdout {results.get("holdout_size", 0.2):.0%}'
+    else:
+        val_tag = ""
+    done_bar(
+        f'<strong>{results["algorithm"].upper()}</strong>{hpo_tag}{val_tag} &nbsp;·&nbsp; '
+        f'AUC <strong>{m["roc_auc"]:.3f}</strong> &nbsp;·&nbsp; '
+        f'F1 <strong>{m["f1"]:.3f}</strong> &nbsp;·&nbsp; '
+        f'PR-AUC <strong>{m["pr_auc"]:.3f}</strong>{sample_info}',
+        "chg_model",
+        ["model_results", "calib_results", "comparison_results"],
+    )
+else:
+    step_title(5, "Treinar Modelo",
+               "Execute o treinamento com a configuração selecionada.")
+    bal = builder.class_balance(cohort)
+    total_n = bal["total"]
+    _val_tag_label = (
+        f"{n_folds}-fold CV" if val_strategy == "Validação cruzada (k-fold)"
+        else f"Holdout {holdout_size:.0%}"
+    )
+    st.info(
+        f"**{algo_label}** · {_val_tag_label} · **{len(selected_features)}** features · "
+        f"**{total_n:,}** registros"
+        + (" · SMOTE" if use_smote else "")
+        + (f" · Optuna {n_trials} trials" if hpo_mode == "Optuna (automático)" else "")
+    )
+
+    X_model = X[selected_features]
+    sample_n = total_n
+
     def _lc_fig(sizes, val_aucs, train_aucs):
         import plotly.graph_objects as _go
         fig = _go.Figure()
@@ -727,25 +747,18 @@ with _tab_train:
     _lc_status_ph = st.empty()
     _lc_chart_ph.plotly_chart(_lc_fig([], [], []), use_container_width=True)
 
-    # ── Botão treinar ─────────────────────────────────────────────────────────
-    _val_tag = (
-        f"{n_folds}-fold CV" if val_strategy == "Validação cruzada (k-fold)"
-        else f"Holdout {holdout_size:.0%}"
-    )
     btn_label = (
-        f"Otimizar + Treinar {algo_label} · {_val_tag}"
+        f"Otimizar + Treinar {algo_label} · {_val_tag_label}"
         if hpo_mode == "Optuna (automático)"
-        else f"Treinar {algo_label} · {_val_tag}"
+        else f"Treinar {algo_label} · {_val_tag_label}"
     )
-    if sample_n < total_n:
-        btn_label += f" ({sample_n:,} registros)"
 
     if st.button(btn_label, type="primary"):
         try:
             from sklearn.model_selection import train_test_split
             from sklearn.metrics import roc_auc_score as _roc_auc
 
-            X_train = X[selected_features]
+            X_train = X_model
             y_train = y
             if sample_n < total_n:
                 X_train, _, y_train, _ = train_test_split(
@@ -866,165 +879,160 @@ with _tab_train:
         except Exception as e:
             st.error(f"Erro no treino: {e}")
             st.exception(e)
+    st.stop()
 
-# ─────────────────────────────────────────────────────────────────────────────
-# TAB VALIDAR
-# ─────────────────────────────────────────────────────────────────────────────
-with _tab_val:
-  if not ss["model_results"]:
-    st.info("Treine o modelo primeiro na aba **Treinar Modelo**.")
-  else:
-    ev = _ev()
-    results = ss["model_results"]
-    st.markdown(
-        '<p class="ds-section-title">Resultados do Modelo</p>'
-        '<p class="ds-section-caption">Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.</p>',
-        unsafe_allow_html=True,
-    )
-    
-    m = results["mean_metrics"]
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("ROC-AUC", f"{m['roc_auc']:.4f}")
-    c2.metric("PR-AUC", f"{m['pr_auc']:.4f}")
-    c3.metric("F1-Score", f"{m['f1']:.4f}")
-    c4.metric("Recall", f"{m['recall']:.4f}")
-    c5.metric("Brier Score", f"{m['brier']:.4f}")
-    
-    col_exp1, col_exp2 = st.columns(2)
-    with col_exp1:
-        _exp_label = "Métricas por fold" if results.get("validation_strategy") != "holdout" else "Métricas do conjunto de teste"
-        with st.expander(_exp_label):
-            st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
-    with col_exp2:
-        with st.expander("Hiperparâmetros utilizados"):
-            bp = results.get("best_params") or {}
-            if bp:
-                st.json(bp)
-            else:
-                st.caption("Parâmetros padrão (sem configuração explícita).")
-            if results.get("sample_n"):
-                sn = results["sample_n"]
-                st.caption(f"Treinado com {sn:,} registros (amostra estratificada).")
-            if results.get("hpo_mode") == "Optuna (automático)":
-                st.caption("Hiperparâmetros encontrados via otimização bayesiana (Optuna).")
-    
-    X_res = X[results["X_columns"]]
-    oof = results["oof_probs"]
-    # Holdout: usar apenas os labels do conjunto de teste
-    if results.get("validation_strategy") == "holdout":
-        y_arr = results["y_eval"]
-    else:
-        y_arr = y.values
-    
-    st.markdown("#### Curvas de desempenho")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.plotly_chart(ev.roc_chart(y_arr, oof), use_container_width=True)
-    with col2:
-        st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
-    
-    st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=False)
-    
-    st.markdown("#### Distribuição dos scores preditos")
-    fig_dist = px.histogram(
-        x=oof, color=y_arr.astype(str), nbins=50, barmode="overlay", opacity=0.65,
-        labels={"x": "Score predito", "color": "Desfecho real"},
-        color_discrete_map={"0": "#3b82f6", "1": "#ef4444"},
-        title="Scores por classe real",
-    )
-    fig_dist.update_layout(margin=dict(t=40, b=0))
-    st.plotly_chart(fig_dist, use_container_width=True)
-    
-    if results.get("feature_importances"):
-        st.markdown("#### Importância das variáveis")
-        st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=False)
-    
-    st.markdown("#### SHAP — Explicabilidade Global")
-    with st.spinner("Calculando SHAP…"):
-        shap_fig = ev.shap_summary(results["model"], X_res.head(500))
-    if shap_fig:
-        st.plotly_chart(shap_fig, use_container_width=False)
-    else:
-        st.info("SHAP indisponível para este algoritmo.")
-    
-    # ── SHAP Local ────────────────────────────────────────────────────────────────
-    st.markdown("#### SHAP — Explicabilidade Individual")
-    st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
-    case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
-                                value=0, step=1)
-    with st.spinner("Calculando SHAP individual…"):
-        wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
-    if wf_fig:
-        st.plotly_chart(wf_fig, use_container_width=True)
-    else:
-        st.info("SHAP individual indisponível para este algoritmo.")
-    
-    # ── Métricas Clínicas por Threshold ──────────────────────────────────────────
-    st.markdown("#### Métricas Clínicas por Ponto de Corte")
-    st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
-    threshold = st.slider(
-        "Threshold", 0.01, 0.99, 0.50, 0.01,
-        help="Ponto de corte para classificar como positivo (alto risco).",
-    )
-    tm = ev.threshold_metrics(y_arr, oof, threshold)
-    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-    mc1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
-    mc2.metric("Especificidade", f"{tm['specificity']:.1%}")
-    mc3.metric("VPP", f"{tm['ppv']:.1%}")
-    mc4.metric("VPN", f"{tm['npv']:.1%}")
-    mc5.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
-    with st.expander("Matriz de confusão"):
-        cm_df = pd.DataFrame(
-            [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
-            index=["Real Negativo", "Real Positivo"],
-            columns=["Pred Negativo", "Pred Positivo"],
-        )
-        st.dataframe(cm_df, use_container_width=False)
-    
-    # ── Análise de Equidade por Subgrupo ─────────────────────────────────────────
-    st.markdown("#### Análise de Equidade por Subgrupo")
-    _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
-    _fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
-    if _fairness_cols:
-        group_col = st.selectbox("Estratificar por", _fairness_cols,
-                                  help="Analisa se o modelo performa igualmente para diferentes grupos.")
-        _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
-        sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
-        if not sub_df.empty:
-            st.dataframe(sub_df, use_container_width=True, hide_index=True)
-            fig_eq = px.bar(
-                sub_df, x="Subgrupo", y="ROC-AUC",
-                color="ROC-AUC", color_continuous_scale="RdYlGn",
-                range_color=[0.5, 1.0], title=f"ROC-AUC por {group_col}",
-                text="ROC-AUC",
-            )
-            fig_eq.update_traces(textposition="outside")
-            fig_eq.update_layout(height=360, showlegend=False)
-            st.plotly_chart(fig_eq, use_container_width=True)
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ETAPA 6 — RESULTADOS
+# ═════════════════════════════════════════════════════════════════════════════
+step_title(6, "Resultados do Modelo",
+           "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
+
+ev = _ev()
+results = ss["model_results"]
+
+m = results["mean_metrics"]
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("ROC-AUC", f"{m['roc_auc']:.4f}")
+c2.metric("PR-AUC", f"{m['pr_auc']:.4f}")
+c3.metric("F1-Score", f"{m['f1']:.4f}")
+c4.metric("Recall", f"{m['recall']:.4f}")
+c5.metric("Brier Score", f"{m['brier']:.4f}")
+
+col_exp1, col_exp2 = st.columns(2)
+with col_exp1:
+    _exp_label = "Métricas por fold" if results.get("validation_strategy") != "holdout" else "Métricas do conjunto de teste"
+    with st.expander(_exp_label):
+        st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
+with col_exp2:
+    with st.expander("Hiperparâmetros utilizados"):
+        bp = results.get("best_params") or {}
+        if bp:
+            st.json(bp)
         else:
-            st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
-    else:
-        st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
-    
-    st.markdown("#### Exportar predições")
-    export_df = pd.DataFrame({
-        "score": oof,
-        "predicao": (oof >= 0.5).astype(int),
-        "real": y_arr,
-    })
-    st.download_button(
-        label="Baixar predições OOF (CSV)",
-        data=export_df.to_csv(index=False).encode("utf-8"),
-        file_name=f"predicoes_{ss['outcome_key']}.csv",
-        mime="text/csv",
+            st.caption("Parâmetros padrão (sem configuração explícita).")
+        if results.get("sample_n"):
+            sn = results["sample_n"]
+            st.caption(f"Treinado com {sn:,} registros (amostra estratificada).")
+        if results.get("hpo_mode") == "Optuna (automático)":
+            st.caption("Hiperparâmetros encontrados via otimização bayesiana (Optuna).")
+
+X_res = X[results["X_columns"]]
+oof = results["oof_probs"]
+# Holdout: usar apenas os labels do conjunto de teste
+if results.get("validation_strategy") == "holdout":
+    y_arr = results["y_eval"]
+else:
+    y_arr = y.values
+
+st.markdown("#### Curvas de desempenho")
+col1, col2 = st.columns(2)
+with col1:
+    st.plotly_chart(ev.roc_chart(y_arr, oof), use_container_width=True)
+with col2:
+    st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
+
+st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=False)
+
+st.markdown("#### Distribuição dos scores preditos")
+fig_dist = px.histogram(
+    x=oof, color=y_arr.astype(str), nbins=50, barmode="overlay", opacity=0.65,
+    labels={"x": "Score predito", "color": "Desfecho real"},
+    color_discrete_map={"0": "#3b82f6", "1": "#ef4444"},
+    title="Scores por classe real",
+)
+fig_dist.update_layout(margin=dict(t=40, b=0))
+st.plotly_chart(fig_dist, use_container_width=True)
+
+if results.get("feature_importances"):
+    st.markdown("#### Importância das variáveis")
+    st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=False)
+
+st.markdown("#### SHAP — Explicabilidade Global")
+with st.spinner("Calculando SHAP…"):
+    shap_fig = ev.shap_summary(results["model"], X_res.head(500))
+if shap_fig:
+    st.plotly_chart(shap_fig, use_container_width=False)
+else:
+    st.info("SHAP indisponível para este algoritmo.")
+
+# ── SHAP Local ────────────────────────────────────────────────────────────────
+st.markdown("#### SHAP — Explicabilidade Individual")
+st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
+case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
+                            value=0, step=1)
+with st.spinner("Calculando SHAP individual…"):
+    wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
+if wf_fig:
+    st.plotly_chart(wf_fig, use_container_width=True)
+else:
+    st.info("SHAP individual indisponível para este algoritmo.")
+
+# ── Métricas Clínicas por Threshold ──────────────────────────────────────────
+st.markdown("#### Métricas Clínicas por Ponto de Corte")
+st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
+threshold = st.slider(
+    "Threshold", 0.01, 0.99, 0.50, 0.01,
+    help="Ponto de corte para classificar como positivo (alto risco).",
+)
+tm = ev.threshold_metrics(y_arr, oof, threshold)
+mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+mc1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
+mc2.metric("Especificidade", f"{tm['specificity']:.1%}")
+mc3.metric("VPP", f"{tm['ppv']:.1%}")
+mc4.metric("VPN", f"{tm['npv']:.1%}")
+mc5.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
+with st.expander("Matriz de confusão"):
+    cm_df = pd.DataFrame(
+        [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
+        index=["Real Negativo", "Real Positivo"],
+        columns=["Pred Negativo", "Pred Positivo"],
     )
-    
-if ss["model_results"]:
-    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-    st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibração e benchmark.</p>',
-                unsafe_allow_html=True)
-    if st.button("Calibração e Benchmark →", type="primary"):
-        st.switch_page("pages/calibracao.py")
+    st.dataframe(cm_df, use_container_width=False)
+
+# ── Análise de Equidade por Subgrupo ─────────────────────────────────────────
+st.markdown("#### Análise de Equidade por Subgrupo")
+_fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
+_fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
+if _fairness_cols:
+    group_col = st.selectbox("Estratificar por", _fairness_cols,
+                              help="Analisa se o modelo performa igualmente para diferentes grupos.")
+    _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
+    sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
+    if not sub_df.empty:
+        st.dataframe(sub_df, use_container_width=True, hide_index=True)
+        fig_eq = px.bar(
+            sub_df, x="Subgrupo", y="ROC-AUC",
+            color="ROC-AUC", color_continuous_scale="RdYlGn",
+            range_color=[0.5, 1.0], title=f"ROC-AUC por {group_col}",
+            text="ROC-AUC",
+        )
+        fig_eq.update_traces(textposition="outside")
+        fig_eq.update_layout(height=360, showlegend=False)
+        st.plotly_chart(fig_eq, use_container_width=True)
+    else:
+        st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
+else:
+    st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
+
+st.markdown("#### Exportar predições")
+export_df = pd.DataFrame({
+    "score": oof,
+    "predicao": (oof >= 0.5).astype(int),
+    "real": y_arr,
+})
+st.download_button(
+    label="Baixar predições OOF (CSV)",
+    data=export_df.to_csv(index=False).encode("utf-8"),
+    file_name=f"predicoes_{ss['outcome_key']}.csv",
+    mime="text/csv",
+)
+
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibração e benchmark.</p>',
+            unsafe_allow_html=True)
+if st.button("→ Calibração e Benchmark", type="primary"):
+    st.switch_page("pages/calibracao.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
-
