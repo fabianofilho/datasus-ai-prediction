@@ -205,14 +205,6 @@ OUTCOME_GROUPS = {
 if "outcome_key" not in st.session_state:
     st.session_state.outcome_key = None
 
-# Reset de sessão via query param (?reset=1)
-_qp = st.query_params
-if _qp.get("reset"):
-    for k in list(st.session_state.keys()):
-        del st.session_state[k]
-    st.query_params.clear()
-    st.rerun()
-
 # ── CSS + Material Symbols ────────────────────────────────────────────────────
 st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
