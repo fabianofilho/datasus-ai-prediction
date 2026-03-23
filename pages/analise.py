@@ -1437,21 +1437,18 @@ if not ss["model_results"]:
             all_vals.extend(d.get("train", []))
         if all_vals:
             _ymin = max(0.0, min(all_vals) - 0.05)
-            _ymax = min(1.0, max(all_vals) + 0.05)
+            _ymax = min(1.01, max(all_vals) + 0.03)
         else:
             _ymin, _ymax = 0.4, 1.0
 
         fig = _go.Figure()
         for i, (lbl, d) in enumerate(lc_data.items()):
             color = _LC_COLORS[i % len(_LC_COLORS)]
-            rgba_fill = f"rgba({int(color[1:3],16)},{int(color[3:5],16)},{int(color[5:7],16)},0.08)"
             if d["sizes"]:
                 fig.add_trace(_go.Scatter(
                     x=d["sizes"], y=d["val"], mode="lines+markers",
                     name=f"{lbl} — Validação",
                     line=dict(color=color, width=2.5), marker=dict(size=8),
-                    fill="tonexty" if i > 0 else "none",
-                    fillcolor=rgba_fill,
                 ))
                 if d["train"]:
                     fig.add_trace(_go.Scatter(
@@ -1471,9 +1468,9 @@ if not ss["model_results"]:
             ),
             xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.07)", zeroline=False),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            height=420,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(t=70, b=50, l=70, r=30),
+            height=450,
+            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
+            margin=dict(t=50, b=90, l=70, r=30),
             font=dict(size=13),
             hovermode="x unified",
         )
