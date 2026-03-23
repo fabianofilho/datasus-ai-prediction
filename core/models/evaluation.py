@@ -30,6 +30,22 @@ def _unwrap_model(model):
     return model[-1], model[:-1]
 
 
+def _feat_names_after_transform(prep, original_cols: list, n_out: int) -> list:
+    """Get feature names after preprocessing (handles OHE column expansion).
+
+    After a ColumnTransformer with OneHotEncoding the number of output columns
+    can be larger than the original input columns. This helper tries
+    ``get_feature_names_out()`` first and falls back gracefully.
+    """
+    try:
+        return list(prep.get_feature_names_out())
+    except Exception:
+        pass
+    if n_out <= len(original_cols):
+        return original_cols[:n_out]
+    return [f"feat_{i}" for i in range(n_out)]
+
+
 def roc_chart(y_true: np.ndarray, oof_probs: np.ndarray) -> go.Figure:
     fpr, tpr, _ = roc_curve(y_true, oof_probs)
     auc = _trapz(tpr, fpr)
@@ -101,7 +117,8 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
         X_transformed = X_transformed.toarray()
 
     col_names = X.columns.tolist()
-    X_t = pd.DataFrame(X_transformed, columns=col_names[:X_transformed.shape[1]])
+    feat_names = _feat_names_after_transform(prep, col_names, X_transformed.shape[1])
+    X_t = pd.DataFrame(X_transformed, columns=feat_names)
 
     try:
         explainer = shap.TreeExplainer(estimator)
@@ -117,7 +134,7 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
 
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
     idx = np.argsort(mean_abs_shap)[-max_display:]
-    df = pd.DataFrame({"feature": np.array(col_names[:len(mean_abs_shap)])[idx], "shap": mean_abs_shap[idx]})
+    df = pd.DataFrame({"feature": np.array(feat_names[:len(mean_abs_shap)])[idx], "shap": mean_abs_shap[idx]})
     fig = go.Figure(go.Bar(x=df["shap"], y=df["feature"], orientation="h", marker_color="#d62728"))
     fig.update_layout(
         title=f"SHAP — Importância média absoluta (top {max_display})",
@@ -227,7 +244,8 @@ def shap_values_dict(model, X: pd.DataFrame, max_rows: int = 500) -> dict:
     if hasattr(X_transformed, "toarray"):
         X_transformed = X_transformed.toarray()
     col_names = X_sub.columns.tolist()
-    X_t = pd.DataFrame(X_transformed, columns=col_names[: X_transformed.shape[1]])
+    feat_names = _feat_names_after_transform(prep, col_names, X_transformed.shape[1])
+    X_t = pd.DataFrame(X_transformed, columns=feat_names)
 
     try:
         explainer = shap.TreeExplainer(estimator)
@@ -242,8 +260,8 @@ def shap_values_dict(model, X: pd.DataFrame, max_rows: int = 500) -> dict:
             return {}
 
     mean_abs = np.abs(sv).mean(axis=0)
-    n = min(len(col_names), len(mean_abs))
-    return dict(zip(col_names[:n], mean_abs[:n].tolist()))
+    n = min(len(feat_names), len(mean_abs))
+    return dict(zip(feat_names[:n], mean_abs[:n].tolist()))
 
 
 def threshold_metrics(y_true: np.ndarray, oof_probs: np.ndarray, threshold: float = 0.5) -> dict:
@@ -300,7 +318,8 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
     if hasattr(X_t_raw, "toarray"):
         X_t_raw = X_t_raw.toarray()
     col_names = X.columns.tolist()
-    X_t = pd.DataFrame(X_t_raw, columns=col_names[: X_t_raw.shape[1]])
+    feat_names = _feat_names_after_transform(prep, col_names, X_t_raw.shape[1])
+    X_t = pd.DataFrame(X_t_raw, columns=feat_names)
 
     try:
         explainer = shap.TreeExplainer(estimator)
@@ -314,8 +333,8 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
         return None
 
     sv_flat = sv[0]
-    n = min(len(col_names), len(sv_flat))
-    contributions = pd.Series(sv_flat[:n], index=col_names[:n])
+    n = min(len(feat_names), len(sv_flat))
+    contributions = pd.Series(sv_flat[:n], index=feat_names[:n])
     top = contributions.abs().nlargest(15).index
     contributions = contributions[top].sort_values()
 
