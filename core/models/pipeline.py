@@ -467,9 +467,11 @@ def train_cv(
             importances_list.append(imp)
 
     mean_metrics = {
-        k: float(np.mean([f[k] for f in fold_metrics]))
+        k: float(np.nanmean([f[k] for f in fold_metrics if k in f]))
         for k in fold_metrics[0] if k != "fold"
     }
+    # Garantir que nenhuma métrica seja nan — substituir por 0.0
+    mean_metrics = {k: (v if not (v != v) else 0.0) for k, v in mean_metrics.items()}
 
     feature_importances = {}
     if importances_list:

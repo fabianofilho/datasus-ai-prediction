@@ -1728,8 +1728,8 @@ if len(_all) > 1:
         {
             "Algoritmo": r.get("algo_label", r.get("algorithm", "?").upper()),
             "ROC-AUC":        round(r["mean_metrics"]["roc_auc"], 4),
-            "Sensibilidade":  round(r["mean_metrics"].get("recall", float("nan")), 4),
-            "Especificidade": round(r["mean_metrics"].get("specificity", float("nan")), 4),
+            "Sensibilidade":  round(r["mean_metrics"].get("recall", 0), 4),
+            "Especificidade": round(r["mean_metrics"].get("specificity", 0), 4),
             "PR-AUC":         round(r["mean_metrics"]["pr_auc"], 4),
             "F1":             round(r["mean_metrics"]["f1"], 4),
         }
@@ -1759,8 +1759,8 @@ if len(_all) > 1:
 m = results["mean_metrics"]
 c1, c2, c3, c4, c5 = st.columns(5)
 c1.metric("ROC-AUC",        f"{m['roc_auc']:.4f}")
-c2.metric("Sensibilidade",  f"{m.get('recall', float('nan')):.4f}")
-c3.metric("Especificidade", f"{m.get('specificity', float('nan')):.4f}")
+c2.metric("Sensibilidade",  f"{m.get('recall', 0):.4f}")
+c3.metric("Especificidade", f"{m.get('specificity', 0):.4f}")
 c4.metric("PR-AUC",         f"{m['pr_auc']:.4f}")
 c5.metric("F1-Score",       f"{m['f1']:.4f}")
 
