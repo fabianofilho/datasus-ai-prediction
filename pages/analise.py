@@ -1908,13 +1908,27 @@ if ss.get("result_tab") == "metricas_clinicas":
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Métricas Clínicas por Ponto de Corte**")
     st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
-    _mc_left, _mc_right = st.columns([3, 2])
-    with _mc_left:
+
+    # ── Threshold: label inline + slider ──────────────────────────────────────
+    _th_lbl, _th_slid = st.columns([1, 7])
+    with _th_lbl:
+        st.markdown(
+            "<div style='padding-top:26px;font-size:.85rem;font-weight:600;"
+            "color:#111827'>Threshold</div>",
+            unsafe_allow_html=True,
+        )
+    with _th_slid:
         threshold = st.slider(
             "Threshold", 0.01, 0.99, 0.50, 0.01,
+            label_visibility="collapsed",
             help="Ponto de corte para classificar como positivo (alto risco).",
         )
-        tm = ev.threshold_metrics(y_arr, oof, threshold)
+
+    tm = ev.threshold_metrics(y_arr, oof, threshold)
+
+    # ── Matriz de confusão (quadrada) + 4 métricas em grade 2×2 ──────────────
+    _mc_left, _mc_right = st.columns([1, 1])
+    with _mc_left:
         _cm_fig = _go.Figure(_go.Heatmap(
             z=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
             x=["Pred Negativo", "Pred Positivo"],
@@ -1926,17 +1940,20 @@ if ss.get("result_tab") == "metricas_clinicas":
         ))
         _cm_fig.update_layout(
             title="Matriz de confusão",
-            height=240, margin=dict(t=40, b=10, l=10, r=10),
-            yaxis=dict(autorange="reversed"),
+            width=340, height=340,
+            margin=dict(t=40, b=30, l=100, r=20),
+            yaxis=dict(autorange="reversed", scaleanchor="x", scaleratio=1),
         )
-        st.plotly_chart(_cm_fig, use_container_width=True)
+        st.plotly_chart(_cm_fig, use_container_width=False)
     with _mc_right:
-        st.markdown("")
-        st.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
-        st.metric("Especificidade", f"{tm['specificity']:.1%}")
-        st.metric("VPP", f"{tm['ppv']:.1%}")
-        st.metric("VPN", f"{tm['npv']:.1%}")
-        st.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
+        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
+        _mr1, _mr2 = st.columns(2)
+        _mr1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
+        _mr2.metric("Especificidade", f"{tm['specificity']:.1%}")
+        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+        _mr3, _mr4 = st.columns(2)
+        _mr3.metric("VPP", f"{tm['ppv']:.1%}")
+        _mr4.metric("VPN", f"{tm['npv']:.1%}")
 
 if ss.get("result_tab") == "equidade":
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
