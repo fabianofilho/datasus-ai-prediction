@@ -231,8 +231,8 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
-    optionals = {9, 10}
+    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
+    optionals = {8, 9}
     parts = []
     for i, lbl in enumerate(labels, 1):
         optional = i in optionals
@@ -391,7 +391,7 @@ if not ss["model_results"] or not ss["outcome_key"] or ss["cohort"] is None:
     st.stop()
 
 # ── Stepbar ────────────────────────────────────────────────────────────────────
-_step = 10 if ss.get("comparison_results") else 9
+_step = 9 if ss.get("comparison_results") else 8
 render_step_bar(_step)
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
@@ -426,7 +426,7 @@ if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
 # ETAPA 8 — CALIBRAÇÃO (opcional) — oculta quando benchmark já foi executado
 # ═════════════════════════════════════════════════════════════════════════════
 if not ss.get("comparison_results"):
-    step_title(8, "Calibração do Modelo",
+    step_title(8, "Calibração do Modelo",  # step 8 de 9
                "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
 
 if not ss.get("comparison_results") and ss["calib_results"]:
@@ -503,7 +503,7 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 9 — BENCHMARK ENTRE ESTADOS (opcional)
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(9, "Benchmark entre Estados",
+step_title(9, "Benchmark entre Estados",  # step 9 de 9
            "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
 
 if ss["comparison_results"]:

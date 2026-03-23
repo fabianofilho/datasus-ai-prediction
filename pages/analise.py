@@ -333,20 +333,18 @@ for k, v in _defaults.items():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def current_step() -> int:
     if ss.get("comparison_results"):
-        return 10
-    if ss.get("calib_results"):
         return 9
-    if ss["model_results"]:
+    if ss.get("calib_results"):
         return 8
-    if ss.get("model_config"):
+    if ss["model_results"]:
         return 7
-    if ss.get("treatment_config"):
+    if ss.get("model_config"):
         return 6
-    if ss.get("feature_config"):
+    if ss.get("treatment_config"):
         return 5
-    if ss["cohort"] is not None:
+    if ss.get("feature_config"):
         return 4
-    if ss["raw_data"]:
+    if ss["cohort"] is not None or ss["raw_data"]:
         return 3
     if ss["outcome_key"]:
         return 2
@@ -368,8 +366,8 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
-    optionals = {9, 10}
+    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
+    optionals = {8, 9}
     parts = []
     for i, lbl in enumerate(labels):
         n = i + 1
@@ -614,7 +612,7 @@ if ss["cohort"] is None:
     # ETAPA 2 — DADOS
     # ═════════════════════════════════════════════════════════════════════════
     if not ss["raw_data"]:
-        step_title(2, "Baixar Dados",
+        step_title(2, "Dados",
                    f"Fontes necessárias para este desfecho: {', '.join(outcome.data_sources)}")
 
         # ── Linha 1: Estado + Ano + Botão ─────────────────────────────────────────
@@ -730,14 +728,12 @@ if ss["cohort"] is None:
 
         st.stop()
 
-    # ── Lazy: CohortBuilder (só carrega ao chegar na etapa 3) ────────────────
+    # ── Lazy: CohortBuilder ───────────────────────────────────────────────────
     CohortBuilder = _cohort()
 
-    # ═════════════════════════════════════════════════════════════════════════
-    # ETAPA 3 — COORTE
-    # ═════════════════════════════════════════════════════════════════════════
-    step_title(3, "Construir Coorte",
-               "Revise os dados baixados e confirme para construir a coorte de modelagem.")
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    st.markdown("**Revisar e Construir Coorte**")
+    st.caption("Revise os dados baixados e confirme para construir a coorte de modelagem.")
 
     # ── Preview dos dados brutos ──────────────────────────────────────────────
     _sources = list(ss["raw_data"].keys())
@@ -882,7 +878,7 @@ X, y = builder.get_Xy(cohort)
 if not ss.get("feature_config"):
     from core.features.data_dict import get_info as _feat_info
 
-    step_title(4, "Selecionar Features",
+    step_title(3, "Selecionar Features",
                "Escolha as variáveis a incluir no modelo e consulte o dicionário de dados.")
 
     bal = builder.class_balance(cohort)
@@ -954,7 +950,7 @@ if not ss.get("feature_config"):
 # ETAPA 5 — TRATAMENTO DE VARIÁVEIS
 # ═════════════════════════════════════════════════════════════════════════════
 if not ss.get("treatment_config"):
-    step_title(5, "Tratamento de Variáveis",
+    step_title(4, "Tratamento de Variáveis",
                "Classifique o tipo de cada variável e configure o tratamento.")
 
     _sel_feats = ss["feature_config"]["selected_features"]
@@ -1139,7 +1135,7 @@ if not ss.get("treatment_config"):
 # ETAPA 6 — CONFIGURAR MODELO
 # ═════════════════════════════════════════════════════════════════════════════
 if not ss.get("model_config"):
-    step_title(6, "Configurar Modelo",
+    step_title(5, "Configurar Modelo",
                "Configure os algoritmos, validação e hiperparâmetros.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
@@ -1329,7 +1325,7 @@ selected_features = ss["feature_config"]["selected_features"]
 treatment = ss.get("treatment_config")
 
 if not ss["model_results"]:
-    step_title(7, "Treinar Modelo",
+    step_title(6, "Treinar Modelo",
                "Execute o treinamento com a configuração selecionada.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
@@ -1579,7 +1575,7 @@ if not ss["model_results"]:
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 7 — RESULTADOS
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(8, "Resultados do Modelo",
+step_title(7, "Resultados do Modelo",
            "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
 
 ev = _ev()
