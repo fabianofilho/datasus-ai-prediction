@@ -1,9 +1,12 @@
 """DataSUS AI Prediction — home page minima, zero imports pesados."""
+from pathlib import Path
+from PIL import Image as _PILImage
 import streamlit as st
 
+_favicon = _PILImage.open(Path(__file__).parent / "favicon.png")
 st.set_page_config(
     page_title="DataSUS AI Prediction",
-    page_icon="🏥",
+    page_icon=_favicon,
     layout="wide",
     initial_sidebar_state="collapsed",
 )

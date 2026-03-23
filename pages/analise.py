@@ -1,5 +1,7 @@
 """DataSUS AI Prediction — wizard completo (carregado sob demanda)."""
 from __future__ import annotations
+from pathlib import Path
+from PIL import Image as _PILImage
 
 import streamlit as st
 
@@ -41,9 +43,10 @@ def _pd():
     import pandas as pd
     return pd
 
+_favicon = _PILImage.open(Path(__file__).parent.parent / "favicon.png")
 st.set_page_config(
     page_title="DataSUS AI — Análise",
-    page_icon="🏥",
+    page_icon=_favicon,
     layout="wide",
     initial_sidebar_state="expanded",
 )
