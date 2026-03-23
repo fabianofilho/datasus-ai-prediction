@@ -39,15 +39,16 @@ st.markdown("""
 }
 header,footer,[data-testid="stSidebarNav"],[data-testid="stHeader"],
 [data-testid="stToolbar"],[data-testid="stDecoration"],#MainMenu{display:none!important}
+[data-testid="collapsedControl"],[data-testid="stSidebarCollapseButton"]{display:none!important}
 html,body,.stApp,[data-testid="stAppViewContainer"]{
   background:var(--bg)!important;
   font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif!important;
   color:var(--fg)!important;
 }
 .block-container{
-  padding-top:calc(var(--topbar-h)+52px)!important;
+  padding-top:calc(var(--topbar-h)+32px)!important;
   padding-bottom:56px!important;
-  padding-left:40px!important;padding-right:40px!important;
+  padding-left:32px!important;padding-right:40px!important;
   max-width:1100px!important;
 }
 .ds-topbar{
@@ -55,7 +56,7 @@ html,body,.stApp,[data-testid="stAppViewContainer"]{
   height:var(--topbar-h);background:var(--bg);
   border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;
-  padding:0 48px 0 calc(52px+20px);
+  padding:0 48px 0 24px;
 }
 .ds-topbar-logo{
   display:flex;align-items:center;gap:8px;
@@ -145,7 +146,13 @@ for i, lbl in enumerate(labels, 1):
     parts.append(f'<span class="{cls}">{dot}. {lbl}{suffix}</span>')
     if i < len(labels):
         parts.append('<span class="ds-step-arrow">›</span>')
-st.markdown('<div class="ds-stepbar">' + "".join(parts) + "</div>", unsafe_allow_html=True)
+st.markdown(
+    '<div class="ds-stepbar">'
+    + "".join(parts)
+    + '<span style="margin-left:auto;font-size:0.65rem;color:#9ca3af;white-space:nowrap;flex-shrink:0;">* etapa opcional</span>'
+    + "</div>",
+    unsafe_allow_html=True,
+)
 
 # ── Lazy imports ───────────────────────────────────────────────────────────────
 pd = _pd()
@@ -179,8 +186,22 @@ st.caption(
 )
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
+# ── Helper: cria format_func para selectbox categórico ────────────────────────
+def _make_fmt(vals_dict: dict):
+    """Retorna função de formatação para st.selectbox sem closure em loop."""
+    def _fmt(v: str) -> str:
+        try:
+            k = v.split(".")[0] if "." in v and v.endswith(".0") else v
+            lbl = vals_dict.get(k) or vals_dict.get(v)
+            return f"{lbl} ({v})" if lbl else v
+        except Exception:
+            return str(v)
+    return _fmt
+
+
 # ── Formulário de entrada ─────────────────────────────────────────────────────
 input_vals: dict = {}
+_ncols = 3  # sempre definido antes dos blocos condicionais
 
 with st.form("deploy_form"):
     n_num = len([c for c in feature_cols if c in num_cols])
@@ -188,7 +209,6 @@ with st.form("deploy_form"):
 
     if n_num:
         st.markdown("**Variáveis Numéricas**")
-        _ncols = 3
         _num_feats = [c for c in feature_cols if c in num_cols]
         for row_start in range(0, len(_num_feats), _ncols):
             _row = _num_feats[row_start: row_start + _ncols]
@@ -219,17 +239,16 @@ with st.form("deploy_form"):
                 info = _dd_info(col) or {}
                 label = info.get("label", col)
                 desc  = info.get("desc", "")
-                _opts = sorted(X_res[col].dropna().astype(str).unique().tolist()) if col in X_res else []
+                _opts = (
+                    sorted(X_res[col].dropna().astype(str).unique().tolist())
+                    if col in X_res else []
+                )
                 _vals = info.get("values", {}) if info else {}
-                def _fmt_opt(v, _v=_vals):
-                    # normalise "1.0" → "1" for dict lookup
-                    k = v.split(".")[0] if "." in v and v.endswith(".0") else v
-                    lbl = _v.get(k) or _v.get(v)
-                    return f"{lbl} ({v})" if lbl else v
+                _fmt  = _make_fmt(_vals) if _vals else None
                 input_vals[col] = cols[ci].selectbox(
                     label,
                     options=_opts if _opts else ["—"],
-                    format_func=_fmt_opt if _vals else None,
+                    format_func=_fmt,
                     help=desc or col,
                     key=f"inp_{col}",
                 )
