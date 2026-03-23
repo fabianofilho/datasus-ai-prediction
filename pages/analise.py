@@ -171,19 +171,21 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 
 /* ── Step bar ───────────────────────────────────────────────── */
 .ds-stepbar {
-  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 2px; flex-wrap: nowrap;
+  overflow-x: auto; scrollbar-width: none;
   margin-bottom: 28px;
   padding: 10px 0; border-bottom: 1px solid var(--border);
 }
+.ds-stepbar::-webkit-scrollbar { display: none; }
 .ds-step {
-  border-radius: 4px; padding: 3px 12px;
-  font-size: 0.78rem; font-weight: 500; white-space: nowrap;
+  border-radius: 4px; padding: 2px 7px;
+  font-size: 0.7rem; font-weight: 500; white-space: nowrap; flex-shrink: 0;
 }
 .ds-step-done   { color: var(--muted); }
 .ds-step-active { background: var(--fg); color: #fff; font-weight: 600; }
 .ds-step-locked { color: #d1d5db; }
 .ds-step-optional { color: #d1d5db; }
-.ds-step-arrow  { color: #d1d5db; font-size: 0.85rem; padding: 0 1px; }
+.ds-step-arrow  { color: #d1d5db; font-size: 0.75rem; padding: 0; flex-shrink: 0; }
 
 /* ── Done bar ───────────────────────────────────────────────── */
 .ds-done-bar {

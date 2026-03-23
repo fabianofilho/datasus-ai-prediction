@@ -132,18 +132,20 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 }
 .ds-topbar-right:hover { color: #111827 !important; }
 .ds-stepbar {
-  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 2px; flex-wrap: nowrap;
+  overflow-x: auto; scrollbar-width: none;
   margin-bottom: 28px; padding: 10px 0; border-bottom: 1px solid var(--border);
 }
+.ds-stepbar::-webkit-scrollbar { display: none; }
 .ds-step {
-  border-radius: 4px; padding: 3px 12px;
-  font-size: 0.78rem; font-weight: 500; white-space: nowrap;
+  border-radius: 4px; padding: 2px 7px;
+  font-size: 0.7rem; font-weight: 500; white-space: nowrap; flex-shrink: 0;
 }
 .ds-step-done   { color: var(--muted); }
 .ds-step-active { background: var(--fg); color: #fff; font-weight: 600; }
 .ds-step-locked { color: #d1d5db; }
 .ds-step-optional { color: #d1d5db; }
-.ds-step-arrow  { color: #d1d5db; font-size: 0.85rem; padding: 0 1px; }
+.ds-step-arrow  { color: #d1d5db; font-size: 0.75rem; padding: 0; flex-shrink: 0; }
 .ds-done-bar {
   background: var(--done-bg); border: 1px solid var(--done-border);
   border-radius: var(--radius); padding: 9px 14px; margin-bottom: 4px;
@@ -209,6 +211,7 @@ _defaults: dict = {
     "model_results": None, "calib_results": None, "comparison_results": [],
     "sel_states": ["SP"], "sel_years": [2023], "manual_needed": [],
     "sample_n": 10_000, "sample_seed": 42, "use_sample": True,
+    "show_benchmark": False,
 }
 for k, v in _defaults.items():
     if k not in ss:
@@ -501,9 +504,16 @@ elif not ss.get("comparison_results"):
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 9 — BENCHMARK ENTRE ESTADOS (opcional) — só aparece após calibração
+# ETAPA 9 — BENCHMARK ENTRE ESTADOS (opcional) — só aparece quando ativado
 # ═════════════════════════════════════════════════════════════════════════════
 if not ss.get("calib_results"):
+    st.stop()
+
+# Se benchmark ainda não foi ativado nem tem resultados, mostrar só o botão de acesso
+if not ss.get("show_benchmark") and not ss.get("comparison_results"):
+    if st.button("→ Ir para Benchmark entre Estados", type="secondary"):
+        ss["show_benchmark"] = True
+        st.rerun()
     st.stop()
 
 step_title(9, "Benchmark entre Estados",  # step 9 de 9
@@ -522,6 +532,7 @@ if ss["comparison_results"]:
 
     if st.button("Limpar e comparar outros estados", type="secondary"):
         ss["comparison_results"] = []
+        ss["show_benchmark"] = True
         st.rerun()
 else:
     st.info(
