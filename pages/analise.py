@@ -2164,6 +2164,10 @@ if ss.get("result_tab") == "equidade":
                 "#dc2626", "#0284c7", "#16a34a", "#9333ea",
             ]
             # ── Curvas ROC sobrepostas ───────────────────────────────────
+            # Indexa sub_df por string para lookup rápido (subgroup_metrics_table
+            # armazena str(g), mas _groups contém o dtype original: int/float/str)
+            _sg_lookup = {str(row["Subgrupo"]): row for _, row in sub_df.iterrows()}
+
             fig_eq = _go_eq.Figure()
             # Linha de referência (classificador aleatório)
             fig_eq.add_trace(_go_eq.Scatter(
@@ -2172,12 +2176,18 @@ if ss.get("result_tab") == "equidade":
                 name="Aleatório (AUC 0.500)",
                 showlegend=True,
             ))
-            _groups_arr = _groups.values
-            for _ci, (_, _row) in enumerate(sub_df.iterrows()):
-                _sg_val = _row["Subgrupo"]
-                _mask = _groups_arr == _sg_val
-                _y_sub = y_arr[_mask]
-                _p_sub = oof[_mask]
+            _ci = 0
+            # Itera sobre valores ORIGINAIS do grupo (mesmo tipo que _groups)
+            for _sg_orig in sorted(_groups.unique()):
+                _sg_str = str(_sg_orig)
+                if _sg_str not in _sg_lookup:
+                    continue  # subgrupo filtrado por tamanho mínimo
+                _row = _sg_lookup[_sg_str]
+                # Máscara com tipo original → comparação sempre correta
+                _mask = (_groups.values == _sg_orig)
+                # Garante alinhamento: usa apenas índices onde mask é True
+                _y_sub = y_arr[_mask[:len(y_arr)]]
+                _p_sub = oof[_mask[:len(oof)]]
                 if len(_y_sub) < 10 or _y_sub.sum() < 2:
                     continue
                 try:
@@ -2187,9 +2197,10 @@ if ss.get("result_tab") == "equidade":
                     _color = _EQ_COLORS[_ci % len(_EQ_COLORS)]
                     fig_eq.add_trace(_go_eq.Scatter(
                         x=_fpr, y=_tpr, mode="lines",
-                        name=f"{_sg_val}  ·  AUC {_auc_val:.3f}  (n={_n:,})",
+                        name=f"{_sg_str}  ·  AUC {_auc_val:.3f}  (n={_n:,})",
                         line=dict(color=_color, width=2.5),
                     ))
+                    _ci += 1
                 except Exception:
                     pass
             fig_eq.update_layout(
