@@ -356,7 +356,6 @@ _defaults: dict = {
     "manual_needed": [],
     "sample_n": 10_000,
     "sample_seed": 42,
-    "use_sample": True,
 }
 for k, v in _defaults.items():
     if k not in ss:
@@ -530,54 +529,38 @@ else:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
         _download_clicked = st.button("Baixar", type="primary")
 
-    # ── Linha 2: Configuração de Amostragem ────────────────────────────────────
+    # ── Linha 2: Limite de registros ───────────────────────────────────────────
     st.markdown("<div style='margin-top:.75rem'></div>", unsafe_allow_html=True)
-    with st.expander("Configuracao de Amostragem", expanded=True):
-        sa1, sa2, sa3 = st.columns([1, 1, 2])
+    with st.expander("Limite de registros por download", expanded=False):
+        sa1, sa2 = st.columns(2)
         with sa1:
-            ss["use_sample"] = st.toggle(
-                "Usar amostragem",
-                value=ss["use_sample"],
-                help="Se ativado, limita o dataset ao número de registros abaixo. "
-                     "Recomendado para testes rápidos.",
-            )
-        with sa2:
             ss["sample_n"] = st.number_input(
-                "Tamanho da amostra",
+                "Máximo de registros",
                 min_value=1_000,
                 max_value=500_000,
                 value=ss["sample_n"],
                 step=5_000,
-                disabled=not ss["use_sample"],
-                help="Número máximo de registros no dataset final. A amostragem é aplicada por arquivo durante o download para economizar memória.",
+                help="Limita o download para evitar falta de memória. Padrão: 10.000. Use 500.000 para dados completos.",
             )
-        with sa3:
+        with sa2:
             ss["sample_seed"] = st.number_input(
                 "Seed (reprodutibilidade)",
-                min_value=0,
-                max_value=99_999,
-                value=ss["sample_seed"],
-                step=1,
-                disabled=not ss["use_sample"],
-                help="Seed aleatória fixa para garantir resultados reproduzíveis.",
+                min_value=0, max_value=99_999,
+                value=ss["sample_seed"], step=1,
+                help="Seed aleatória para garantir resultados reproduzíveis.",
             )
-        if ss["use_sample"]:
-            st.caption(
-                f"Serão usados até **{ss['sample_n']:,}** registros "
-                f"amostrados aleatoriamente com seed **{ss['sample_seed']}**. "
-                "Desative para usar o dataset completo."
-            )
-        else:
-            st.caption("Dataset completo será usado — pode ser lento para grandes estados/anos.")
+        st.caption(
+            f"Serão baixados até **{ss['sample_n']:,}** registros com seed **{ss['sample_seed']}**. "
+            "O limite é aplicado durante a leitura dos arquivos para economizar memória."
+        )
 
     if _download_clicked:
         raw_data: dict = {}
         manual_needed: list = []
-        _use_sample = ss["use_sample"]
-        _sample_n   = int(ss["sample_n"])
+        _sample_n    = int(ss["sample_n"])
         _sample_seed = int(ss["sample_seed"])
         # Quota por arquivo para não estourar memória antes do concat
-        _quota_per_file = max(1_000, _sample_n // max(len(ss["sel_states"]) * len(ss["sel_years"]), 1)) if _use_sample else None
+        _quota_per_file = max(1_000, _sample_n // max(len(ss["sel_states"]) * len(ss["sel_years"]), 1))
 
         for source in outcome.data_sources:
             prog = st.progress(0.0, text=f"Baixando {source}…")
@@ -596,9 +579,9 @@ else:
                 df = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
                 # ── Garante o total exato após concat ──────────────────────────
-                if _use_sample and len(df) > _sample_n:
+                if len(df) > _sample_n:
                     df = df.sample(n=_sample_n, random_state=_sample_seed).reset_index(drop=True)
-                    prog.progress(1.0, text=f"{source}: {len(df):,} registros (amostra)")
+                    prog.progress(1.0, text=f"{source}: {len(df):,} registros (limitado a {_sample_n:,})")
                 else:
                     prog.progress(1.0, text=f"{source}: {len(df):,} registros")
 
@@ -654,14 +637,15 @@ CohortBuilder = _cohort()
 if ss["cohort"] is not None:
     cohort = ss["cohort"]
     builder = CohortBuilder(outcome)
-    bal = builder.class_balance(cohort)
-    done_bar(
-        f'<strong>{bal["total"]:,}</strong> registros &nbsp;·&nbsp; '
-        f'prevalência <strong>{bal["prevalence"]:.1%}</strong>',
-        "chg_cohort",
-        ["cohort", "model_results"],
-    )
-    # Mostrar detalhes da coorte apenas antes do modelo ser treinado
+    # Mostrar done_bar + detalhes da coorte apenas antes do modelo ser treinado
+    if not ss["model_results"]:
+        bal = builder.class_balance(cohort)
+        done_bar(
+            f'<strong>{bal["total"]:,}</strong> registros &nbsp;·&nbsp; '
+            f'prevalência <strong>{bal["prevalence"]:.1%}</strong>',
+            "chg_cohort",
+            ["cohort", "model_results"],
+        )
     if not ss["model_results"]:
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Total", f"{bal['total']:,}")
@@ -762,21 +746,7 @@ with _tab_train:
         f"**{len(X.columns)}** features disponíveis"
     )
 
-    # ── Tamanho do conjunto de treino ─────────────────────────────────────────
-    sn_col1, sn_col2 = st.columns([1, 2])
-    with sn_col1:
-        sample_n = st.number_input(
-            "Registros para treino", min_value=100, max_value=total_n,
-            value=total_n, step=100,
-            help="Use o total ou defina um subconjunto para treino mais rápido.",
-        )
-    with sn_col2:
-        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        if sample_n < total_n:
-            st.caption(f"Usando **{sample_n:,}** de **{total_n:,}** registros ({sample_n/total_n:.0%}). Amostragem estratificada.")
-        else:
-            st.caption("Usando todos os registros disponíveis.")
-
+    sample_n = total_n
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     with c1:
@@ -1154,225 +1124,12 @@ with _tab_val:
         mime="text/csv",
     )
     
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+if ss["model_results"]:
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibração e benchmark.</p>',
+                unsafe_allow_html=True)
+    if st.button("Calibração e Benchmark →", type="primary"):
+        st.switch_page("pages/calibracao.py")
 
+st.markdown('</div>', unsafe_allow_html=True)
 
-if not ss["model_results"]:
-    st.stop()
-
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 6 — CALIBRAÇÃO (opcional)
-# ═════════════════════════════════════════════════════════════════════════════
-step_title(6, "Calibração do Modelo",
-           "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
-
-if ss["calib_results"]:
-    cr = ss["calib_results"]
-    delta = cr["brier_delta"]
-    delta_sign = "-" if delta >= 0 else "+"
-    done_bar(
-        f'Método <strong>{cr["method"].capitalize()}</strong> &nbsp;·&nbsp; '
-        f'Brier antes <strong>{cr["brier_before"]:.4f}</strong> → '
-        f'depois <strong>{cr["brier_after"]:.4f}</strong> &nbsp;·&nbsp; '
-        f'melhora <strong>{delta_sign}{abs(delta):.4f}</strong>',
-        "chg_calib",
-        ["calib_results", "comparison_results"],
-    )
-    col_cal1, col_cal2 = st.columns(2)
-    with col_cal1:
-        st.plotly_chart(
-            ev.calibration_comparison_chart(
-                cr["y_eval"], cr["raw_probs"], cr["cal_probs"],
-                method_label=f'Calibrado ({cr["method"]})',
-            ),
-            use_container_width=True,
-        )
-    with col_cal2:
-        st.metric("Brier antes", f"{cr['brier_before']:.4f}")
-        st.metric("Brier depois", f"{cr['brier_after']:.4f}",
-                  delta=f"{-delta:+.4f}", delta_color="inverse")
-        if delta > 0:
-            st.success("Calibração melhorou as probabilidades.")
-        elif delta < 0:
-            st.warning("Calibração piorou levemente. Considere o método alternativo.")
-        else:
-            st.info("Sem variação significativa.")
-else:
-    c_col1, c_col2 = st.columns([2, 1])
-    with c_col1:
-        calib_method = st.radio(
-            "Método de calibração",
-            ["sigmoid", "isotonic"],
-            format_func=lambda x: "Platt Scaling (sigmoid)" if x == "sigmoid" else "Isotonic Regression",
-            horizontal=True,
-            help=(
-                "Platt Scaling: mais estável com pouco dado, assume forma sigmoide. "
-                "Isotonic: mais flexível, requer pelo menos ~1.000 amostras."
-            ),
-        )
-    with c_col2:
-        st.caption(
-            "A calibração usa 25% dos dados como holdout interno para ajustar "
-            "as probabilidades sem vazar informação do treino."
-        )
-    col_cb1, col_cb2 = st.columns(2)
-    with col_cb1:
-        if st.button("Executar Calibração", type="primary"):
-            with st.spinner("Executando calibração…"):
-                try:
-                    cr = calibrate_model(
-                        results["model"],
-                        X_res,
-                        y,
-                        method=calib_method,
-                    )
-                    ss["calib_results"] = cr
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro no benchmark: {e}")
-    with col_cb2:
-        if st.button("Pular benchmark", type="secondary"):
-            ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
-            st.rerun()
-
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 7 — COMPARAÇÃO ENTRE ESTADOS (opcional)
-# ═════════════════════════════════════════════════════════════════════════════
-step_title(7, "Benchmark entre Estados",
-           "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e explicabilidade SHAP.")
-
-# Modelo a usar: calibrado (se disponível e não pulado) ou original
-_active_model = results["model"]
-if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
-    _active_model = ss["calib_results"]["cal_model"]
-
-if ss["comparison_results"]:
-    comp = ss["comparison_results"]
-    st.markdown("**Métricas por coorte**")
-    st.dataframe(
-        ev.metrics_comparison_table(comp),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-    shap_dicts = [r["shap_dict"] for r in comp if r.get("shap_dict")]
-    shap_labels = [r["label"] for r in comp if r.get("shap_dict")]
-    if len(shap_dicts) >= 2:
-        st.markdown("**Comparação SHAP entre coortes**")
-        st.plotly_chart(
-            ev.shap_comparison_chart(shap_dicts, shap_labels),
-            use_container_width=True,
-        )
-
-    if st.button("Limpar e comparar outros estados", type="secondary"):
-        ss["comparison_results"] = []
-        st.rerun()
-else:
-    st.info(
-        "Selecione estados adicionais para comparar o desempenho do mesmo modelo "
-        "treinado em populações diferentes."
-    )
-    cmp_col1, cmp_col2 = st.columns(2)
-    with cmp_col1:
-        already_used = ss["sel_states"]
-        cmp_states = st.multiselect(
-            "Estados para comparação",
-            [s for s in STATES if s not in already_used],
-            default=[],
-            help="Baixa os dados, constrói a coorte e aplica o modelo treinado.",
-        )
-        include_original = st.checkbox(
-            f"Incluir coorte original ({', '.join(already_used)})",
-            value=True,
-        )
-    with cmp_col2:
-        cmp_years = st.multiselect(
-            "Anos",
-            list(range(2018, 2025)),
-            default=ss["sel_years"],
-        )
-
-    if not cmp_states and not include_original:
-        st.warning("Selecione pelo menos um estado ou mantenha a coorte original.")
-    elif st.button("Rodar comparação", type="primary"):
-        comp_list = []
-
-        # Helper: run a single state group
-        def _run_state_group(label: str, states: list[str], years: list[int], raw_override=None):
-            try:
-                if raw_override is not None:
-                    raw = raw_override
-                else:
-                    raw = {}
-                    for src in outcome.data_sources:
-                        dfs = []
-                        for st_ in states:
-                            for yr in years:
-                                dfs.append(fetch(src, st_, yr))
-                        raw[src] = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-
-                builder_cmp = CohortBuilder(outcome)
-                cohort_cmp = builder_cmp.build(raw)
-                X_cmp, y_cmp = builder_cmp.get_Xy(cohort_cmp)
-
-                # Align columns to trained model
-                train_cols = results["X_columns"]
-                for col in train_cols:
-                    if col not in X_cmp.columns:
-                        X_cmp[col] = float("nan")
-                X_cmp = X_cmp[train_cols]
-
-                probs_cmp = _active_model.predict_proba(X_cmp)[:, 1]
-                preds_cmp = (probs_cmp >= 0.5).astype(int)
-
-                from sklearn.metrics import (
-                    roc_auc_score, average_precision_score,
-                    f1_score, recall_score, brier_score_loss,
-                )
-                metrics_cmp = {
-                    "roc_auc": roc_auc_score(y_cmp, probs_cmp),
-                    "pr_auc": average_precision_score(y_cmp, probs_cmp),
-                    "f1": f1_score(y_cmp, preds_cmp, zero_division=0),
-                    "recall": recall_score(y_cmp, preds_cmp, zero_division=0),
-                    "brier": brier_score_loss(y_cmp, probs_cmp),
-                }
-
-                shap_d = ev.shap_values_dict(_active_model, X_cmp)
-
-                return {
-                    "label": label,
-                    "n": len(y_cmp),
-                    "metrics": metrics_cmp,
-                    "shap_dict": shap_d,
-                }
-            except Exception as exc:
-                st.error(f"Erro em {label}: {exc}")
-                return None
-
-        prog_cmp = st.progress(0.0, text="Iniciando comparação…")
-        all_groups = []
-        if include_original:
-            all_groups.append(
-                (f"{'+'.join(already_used)} · {'+'.join(map(str, ss['sel_years']))}",
-                 already_used, ss["sel_years"], ss["raw_data"])
-            )
-        for st_ in cmp_states:
-            all_groups.append(
-                (f"{st_} · {'+'.join(map(str, cmp_years))}",
-                 [st_], cmp_years, None)
-            )
-
-        for idx, (lbl, sts, yrs, raw_ov) in enumerate(all_groups):
-            prog_cmp.progress((idx) / len(all_groups), text=f"Processando {lbl}…")
-            r = _run_state_group(lbl, sts, yrs, raw_ov)
-            if r:
-                comp_list.append(r)
-
-        prog_cmp.progress(1.0, text="Comparação concluída.")
-        ss["comparison_results"] = comp_list
-        st.rerun()
-
-st.markdown('</div>', unsafe_allow_html=True)  # fecha ds-page
