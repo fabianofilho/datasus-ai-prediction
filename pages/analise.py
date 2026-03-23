@@ -311,6 +311,7 @@ _defaults: dict = {
     "raw_data": {},
     "cohort": None,
     "feature_config": None,
+    "treatment_config": None,
     "model_config": None,
     "model_results": None,
     "calib_results": None,
@@ -329,12 +330,14 @@ for k, v in _defaults.items():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def current_step() -> int:
     if ss.get("comparison_results"):
-        return 9
+        return 10
     if ss.get("calib_results"):
-        return 8
+        return 9
     if ss["model_results"]:
-        return 7
+        return 8
     if ss.get("model_config"):
+        return 7
+    if ss.get("treatment_config"):
         return 6
     if ss.get("feature_config"):
         return 5
@@ -362,8 +365,8 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Features", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
-    optionals = {8, 9}
+    labels = ["Desfecho", "Dados", "Coorte", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
+    optionals = {9, 10}
     parts = []
     for i, lbl in enumerate(labels):
         n = i + 1
@@ -409,7 +412,7 @@ def step_title(n: int, title: str, caption: str = "") -> None:
 
 def render_sidebar() -> None:
     with st.sidebar:
-        st.markdown('<p class="sb-title">Configuração</p>', unsafe_allow_html=True)
+        st.markdown('<p class="sb-title">Pipeline</p>', unsafe_allow_html=True)
 
         # Step 1: Desfecho
         if ss.get("outcome_key"):
@@ -473,11 +476,35 @@ def render_sidebar() -> None:
                 unsafe_allow_html=True,
             )
             if st.button("Editar", key="sb_chg_features"):
-                for k in ["feature_config", "model_config", "model_results", "calib_results", "comparison_results"]:
+                for k in ["feature_config", "treatment_config", "model_config",
+                          "model_results", "calib_results", "comparison_results"]:
                     ss[k] = _defaults[k]
                 st.rerun()
 
-        # Step 5: Modelo configurado
+        # Step 5: Tratamento
+        if ss.get("treatment_config"):
+            tc_ = ss["treatment_config"]
+            _num_lbl = {"none": "Sem escala", "standard": "Z-score", "minmax": "Min-Max"}.get(
+                tc_.get("num_default", "none"), "—")
+            _cat_lbl = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}.get(
+                tc_.get("cat_default", "ohe"), "—")
+            _n_ov = len(tc_.get("overrides", {}))
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">5 · Tratamento</div>'
+                f'<div class="sb-step-value">'
+                f'Num: {_num_lbl} · Cat: {_cat_lbl}'
+                + (f'<br><span style="font-size:.7rem;color:var(--muted)">{_n_ov} ajuste(s) manual(is)</span>' if _n_ov else "")
+                + f'</div></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Editar", key="sb_chg_treatment"):
+                for k in ["treatment_config", "model_config", "model_results",
+                          "calib_results", "comparison_results"]:
+                    ss[k] = _defaults[k]
+                st.rerun()
+
+        # Step 6: Modelo configurado
         if ss.get("model_config"):
             cfg_ = ss["model_config"]
             _vs = (
@@ -490,7 +517,7 @@ def render_sidebar() -> None:
             _albl = " · ".join(cfg_.get("algo_labels", [cfg_["algo_label"]]))
             st.markdown(
                 f'<div class="sb-step">'
-                f'<div class="sb-step-label">5 · Modelo</div>'
+                f'<div class="sb-step-label">6 · Modelo</div>'
                 f'<div class="sb-step-value">{_albl}<br>'
                 f'<span style="font-size:.7rem;color:var(--muted)">{_vs} · {_nf} features</span></div>'
                 f'</div>',
@@ -507,7 +534,7 @@ def render_sidebar() -> None:
             m_ = r_["mean_metrics"]
             st.markdown(
                 f'<div class="sb-step">'
-                f'<div class="sb-step-label">6 · Treinamento</div>'
+                f'<div class="sb-step-label">7 · Treinamento</div>'
                 f'<div class="sb-step-value">'
                 f'AUC {m_["roc_auc"]:.3f} · F1 {m_["f1"]:.3f}<br>'
                 f'<span style="font-size:.7rem;color:var(--muted)">PR-AUC {m_["pr_auc"]:.3f}</span>'
@@ -853,6 +880,7 @@ if not ss.get("feature_config"):
 
     if st.button("Confirmar Features", type="primary"):
         ss["feature_config"] = {"selected_features": selected_features}
+        ss["treatment_config"] = None
         ss["model_config"] = None
         ss["model_results"] = None
         ss["calib_results"] = None
@@ -861,10 +889,146 @@ if not ss.get("feature_config"):
     st.stop()
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 5 — CONFIGURAR MODELO
+# ETAPA 5 — TRATAMENTO DE VARIÁVEIS
+# ═════════════════════════════════════════════════════════════════════════════
+if not ss.get("treatment_config"):
+    step_title(5, "Tratamento de Variáveis",
+               "Configure codificação para categóricas e escala para numéricas.")
+
+    _sel_feats = ss["feature_config"]["selected_features"]
+    X_sel = X[_sel_feats]
+    _num_cols = X_sel.select_dtypes(include="number").columns.tolist()
+    _cat_cols = X_sel.select_dtypes(include=["object", "category"]).columns.tolist()
+    _low_card = [c for c in _num_cols if 1 < X_sel[c].nunique() <= 10]
+
+    _ti1, _ti2, _ti3 = st.columns(3)
+    _ti1.metric("Numéricas", str(len(_num_cols)))
+    _ti2.metric("Categóricas", str(len(_cat_cols)))
+    _ti3.metric("Num. baixa cardinalidade", str(len(_low_card)),
+                help="Variáveis numéricas com ≤ 10 valores únicos — podem ser tratadas como categóricas.")
+    if _low_card:
+        st.caption(
+            f"Variáveis com baixa cardinalidade: **{', '.join(_low_card)}** — "
+            "considere codificá-las como categóricas nos ajustes por variável."
+        )
+
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+
+    # ── Defaults globais ──────────────────────────────────────────────────────
+    _g1, _g2 = st.columns(2)
+    with _g1:
+        st.markdown("**Variáveis Numéricas**")
+        _num_opt = st.radio(
+            "Escala",
+            ["Nenhuma (recomendado para árvores)", "Padronização (z-score)", "Normalização (min-max)"],
+            label_visibility="collapsed",
+        )
+        _num_map = {
+            "Nenhuma (recomendado para árvores)": "none",
+            "Padronização (z-score)": "standard",
+            "Normalização (min-max)": "minmax",
+        }
+        _num_default_key = _num_map[_num_opt]
+
+    with _g2:
+        st.markdown("**Variáveis Categóricas**")
+        _cat_opt = st.radio(
+            "Codificação",
+            ["One-Hot Encoding", "Ordinal Encoding", "Target Encoding", "Remover"],
+            label_visibility="collapsed",
+            help=(
+                "**One-Hot**: cria coluna binária por categoria (bom para poucos valores únicos). "
+                "**Ordinal**: converte em inteiro (bom para variáveis com ordem natural). "
+                "**Target**: média do target por categoria (bom para alta cardinalidade). "
+                "**Remover**: exclui a variável do modelo."
+            ),
+        )
+        _cat_map = {
+            "One-Hot Encoding": "ohe",
+            "Ordinal Encoding": "ordinal",
+            "Target Encoding": "target",
+            "Remover": "drop",
+        }
+        _cat_default_key = _cat_map[_cat_opt]
+
+    # ── Ajustes por variável ──────────────────────────────────────────────────
+    _overrides: dict = {}
+    _all_num_opts = ["none", "standard", "minmax", "drop"]
+    _all_cat_opts = ["ohe", "ordinal", "target", "drop"]
+    _num_lbl_map = {"none": "Nenhuma", "standard": "Z-score", "minmax": "Min-Max", "drop": "Remover"}
+    _cat_lbl_map = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}
+
+    with st.expander(f"Ajustes por variável — {len(_sel_feats)} features", expanded=False):
+        if _num_cols:
+            st.markdown("**Numéricas**")
+            for _col in _num_cols:
+                _vc1, _vc2, _vc3 = st.columns([3, 2, 1])
+                with _vc1:
+                    _nuniq = X_sel[_col].nunique()
+                    st.markdown(
+                        f"<div style='padding:5px 0;font-size:.82rem'><b>{_col}</b> "
+                        f"<span style='color:#9ca3af;font-size:.72rem'>({_nuniq} únicos)</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                with _vc2:
+                    _sel_v = st.selectbox(
+                        _col, _all_num_opts,
+                        format_func=lambda x: _num_lbl_map[x],
+                        index=_all_num_opts.index(_num_default_key),
+                        key=f"treat_n_{_col}",
+                        label_visibility="collapsed",
+                    )
+                    if _sel_v != _num_default_key:
+                        _overrides[_col] = _sel_v
+                with _vc3:
+                    if _col in _low_card:
+                        st.markdown(
+                            "<div style='padding:5px 0;font-size:.68rem;color:#d97706'>baixa card.</div>",
+                            unsafe_allow_html=True,
+                        )
+
+        if _cat_cols:
+            st.markdown("**Categóricas**")
+            for _col in _cat_cols:
+                _vc1, _vc2 = st.columns([3, 2])
+                with _vc1:
+                    _nuniq = X_sel[_col].nunique()
+                    st.markdown(
+                        f"<div style='padding:5px 0;font-size:.82rem'><b>{_col}</b> "
+                        f"<span style='color:#9ca3af;font-size:.72rem'>({_nuniq} únicos)</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                with _vc2:
+                    _sel_v = st.selectbox(
+                        _col, _all_cat_opts,
+                        format_func=lambda x: _cat_lbl_map[x],
+                        index=_all_cat_opts.index(_cat_default_key),
+                        key=f"treat_c_{_col}",
+                        label_visibility="collapsed",
+                    )
+                    if _sel_v != _cat_default_key:
+                        _overrides[_col] = _sel_v
+
+    if st.button("Confirmar Tratamento", type="primary"):
+        ss["treatment_config"] = {
+            "num_cols": _num_cols,
+            "cat_cols": _cat_cols,
+            "num_default": _num_default_key,
+            "cat_default": _cat_default_key,
+            "overrides": _overrides,
+        }
+        ss["model_config"] = None
+        ss["model_results"] = None
+        ss["calib_results"] = None
+        ss["comparison_results"] = []
+        st.rerun()
+    st.stop()
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ETAPA 6 — CONFIGURAR MODELO
 # ═════════════════════════════════════════════════════════════════════════════
 if not ss.get("model_config"):
-    step_title(5, "Configurar Modelo",
+    step_title(6, "Configurar Modelo",
                "Configure os algoritmos, validação e hiperparâmetros.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
@@ -1009,7 +1173,7 @@ if not ss.get("model_config"):
     st.stop()
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 6 — TREINAR
+# ETAPA 7 — TREINAR
 # ═════════════════════════════════════════════════════════════════════════════
 cfg = ss["model_config"]
 algos = cfg.get("algos", [cfg["algo"]])
@@ -1026,9 +1190,10 @@ n_iter = cfg.get("n_iter", 30)
 n_trials = cfg.get("n_trials", 50)
 params_per_algo = cfg.get("params_per_algo", {algo: cfg.get("params", {})})
 selected_features = ss["feature_config"]["selected_features"]
+treatment = ss.get("treatment_config")
 
 if not ss["model_results"]:
-    step_title(6, "Treinar Modelo",
+    step_title(7, "Treinar Modelo",
                "Execute o treinamento com a configuração selecionada.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
@@ -1113,7 +1278,7 @@ if not ss["model_results"]:
                         )
                     else:
                         _Xs, _ys = _X_lc, _y_lc
-                    _qp = build_pipeline(_Xs, algo, {}, balancing="none")
+                    _qp = build_pipeline(_Xs, algo, {}, balancing="none", treatment=treatment)
                     _qp.fit(_Xs, _ys)
                     _tr_auc = float(_roc_auc(_ys, _qp.predict_proba(_Xs)[:, 1])) if _ys.sum() > 0 else 0.5
                     _vl_auc = float(_roc_auc(_y_hold, _qp.predict_proba(_X_hold)[:, 1])) if _y_hold.sum() > 0 else 0.5
@@ -1144,7 +1309,8 @@ if not ss["model_results"]:
                     _params = optimize_hyperparams(
                         X_train, y_train, algorithm=_algo,
                         n_trials=n_trials, n_folds=_hpo_folds,
-                        balancing=balancing, progress_callback=_opt_cb,
+                        balancing=balancing, treatment=treatment,
+                        progress_callback=_opt_cb,
                     )
                     _prog.progress(1.0, text=f"Optuna {_algo_lbl} concluído")
 
@@ -1156,7 +1322,8 @@ if not ss["model_results"]:
                         _params = random_search(
                             X_train, y_train, algorithm=_algo,
                             n_iter=n_iter, n_folds=_hpo_folds,
-                            balancing=balancing, progress_callback=_rs_cb,
+                            balancing=balancing, treatment=treatment,
+                            progress_callback=_rs_cb,
                         )
                     _prog.progress(1.0, text=f"Random Search {_algo_lbl} concluído")
 
@@ -1165,6 +1332,7 @@ if not ss["model_results"]:
                         _params = grid_search(
                             X_train, y_train, algorithm=_algo,
                             n_folds=_hpo_folds, balancing=balancing,
+                            treatment=treatment,
                         )
 
                 # Treino
@@ -1179,6 +1347,7 @@ if not ss["model_results"]:
                         _r = train_cv(
                             X=X_train, y=y_train, algorithm=_algo,
                             params=_params, n_folds=n_folds, balancing=balancing,
+                            treatment=treatment,
                         )
                         _r["validation_strategy"] = "cv"
                 else:
@@ -1187,7 +1356,7 @@ if not ss["model_results"]:
                             X_train, y_train, test_size=holdout_size,
                             stratify=y_train, random_state=42,
                         )
-                        _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing)
+                        _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing, treatment=treatment)
                         _pipe.fit(X_tr, y_tr)
                         _te_probs = _pipe.predict_proba(X_te)[:, 1]
                         _te_preds = (_te_probs >= 0.5).astype(int)
@@ -1200,7 +1369,7 @@ if not ss["model_results"]:
                             "brier": float(_brier(y_te, _te_probs)),
                             "fold": 1,
                         }
-                        _final = build_pipeline(X_train, _algo, _params, balancing=balancing)
+                        _final = build_pipeline(X_train, _algo, _params, balancing=balancing, treatment=treatment)
                         _final.fit(X_train, y_train)
                         _imp = {}
                         if hasattr(_final[-1], "feature_importances_"):
@@ -1240,7 +1409,7 @@ if not ss["model_results"]:
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 7 — RESULTADOS
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(7, "Resultados do Modelo",
+step_title(8, "Resultados do Modelo",
            "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
 
 ev = _ev()

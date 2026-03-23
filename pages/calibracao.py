@@ -228,8 +228,8 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Features", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
-    optionals = {8, 9}
+    labels = ["Desfecho", "Dados", "Coorte", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
+    optionals = {9, 10}
     parts = []
     for i, lbl in enumerate(labels, 1):
         optional = i in optionals
@@ -276,7 +276,7 @@ def step_title(n: int, title: str, caption: str = "") -> None:
 
 def render_sidebar() -> None:
     with st.sidebar:
-        st.markdown('<p class="sb-title">Configuração</p>', unsafe_allow_html=True)
+        st.markdown('<p class="sb-title">Pipeline</p>', unsafe_allow_html=True)
 
         if ss.get("outcome_key"):
             o = OUTCOMES[ss["outcome_key"]]
@@ -318,6 +318,20 @@ def render_sidebar() -> None:
                 unsafe_allow_html=True,
             )
 
+        if ss.get("treatment_config"):
+            tc_ = ss["treatment_config"]
+            _num_lbl = {"none": "Sem escala", "standard": "Z-score", "minmax": "Min-Max"}.get(
+                tc_.get("num_default", "none"), "—")
+            _cat_lbl = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}.get(
+                tc_.get("cat_default", "ohe"), "—")
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">5 · Tratamento</div>'
+                f'<div class="sb-step-value">Num: {_num_lbl} · Cat: {_cat_lbl}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
         if ss.get("model_config"):
             cfg_ = ss["model_config"]
             _vs = (
@@ -330,7 +344,7 @@ def render_sidebar() -> None:
             _nf = len(_fc_.get("selected_features", []))
             st.markdown(
                 f'<div class="sb-step">'
-                f'<div class="sb-step-label">5 · Modelo</div>'
+                f'<div class="sb-step-label">6 · Modelo</div>'
                 f'<div class="sb-step-value">{_albl}<br>'
                 f'<span style="font-size:.7rem;color:#6b7280">{_vs} · {_nf} feat.</span></div>'
                 f'</div>',
@@ -342,7 +356,7 @@ def render_sidebar() -> None:
             m_ = r_["mean_metrics"]
             st.markdown(
                 f'<div class="sb-step">'
-                f'<div class="sb-step-label">6 · Treinamento</div>'
+                f'<div class="sb-step-label">7 · Treinamento</div>'
                 f'<div class="sb-step-value">AUC {m_["roc_auc"]:.3f} · F1 {m_["f1"]:.3f}<br>'
                 f'<span style="font-size:.7rem;color:#6b7280">PR-AUC {m_["pr_auc"]:.3f}</span></div>'
                 f'</div>',
@@ -353,7 +367,7 @@ def render_sidebar() -> None:
             cr_ = ss["calib_results"]
             st.markdown(
                 f'<div class="sb-step">'
-                f'<div class="sb-step-label">8 · Calibração</div>'
+                f'<div class="sb-step-label">9 · Calibração</div>'
                 f'<div class="sb-step-value">{cr_["method"].capitalize()}<br>'
                 f'<span style="font-size:.7rem;color:#6b7280">Brier {cr_["brier_after"]:.4f}</span></div>'
                 f'</div>',
@@ -374,7 +388,7 @@ if not ss["model_results"] or not ss["outcome_key"] or ss["cohort"] is None:
     st.stop()
 
 # ── Stepbar ────────────────────────────────────────────────────────────────────
-_step = 9 if ss.get("comparison_results") else 8
+_step = 10 if ss.get("comparison_results") else 9
 render_step_bar(_step)
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 

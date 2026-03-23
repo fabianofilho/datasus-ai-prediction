@@ -3,6 +3,7 @@
 Supported algorithms: LightGBM, XGBoost, Logistic Regression, Random Forest.
 HPO modes: Manual, Random Search, Grid Search, Optuna.
 Balancing: None, Class Weight, SMOTE (oversample), SMOTE + Undersampling.
+Treatment: per-column encoding (OHE, Ordinal, Target) and scaling (Standard, MinMax).
 """
 
 from __future__ import annotations
@@ -121,29 +122,110 @@ def _class_weight_for_balancing(balancing: str) -> str | None:
     return "balanced" if balancing == "class_weight" else None
 
 
+def _build_preprocessor(
+    X: pd.DataFrame,
+    treatment: dict | None,
+    algorithm: str,
+) -> ColumnTransformer:
+    """Build ColumnTransformer from treatment config."""
+    from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, MinMaxScaler
+
+    num_cols = X.select_dtypes(include="number").columns.tolist()
+    cat_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
+
+    if treatment is None:
+        num_default, cat_default, overrides = "none", "ohe", {}
+    else:
+        num_default = treatment.get("num_default", "none")
+        cat_default = treatment.get("cat_default", "ohe")
+        overrides   = treatment.get("overrides", {})
+
+    # Effective treatment per column
+    num_eff = {c: overrides.get(c, num_default) for c in num_cols}
+    cat_eff = {c: overrides.get(c, cat_default) for c in cat_cols}
+
+    # Group by treatment type
+    num_groups: dict[str, list] = {}
+    for c, t in num_eff.items():
+        num_groups.setdefault(t, []).append(c)
+
+    cat_groups: dict[str, list] = {}
+    for c, t in cat_eff.items():
+        cat_groups.setdefault(t, []).append(c)
+
+    transformers = []
+
+    # ── Numerical ─────────────────────────────────────────────────────────────
+    for t, cols in num_groups.items():
+        if t == "drop" or not cols:
+            continue
+        inner: list = [("impute", SimpleImputer(strategy="median"))]
+        if t == "standard":
+            inner.append(("scale", StandardScaler()))
+        elif t == "minmax":
+            inner.append(("scale", MinMaxScaler()))
+        transformers.append((f"num_{t}", Pipeline(inner), cols))
+
+    # ── Categorical ───────────────────────────────────────────────────────────
+    for t, cols in cat_groups.items():
+        if t == "drop" or not cols:
+            continue
+        if t == "target":
+            try:
+                from sklearn.preprocessing import TargetEncoder
+                transformers.append((f"cat_{t}", TargetEncoder(smooth="auto"), cols))
+            except ImportError:
+                # Fallback: ordinal
+                enc = Pipeline([
+                    ("impute", SimpleImputer(strategy="most_frequent")),
+                    ("encode", OrdinalEncoder(
+                        handle_unknown="use_encoded_value", unknown_value=-1)),
+                ])
+                transformers.append((f"cat_{t}", enc, cols))
+        elif t == "ordinal":
+            enc = Pipeline([
+                ("impute", SimpleImputer(strategy="most_frequent")),
+                ("encode", OrdinalEncoder(
+                    handle_unknown="use_encoded_value", unknown_value=-1)),
+            ])
+            transformers.append((f"cat_{t}", enc, cols))
+        else:  # ohe (default)
+            enc = Pipeline([
+                ("impute", SimpleImputer(strategy="most_frequent")),
+                ("encode", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+            ])
+            transformers.append((f"cat_{t}", enc, cols))
+
+    if not transformers:
+        # Fallback: impute all available columns
+        fallback_cols = num_cols or X.columns.tolist()
+        transformers = [("num_none", SimpleImputer(strategy="median"), fallback_cols)]
+
+    return ColumnTransformer(transformers, remainder="drop")
+
+
 def build_pipeline(
     X: pd.DataFrame,
     algorithm: str = "lgbm",
     params: dict | None = None,
-    use_smote: bool = False,         # kept for backward compat
-    balancing: str = "none",         # "none"|"class_weight"|"smote_over"|"smote_under"
+    use_smote: bool = False,
+    balancing: str = "none",
+    treatment: dict | None = None,
 ) -> Pipeline:
     """Build full sklearn/imblearn Pipeline with preprocessing + optional balancing."""
     params = params or {}
-    num_cols = X.select_dtypes(include="number").columns.tolist()
 
-    preprocessor = ColumnTransformer([
-        ("num", SimpleImputer(strategy="median"), num_cols),
-    ], remainder="drop")
-
+    preprocessor = _build_preprocessor(X, treatment, algorithm)
     cw = _class_weight_for_balancing(balancing)
     steps: list = [("prep", preprocessor)]
 
-    if algorithm == "logreg":
+    # Add StandardScaler for logreg when numerics aren't already scaled
+    _num_scaled = treatment is not None and treatment.get("num_default") in ("standard", "minmax")
+    if algorithm == "logreg" and not _num_scaled:
         steps.append(("scaler", StandardScaler()))
 
     # Resolve effective resampling
-    do_smote_over  = balancing == "smote_over"  or use_smote
+    do_smote_over  = balancing == "smote_over" or use_smote
     do_smote_under = balancing == "smote_under"
 
     if do_smote_under or do_smote_over:
@@ -175,11 +257,12 @@ def random_search(
     n_iter: int = 30,
     n_folds: int = 3,
     balancing: str = "none",
+    treatment: dict | None = None,
     progress_callback=None,
 ) -> dict:
     """Randomized hyperparameter search. Returns best params dict."""
     from sklearn.model_selection import RandomizedSearchCV
-    pipe = build_pipeline(X, algorithm, {}, balancing=balancing)
+    pipe = build_pipeline(X, algorithm, {}, balancing=balancing, treatment=treatment)
     grid = _RANDOM_GRIDS.get(algorithm, {})
     skf  = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
     search = RandomizedSearchCV(
@@ -200,11 +283,12 @@ def grid_search(
     algorithm: str = "lgbm",
     n_folds: int = 3,
     balancing: str = "none",
+    treatment: dict | None = None,
     progress_callback=None,
 ) -> dict:
     """Exhaustive grid search. Returns best params dict."""
     from sklearn.model_selection import GridSearchCV
-    pipe = build_pipeline(X, algorithm, {}, balancing=balancing)
+    pipe = build_pipeline(X, algorithm, {}, balancing=balancing, treatment=treatment)
     grid = _GRID_GRIDS.get(algorithm, {})
     skf  = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
     search = GridSearchCV(
@@ -252,6 +336,7 @@ def optimize_hyperparams(
     n_folds: int = 3,
     use_smote: bool = False,
     balancing: str = "none",
+    treatment: dict | None = None,
     progress_callback=None,
 ) -> dict:
     """Run Optuna hyperparameter search. Returns best params dict."""
@@ -271,7 +356,8 @@ def optimize_hyperparams(
         for tr_idx, vl_idx in skf.split(X, y):
             X_tr, X_vl = X.iloc[tr_idx], X.iloc[vl_idx]
             y_tr, y_vl = y.iloc[tr_idx], y.iloc[vl_idx]
-            pipe = build_pipeline(X_tr, algorithm, params, balancing=_balancing)
+            pipe = build_pipeline(X_tr, algorithm, params,
+                                  balancing=_balancing, treatment=treatment)
             pipe.fit(X_tr, y_tr)
             probs = pipe.predict_proba(X_vl)[:, 1]
             scores.append(roc_auc_score(y_vl, probs))
@@ -293,6 +379,7 @@ def train_cv(
     n_folds: int = 5,
     use_smote: bool = False,
     balancing: str = "none",
+    treatment: dict | None = None,
 ) -> dict:
     """Train with StratifiedKFold CV and return per-fold + aggregate metrics."""
     params = params or {}
@@ -307,7 +394,8 @@ def train_cv(
         X_tr, X_vl = X.iloc[tr_idx], X.iloc[vl_idx]
         y_tr, y_vl = y.iloc[tr_idx], y.iloc[vl_idx]
 
-        pipe = build_pipeline(X_tr, algorithm, params, balancing=_balancing)
+        pipe = build_pipeline(X_tr, algorithm, params,
+                              balancing=_balancing, treatment=treatment)
         pipe.fit(X_tr, y_tr)
 
         probs = pipe.predict_proba(X_vl)[:, 1]
@@ -329,10 +417,11 @@ def train_cv(
 
     feature_importances = {}
     if importances_list:
-        all_imp = pd.DataFrame(importances_list)
+        all_imp = pd.DataFrame(importances_list).fillna(0)
         feature_importances = all_imp.mean().to_dict()
 
-    final_pipe = build_pipeline(X, algorithm, params, balancing=_balancing)
+    final_pipe = build_pipeline(X, algorithm, params,
+                                balancing=_balancing, treatment=treatment)
     final_pipe.fit(X, y)
 
     return {
@@ -398,13 +487,20 @@ def _compute_metrics(y_true, probs, preds) -> dict:
 
 
 def _get_importances(pipe: Pipeline, feature_names: list[str]) -> dict | None:
+    """Extract feature importances using pipeline's actual output feature names."""
     model = pipe[-1]
+    # Try to get feature names after transformation (handles OHE expansion)
+    try:
+        actual_names = list(pipe.named_steps["prep"].get_feature_names_out())
+    except Exception:
+        actual_names = feature_names
+
     if hasattr(model, "feature_importances_"):
         imp = model.feature_importances_
-        if len(imp) == len(feature_names):
-            return dict(zip(feature_names, imp))
+        if len(imp) == len(actual_names):
+            return dict(zip(actual_names, imp))
     elif hasattr(model, "coef_"):
         imp = np.abs(model.coef_[0])
-        if len(imp) == len(feature_names):
-            return dict(zip(feature_names, imp))
+        if len(imp) == len(actual_names):
+            return dict(zip(actual_names, imp))
     return None
