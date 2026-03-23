@@ -1073,15 +1073,15 @@ if not ss.get("treatment_config"):
     _num_default_key = _num_map[_num_opt]
     _cat_default_key = _cat_map[_cat_opt]
 
-    # Reset individual overrides when defaults change
+    # Sync individual overrides to new default when radio changes
     if ss.get("_prev_num_default") != _num_default_key:
         for _c in _num_cols:
-            ss.pop(f"treat_n_{_c}", None)
+            ss[f"treat_n_{_c}"] = _num_default_key
     ss["_prev_num_default"] = _num_default_key
 
     if ss.get("_prev_cat_default") != _cat_default_key:
         for _c in _cat_cols:
-            ss.pop(f"treat_c_{_c}", None)
+            ss[f"treat_c_{_c}"] = _cat_default_key
     ss["_prev_cat_default"] = _cat_default_key
 
     # ── Row 2: expanders alinhados ─────────────────────────────────────────────
