@@ -1723,6 +1723,19 @@ if len(_all) > 1:
         f"**{results.get('algo_label', results.get('algorithm', '').upper())}**"
         f" (ROC-AUC {results['mean_metrics']['roc_auc']:.4f})"
     )
+    st.markdown(
+        """
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin:.75rem 0 0">
+          <a href="#curvas-de-desempenho"       style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">📈 Curvas de desempenho</a>
+          <a href="#distribuicao-dos-scores"    style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">📊 Distribuição dos scores</a>
+          <a href="#shap-global"                style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">🔍 SHAP Global</a>
+          <a href="#shap-individual"            style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">🔎 SHAP Individual</a>
+          <a href="#metricas-clinicas"          style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">⚕️ Métricas Clínicas</a>
+          <a href="#equidade"                   style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">⚖️ Equidade por Subgrupo</a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 m = results["mean_metrics"]
@@ -1762,6 +1775,7 @@ if results.get("validation_strategy") in ("holdout", "temporal"):
 else:
     y_arr = y.values
 
+st.markdown('<div id="curvas-de-desempenho"></div>', unsafe_allow_html=True)
 st.markdown("#### Curvas de desempenho")
 col1, col2 = st.columns(2)
 with col1:
@@ -1771,6 +1785,7 @@ with col2:
 
 st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=True)
 
+st.markdown('<div id="distribuicao-dos-scores"></div>', unsafe_allow_html=True)
 st.markdown("#### Distribuição dos scores preditos")
 fig_dist = px.histogram(
     x=oof, color=y_arr.astype(str), nbins=50, barmode="overlay", opacity=0.65,
@@ -1785,6 +1800,7 @@ if results.get("feature_importances"):
     st.markdown("#### Importância das variáveis")
     st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=True)
 
+st.markdown('<div id="shap-global"></div>', unsafe_allow_html=True)
 st.markdown("#### SHAP — Explicabilidade Global")
 with st.spinner("Calculando SHAP…"):
     shap_fig = ev.shap_summary(results["model"], X_res.head(500))
@@ -1794,6 +1810,7 @@ else:
     st.info("SHAP indisponível para este algoritmo.")
 
 # ── SHAP Local ────────────────────────────────────────────────────────────────
+st.markdown('<div id="shap-individual"></div>', unsafe_allow_html=True)
 st.markdown("#### SHAP — Explicabilidade Individual")
 st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
 case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
@@ -1806,6 +1823,7 @@ else:
     st.info("SHAP individual indisponível para este algoritmo.")
 
 # ── Métricas Clínicas por Threshold ──────────────────────────────────────────
+st.markdown('<div id="metricas-clinicas"></div>', unsafe_allow_html=True)
 st.markdown("#### Métricas Clínicas por Ponto de Corte")
 st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
 threshold = st.slider(
@@ -1828,6 +1846,7 @@ with st.expander("Matriz de confusão"):
     st.dataframe(cm_df, use_container_width=False)
 
 # ── Análise de Equidade por Subgrupo ─────────────────────────────────────────
+st.markdown('<div id="equidade"></div>', unsafe_allow_html=True)
 st.markdown("#### Análise de Equidade por Subgrupo")
 _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
 _fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
