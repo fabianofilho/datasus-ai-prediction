@@ -643,7 +643,9 @@ else:
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown('<p class="ds-section-caption">Prossiga para inferência individual no Deploy.</p>',
             unsafe_allow_html=True)
-if st.button("→ Deploy — Inferência Individual", type="primary"):
-    st.switch_page("pages/deploy.py")
+_dep_l, _dep_r = st.columns([4, 2])
+with _dep_r:
+    if st.button("→ Deploy — Inferência Individual", type="primary", use_container_width=True):
+        st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)

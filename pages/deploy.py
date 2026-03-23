@@ -45,7 +45,7 @@ html,body,.stApp,[data-testid="stAppViewContainer"]{
   color:var(--fg)!important;
 }
 .block-container{
-  padding-top:calc(var(--topbar-h)+32px)!important;
+  padding-top:calc(var(--topbar-h)+52px)!important;
   padding-bottom:56px!important;
   padding-left:40px!important;padding-right:40px!important;
   max-width:1100px!important;
