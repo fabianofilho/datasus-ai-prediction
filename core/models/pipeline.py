@@ -1,6 +1,8 @@
-"""ML training pipeline with cross-validation and optional Optuna HPO.
+"""ML training pipeline with cross-validation and optional HPO.
 
-Supported algorithms: LightGBM (default), XGBoost, Logistic Regression, Random Forest.
+Supported algorithms: LightGBM, XGBoost, Logistic Regression, Random Forest.
+HPO modes: Manual, Random Search, Grid Search, Optuna.
+Balancing: None, Class Weight, SMOTE (oversample), SMOTE + Undersampling.
 """
 
 from __future__ import annotations
@@ -25,8 +27,53 @@ ALGORITHMS = {
     "Random Forest": "rf",
 }
 
+# ── Param grids for Random Search (wide) ──────────────────────────────────────
+_RANDOM_GRIDS: dict[str, dict] = {
+    "lgbm": {
+        "model__n_estimators":  [100, 200, 300, 500, 800],
+        "model__learning_rate": [0.005, 0.01, 0.05, 0.1, 0.2],
+        "model__max_depth":     [-1, 3, 5, 7, 10],
+        "model__num_leaves":    [15, 31, 63, 100, 150],
+    },
+    "xgb": {
+        "model__n_estimators":  [100, 200, 300, 500],
+        "model__learning_rate": [0.005, 0.01, 0.05, 0.1, 0.2],
+        "model__max_depth":     [3, 5, 7, 10],
+    },
+    "rf": {
+        "model__n_estimators": [100, 200, 300, 500],
+        "model__max_depth":    [None, 5, 10, 15, 20],
+        "model__min_samples_split": [2, 5, 10],
+    },
+    "logreg": {
+        "model__C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0],
+    },
+}
 
-def _build_model(algorithm: str, params: dict):
+# ── Param grids for Grid Search (focused) ────────────────────────────────────
+_GRID_GRIDS: dict[str, dict] = {
+    "lgbm": {
+        "model__n_estimators":  [100, 300, 500],
+        "model__learning_rate": [0.05, 0.1],
+        "model__max_depth":     [-1, 5, 10],
+    },
+    "xgb": {
+        "model__n_estimators":  [100, 300],
+        "model__learning_rate": [0.05, 0.1],
+        "model__max_depth":     [3, 6, 10],
+    },
+    "rf": {
+        "model__n_estimators": [100, 200],
+        "model__max_depth":    [None, 10, 20],
+    },
+    "logreg": {
+        "model__C": [0.01, 0.1, 1.0, 10.0],
+    },
+}
+
+
+def _build_model(algorithm: str, params: dict, class_weight: str | None = None):
+    """Build a classifier. class_weight='balanced' or None."""
     if algorithm == "lgbm":
         from lightgbm import LGBMClassifier
         return LGBMClassifier(
@@ -34,7 +81,7 @@ def _build_model(algorithm: str, params: dict):
             learning_rate=params.get("learning_rate", 0.05),
             max_depth=params.get("max_depth", -1),
             num_leaves=params.get("num_leaves", 31),
-            class_weight="balanced",
+            class_weight=class_weight,
             random_state=42,
             verbose=-1,
         )
@@ -44,7 +91,6 @@ def _build_model(algorithm: str, params: dict):
             n_estimators=params.get("n_estimators", 300),
             learning_rate=params.get("learning_rate", 0.05),
             max_depth=params.get("max_depth", 6),
-            scale_pos_weight=params.get("scale_pos_weight", 1),
             use_label_encoder=False,
             eval_metric="logloss",
             random_state=42,
@@ -53,7 +99,7 @@ def _build_model(algorithm: str, params: dict):
         from sklearn.linear_model import LogisticRegression
         return LogisticRegression(
             C=params.get("C", 1.0),
-            class_weight="balanced",
+            class_weight=class_weight,
             max_iter=1000,
             random_state=42,
         )
@@ -62,11 +108,115 @@ def _build_model(algorithm: str, params: dict):
         return RandomForestClassifier(
             n_estimators=params.get("n_estimators", 200),
             max_depth=params.get("max_depth", None),
-            class_weight="balanced",
+            min_samples_split=params.get("min_samples_split", 2),
+            class_weight=class_weight,
             random_state=42,
             n_jobs=-1,
         )
     raise ValueError(f"Unknown algorithm: {algorithm}")
+
+
+def _class_weight_for_balancing(balancing: str) -> str | None:
+    """Return sklearn class_weight value given our balancing setting."""
+    return "balanced" if balancing == "class_weight" else None
+
+
+def build_pipeline(
+    X: pd.DataFrame,
+    algorithm: str = "lgbm",
+    params: dict | None = None,
+    use_smote: bool = False,         # kept for backward compat
+    balancing: str = "none",         # "none"|"class_weight"|"smote_over"|"smote_under"
+) -> Pipeline:
+    """Build full sklearn/imblearn Pipeline with preprocessing + optional balancing."""
+    params = params or {}
+    num_cols = X.select_dtypes(include="number").columns.tolist()
+
+    preprocessor = ColumnTransformer([
+        ("num", SimpleImputer(strategy="median"), num_cols),
+    ], remainder="drop")
+
+    cw = _class_weight_for_balancing(balancing)
+    steps: list = [("prep", preprocessor)]
+
+    if algorithm == "logreg":
+        steps.append(("scaler", StandardScaler()))
+
+    # Resolve effective resampling
+    do_smote_over  = balancing == "smote_over"  or use_smote
+    do_smote_under = balancing == "smote_under"
+
+    if do_smote_under or do_smote_over:
+        try:
+            from imblearn.pipeline import Pipeline as ImbPipeline
+            if do_smote_under:
+                try:
+                    from imblearn.combine import SMOTETomek
+                    steps.append(("resample", SMOTETomek(random_state=42)))
+                except ImportError:
+                    from imblearn.over_sampling import SMOTE
+                    steps.append(("resample", SMOTE(random_state=42)))
+            else:
+                from imblearn.over_sampling import SMOTE
+                steps.append(("resample", SMOTE(random_state=42)))
+            steps.append(("model", _build_model(algorithm, params, cw)))
+            return ImbPipeline(steps)
+        except ImportError:
+            pass  # fall through to standard pipeline
+
+    steps.append(("model", _build_model(algorithm, params, cw)))
+    return Pipeline(steps)
+
+
+def random_search(
+    X: pd.DataFrame,
+    y: pd.Series,
+    algorithm: str = "lgbm",
+    n_iter: int = 30,
+    n_folds: int = 3,
+    balancing: str = "none",
+    progress_callback=None,
+) -> dict:
+    """Randomized hyperparameter search. Returns best params dict."""
+    from sklearn.model_selection import RandomizedSearchCV
+    pipe = build_pipeline(X, algorithm, {}, balancing=balancing)
+    grid = _RANDOM_GRIDS.get(algorithm, {})
+    skf  = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+    search = RandomizedSearchCV(
+        pipe, grid, n_iter=n_iter,
+        cv=skf, scoring="roc_auc",
+        random_state=42, n_jobs=-1, refit=True,
+    )
+    search.fit(X, y)
+    if progress_callback:
+        progress_callback(n_iter, n_iter, search.best_score_)
+    best = {k.replace("model__", ""): v for k, v in search.best_params_.items()}
+    return best
+
+
+def grid_search(
+    X: pd.DataFrame,
+    y: pd.Series,
+    algorithm: str = "lgbm",
+    n_folds: int = 3,
+    balancing: str = "none",
+    progress_callback=None,
+) -> dict:
+    """Exhaustive grid search. Returns best params dict."""
+    from sklearn.model_selection import GridSearchCV
+    pipe = build_pipeline(X, algorithm, {}, balancing=balancing)
+    grid = _GRID_GRIDS.get(algorithm, {})
+    skf  = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+    search = GridSearchCV(
+        pipe, grid,
+        cv=skf, scoring="roc_auc",
+        n_jobs=-1, refit=True,
+    )
+    search.fit(X, y)
+    if progress_callback:
+        progress_callback(1, 1, search.best_score_)
+    best = {k.replace("model__", ""): v for k, v in search.best_params_.items()}
+    return best
 
 
 def _suggest_params(trial, algorithm: str) -> dict:
@@ -101,20 +251,17 @@ def optimize_hyperparams(
     n_trials: int = 50,
     n_folds: int = 3,
     use_smote: bool = False,
+    balancing: str = "none",
     progress_callback=None,
 ) -> dict:
-    """Run Optuna hyperparameter search. Returns best params dict.
-
-    Args:
-        progress_callback: optional callable(completed_trials, n_trials, best_value)
-            called after each trial for live progress updates.
-    """
+    """Run Optuna hyperparameter search. Returns best params dict."""
     try:
         import optuna
         optuna.logging.set_verbosity(optuna.logging.WARNING)
     except ImportError:
         raise ImportError("Instale optuna: pip install optuna")
 
+    _balancing = balancing if balancing != "none" else ("smote_over" if use_smote else "none")
     skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
     completed = [0]
 
@@ -124,7 +271,7 @@ def optimize_hyperparams(
         for tr_idx, vl_idx in skf.split(X, y):
             X_tr, X_vl = X.iloc[tr_idx], X.iloc[vl_idx]
             y_tr, y_vl = y.iloc[tr_idx], y.iloc[vl_idx]
-            pipe = build_pipeline(X_tr, algorithm, params, use_smote)
+            pipe = build_pipeline(X_tr, algorithm, params, balancing=_balancing)
             pipe.fit(X_tr, y_tr)
             probs = pipe.predict_proba(X_vl)[:, 1]
             scores.append(roc_auc_score(y_vl, probs))
@@ -138,39 +285,6 @@ def optimize_hyperparams(
     return study.best_params
 
 
-def build_pipeline(
-    X: pd.DataFrame,
-    algorithm: str = "lgbm",
-    params: dict | None = None,
-    use_smote: bool = False,
-) -> Pipeline:
-    """Build a full sklearn Pipeline with imputation + optional scaling + model."""
-    params = params or {}
-    num_cols = X.select_dtypes(include="number").columns.tolist()
-
-    preprocessor = ColumnTransformer([
-        ("num", SimpleImputer(strategy="median"), num_cols),
-    ], remainder="drop")
-
-    steps = [("prep", preprocessor)]
-
-    if algorithm == "logreg":
-        steps.append(("scaler", StandardScaler()))
-
-    if use_smote:
-        try:
-            from imblearn.over_sampling import SMOTE
-            from imblearn.pipeline import Pipeline as ImbPipeline
-            steps.append(("smote", SMOTE(random_state=42)))
-            steps.append(("model", _build_model(algorithm, params)))
-            return ImbPipeline(steps)
-        except ImportError:
-            pass  # fall through to standard pipeline
-
-    steps.append(("model", _build_model(algorithm, params)))
-    return Pipeline(steps)
-
-
 def train_cv(
     X: pd.DataFrame,
     y: pd.Series,
@@ -178,18 +292,11 @@ def train_cv(
     params: dict | None = None,
     n_folds: int = 5,
     use_smote: bool = False,
+    balancing: str = "none",
 ) -> dict:
-    """Train with StratifiedKFold CV and return per-fold + aggregate metrics.
-
-    Returns:
-        dict with keys:
-            fold_metrics: list of per-fold metric dicts
-            mean_metrics: averaged across folds
-            oof_probs: out-of-fold predicted probabilities (N,)
-            feature_importances: dict col→importance (tree models only)
-            model: fitted pipeline on full data
-    """
+    """Train with StratifiedKFold CV and return per-fold + aggregate metrics."""
     params = params or {}
+    _balancing = balancing if balancing != "none" else ("smote_over" if use_smote else "none")
     skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
 
     oof_probs = np.zeros(len(y))
@@ -200,7 +307,7 @@ def train_cv(
         X_tr, X_vl = X.iloc[tr_idx], X.iloc[vl_idx]
         y_tr, y_vl = y.iloc[tr_idx], y.iloc[vl_idx]
 
-        pipe = build_pipeline(X_tr, algorithm, params, use_smote)
+        pipe = build_pipeline(X_tr, algorithm, params, balancing=_balancing)
         pipe.fit(X_tr, y_tr)
 
         probs = pipe.predict_proba(X_vl)[:, 1]
@@ -211,25 +318,21 @@ def train_cv(
         metrics["fold"] = fold + 1
         fold_metrics.append(metrics)
 
-        # Feature importance (tree models)
         imp = _get_importances(pipe, X.columns.tolist())
         if imp is not None:
             importances_list.append(imp)
 
-    # Mean across folds
     mean_metrics = {
         k: float(np.mean([f[k] for f in fold_metrics]))
         for k in fold_metrics[0] if k != "fold"
     }
 
-    # Average feature importances
     feature_importances = {}
     if importances_list:
         all_imp = pd.DataFrame(importances_list)
         feature_importances = all_imp.mean().to_dict()
 
-    # Refit on full data
-    final_pipe = build_pipeline(X, algorithm, params, use_smote)
+    final_pipe = build_pipeline(X, algorithm, params, balancing=_balancing)
     final_pipe.fit(X, y)
 
     return {
@@ -250,22 +353,10 @@ def calibrate_model(
     method: str = "sigmoid",
     cal_fraction: float = 0.25,
 ) -> dict:
-    """Post-hoc Platt/isotonic calibration using a held-out calibration set.
-
-    Returns a dict with keys:
-        cal_model     — CalibratedClassifierCV fitted on the calibration split
-        raw_probs     — uncalibrated probabilities on the cal split
-        cal_probs     — calibrated probabilities on the cal split
-        y_eval        — true labels for the cal split
-        brier_before  — Brier score before calibration
-        brier_after   — Brier score after calibration
-        brier_delta   — improvement (positive = better)
-        method        — calibration method used
-    """
+    """Post-hoc Platt/isotonic calibration using a held-out calibration set."""
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.model_selection import train_test_split
 
-    # Reserve a calibration set that the model has never seen during CV
     _, X_cal, _, y_cal = train_test_split(
         X, y, test_size=cal_fraction, stratify=y, random_state=7
     )
@@ -273,7 +364,6 @@ def calibrate_model(
     raw_probs = model.predict_proba(X_cal)[:, 1]
 
     try:
-        # sklearn >= 1.6: FrozenEstimator is preferred over cv="prefit"
         from sklearn.frozen import FrozenEstimator
         cal_clf = CalibratedClassifierCV(estimator=FrozenEstimator(model), method=method)
     except ImportError:
@@ -282,7 +372,7 @@ def calibrate_model(
     cal_probs = cal_clf.predict_proba(X_cal)[:, 1]
 
     brier_before = brier_score_loss(y_cal, raw_probs)
-    brier_after = brier_score_loss(y_cal, cal_probs)
+    brier_after  = brier_score_loss(y_cal, cal_probs)
 
     return {
         "cal_model": cal_clf,
@@ -291,19 +381,19 @@ def calibrate_model(
         "cal_probs": cal_probs,
         "y_eval": y_cal.values,
         "brier_before": float(brier_before),
-        "brier_after": float(brier_after),
-        "brier_delta": float(brier_before - brier_after),
+        "brier_after":  float(brier_after),
+        "brier_delta":  float(brier_before - brier_after),
     }
 
 
 def _compute_metrics(y_true, probs, preds) -> dict:
     return {
-        "roc_auc": roc_auc_score(y_true, probs),
-        "pr_auc": average_precision_score(y_true, probs),
-        "f1": f1_score(y_true, preds, zero_division=0),
+        "roc_auc":   roc_auc_score(y_true, probs),
+        "pr_auc":    average_precision_score(y_true, probs),
+        "f1":        f1_score(y_true, preds, zero_division=0),
         "precision": precision_score(y_true, preds, zero_division=0),
-        "recall": recall_score(y_true, preds, zero_division=0),
-        "brier": brier_score_loss(y_true, probs),
+        "recall":    recall_score(y_true, preds, zero_division=0),
+        "brier":     brier_score_loss(y_true, probs),
     }
 
 

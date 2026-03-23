@@ -20,8 +20,11 @@ def _cohort():
 
 @st.cache_resource(show_spinner=False)
 def _pipeline():
-    from core.models.pipeline import ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline
-    return ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline
+    from core.models.pipeline import (
+        ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model,
+        build_pipeline, random_search, grid_search,
+    )
+    return ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline, random_search, grid_search
 
 @st.cache_resource(show_spinner=False)
 def _ev():
@@ -557,7 +560,7 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Lazy: CohortBuilder e pipeline ML ────────────────────────────────────────
 CohortBuilder = _cohort()
-ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline = _pipeline()
+ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline, random_search, grid_search = _pipeline()
 
 cohort = ss["cohort"]
 builder = CohortBuilder(outcome)
@@ -611,14 +614,51 @@ else:
                 format_func=lambda x: f"{x:.0%}",
             )
             n_folds = 1
-        use_smote = st.checkbox("SMOTE — oversample da classe minoritária",
-                                help="Recomendado quando prevalência < 5%")
-        st.markdown("**Modo de hiperparâmetros**")
-        hpo_mode = st.radio("Modo", ["Manual", "Optuna (automático)"],
-                            horizontal=True, label_visibility="collapsed")
-        n_trials = (
-            st.slider("Tentativas (trials)", 10, 200, 50, 10) if hpo_mode == "Optuna (automático)" else 50
+
+        st.markdown("**Balanceamento de classes**")
+        balancing = st.radio(
+            "Balanceamento",
+            ["Nenhum", "Class Weight", "SMOTE (oversample)", "SMOTE + Undersampling"],
+            horizontal=False,
+            label_visibility="collapsed",
+            help=(
+                "**Nenhum**: sem ajuste. "
+                "**Class Weight**: penaliza erros na classe minoritária via class_weight='balanced'. "
+                "**SMOTE (oversample)**: gera amostras sintéticas da classe minoritária. "
+                "**SMOTE + Undersampling**: combina SMOTE com remoção de exemplos majoritários (SMOTETomek)."
+            ),
         )
+        _bal_map = {
+            "Nenhum": "none",
+            "Class Weight": "class_weight",
+            "SMOTE (oversample)": "smote_over",
+            "SMOTE + Undersampling": "smote_under",
+        }
+        balancing_key = _bal_map[balancing]
+
+        st.markdown("**Estratégia de hiperparâmetros**")
+        hpo_mode = st.radio(
+            "HPO",
+            ["Manual", "Random Search", "Grid Search", "Optuna (automático)"],
+            horizontal=False,
+            label_visibility="collapsed",
+            help=(
+                "**Manual**: defina os parâmetros à direita. "
+                "**Random Search**: amostragem aleatória do espaço de hiperparâmetros (rápido). "
+                "**Grid Search**: busca exaustiva em grade pré-definida (preciso, porém lento). "
+                "**Optuna**: otimização bayesiana automática (melhor custo-benefício)."
+            ),
+        )
+        if hpo_mode == "Random Search":
+            n_iter = st.slider("Iterações (n_iter)", 10, 100, 30, 5)
+            n_trials = 50
+        elif hpo_mode == "Optuna (automático)":
+            n_trials = st.slider("Tentativas (trials)", 10, 200, 50, 10)
+            n_iter = 30
+        else:
+            n_iter = 30
+            n_trials = 50
+
     with c2:
         if hpo_mode == "Manual":
             st.markdown("**Hiperparâmetros**")
@@ -634,7 +674,12 @@ else:
                 params["C"] = st.select_slider("C (regularização)", [0.001, 0.01, 0.1, 1.0, 10.0], value=1.0)
         else:
             params = {}
-            st.caption("Optuna buscará automaticamente os melhores hiperparâmetros.")
+            _hpo_desc = {
+                "Random Search": f"Random Search buscará {n_iter} combinações aleatórias.",
+                "Grid Search":   "Grid Search testará todas as combinações da grade pré-definida.",
+                "Optuna (automático)": f"Optuna buscará os melhores hiperparâmetros em {n_trials} trials.",
+            }
+            st.caption(_hpo_desc.get(hpo_mode, ""))
 
     selected_features = st.multiselect(
         "Features para o modelo", X.columns.tolist(), default=X.columns.tolist(),
@@ -650,8 +695,10 @@ else:
             "val_strategy": val_strategy,
             "n_folds": n_folds,
             "holdout_size": holdout_size,
-            "use_smote": use_smote,
+            "balancing": balancing_key,
+            "balancing_label": balancing,
             "hpo_mode": hpo_mode,
+            "n_iter": n_iter,
             "n_trials": n_trials,
             "params": params,
             "selected_features": selected_features,
@@ -673,9 +720,10 @@ algo_label = cfg["algo_label"]
 val_strategy = cfg["val_strategy"]
 n_folds = cfg["n_folds"]
 holdout_size = cfg["holdout_size"]
-use_smote = cfg["use_smote"]
+balancing = cfg.get("balancing", "none")
 hpo_mode = cfg["hpo_mode"]
-n_trials = cfg["n_trials"]
+n_iter = cfg.get("n_iter", 30)
+n_trials = cfg.get("n_trials", 50)
 params = cfg["params"]
 selected_features = cfg["selected_features"]
 
@@ -710,8 +758,10 @@ else:
     st.info(
         f"**{algo_label}** · {_val_tag_label} · **{len(selected_features)}** features · "
         f"**{total_n:,}** registros"
-        + (" · SMOTE" if use_smote else "")
+        + (f" · {cfg.get('balancing_label', '')}" if balancing != "none" else "")
         + (f" · Optuna {n_trials} trials" if hpo_mode == "Optuna (automático)" else "")
+        + (f" · Random Search {n_iter} iter" if hpo_mode == "Random Search" else "")
+        + (" · Grid Search" if hpo_mode == "Grid Search" else "")
     )
 
     X_model = X[selected_features]
@@ -747,11 +797,12 @@ else:
     _lc_status_ph = st.empty()
     _lc_chart_ph.plotly_chart(_lc_fig([], [], []), use_container_width=True)
 
-    btn_label = (
-        f"Otimizar + Treinar {algo_label} · {_val_tag_label}"
-        if hpo_mode == "Optuna (automático)"
-        else f"Treinar {algo_label} · {_val_tag_label}"
-    )
+    _hpo_prefix = {
+        "Optuna (automático)": "Optuna + ",
+        "Random Search": "Random Search + ",
+        "Grid Search": "Grid Search + ",
+    }.get(hpo_mode, "")
+    btn_label = f"{_hpo_prefix}Treinar {algo_label} · {_val_tag_label}"
 
     if st.button(btn_label, type="primary"):
         try:
@@ -786,7 +837,7 @@ else:
                         )
                     else:
                         _Xs, _ys = _X_lc, _y_lc
-                    _qp = build_pipeline(_Xs, algo, params, use_smote=False)
+                    _qp = build_pipeline(_Xs, algo, params, balancing="none")
                     _qp.fit(_Xs, _ys)
                     _tr_auc = float(_roc_auc(_ys, _qp.predict_proba(_Xs)[:, 1])) if _ys.sum() > 0 else 0.5
                     _vl_auc = float(_roc_auc(_y_hold, _qp.predict_proba(_X_hold)[:, 1])) if _y_hold.sum() > 0 else 0.5
@@ -802,7 +853,8 @@ else:
 
             _lc_status_ph.caption("Finalizando treino…")
 
-            # ── Optuna HPO ────────────────────────────────────────────────────
+            # ── HPO automático ────────────────────────────────────────────────
+            _hpo_folds = min(n_folds, 3) if val_strategy == "Validação cruzada (k-fold)" else 3
             if hpo_mode == "Optuna (automático)":
                 prog = st.progress(0.0, text="Iniciando Optuna…")
 
@@ -810,20 +862,41 @@ else:
                     prog.progress(done / total,
                                   text=f"Optuna: trial {done}/{total} — melhor ROC-AUC {best:.4f}")
 
-                _hpo_folds = min(n_folds, 3) if val_strategy == "Validação cruzada (k-fold)" else 3
                 params = optimize_hyperparams(
                     X_train, y_train, algorithm=algo,
                     n_trials=n_trials, n_folds=_hpo_folds,
-                    use_smote=use_smote, progress_callback=_optuna_cb,
+                    balancing=balancing, progress_callback=_optuna_cb,
                 )
                 prog.progress(1.0, text=f"Optuna concluído — {n_trials} trials")
+
+            elif hpo_mode == "Random Search":
+                prog = st.progress(0.0, text="Iniciando Random Search…")
+
+                def _rs_cb(done, total, best):
+                    prog.progress(1.0, text=f"Random Search — melhor ROC-AUC {best:.4f}")
+
+                with st.spinner(f"Random Search: {n_iter} iterações…"):
+                    params = random_search(
+                        X_train, y_train, algorithm=algo,
+                        n_iter=n_iter, n_folds=_hpo_folds,
+                        balancing=balancing, progress_callback=_rs_cb,
+                    )
+                prog.progress(1.0, text=f"Random Search concluído — {n_iter} iterações")
+
+            elif hpo_mode == "Grid Search":
+                with st.spinner("Grid Search — testando combinações…"):
+                    params = grid_search(
+                        X_train, y_train, algorithm=algo,
+                        n_folds=_hpo_folds, balancing=balancing,
+                    )
+                st.caption(f"Grid Search concluído. Melhores params: {params}")
 
             # ── Treino final ──────────────────────────────────────────────────
             if val_strategy == "Validação cruzada (k-fold)":
                 with st.spinner(f"Treinando {algo_label} com {n_folds}-fold CV…"):
                     results = train_cv(
                         X=X_train, y=y_train, algorithm=algo,
-                        params=params, n_folds=n_folds, use_smote=use_smote,
+                        params=params, n_folds=n_folds, balancing=balancing,
                     )
                     results["validation_strategy"] = "cv"
             else:
@@ -838,7 +911,7 @@ else:
                         X_train, y_train, test_size=holdout_size,
                         stratify=y_train, random_state=42,
                     )
-                    _pipe = build_pipeline(X_tr, algo, params, use_smote)
+                    _pipe = build_pipeline(X_tr, algo, params, balancing=balancing)
                     _pipe.fit(X_tr, y_tr)
                     _te_probs = _pipe.predict_proba(X_te)[:, 1]
                     _te_preds = (_te_probs >= 0.5).astype(int)
@@ -852,7 +925,7 @@ else:
                         "fold": 1,
                     }
                     # Refit on full training set
-                    _final = build_pipeline(X_train, algo, params, use_smote)
+                    _final = build_pipeline(X_train, algo, params, balancing=balancing)
                     _final.fit(X_train, y_train)
                     _imp = {}
                     _m2 = _final[-1]
