@@ -26,133 +26,325 @@ st.set_page_config(
     page_title="Deploy — DataSUS AI",
     page_icon=_favicon,
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ── CSS ────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
+
 <style>
 :root {
-  --primary:#111827; --bg:#ffffff; --fg:#111827;
-  --muted:#6b7280; --border:#e5e7eb; --radius:6px; --topbar-h:52px;
+  --primary: #111827; --primary-hover: #374151;
+  --primary-light: #f3f4f6; --primary-ring: rgba(17,24,39,.12);
+  --bg: #ffffff; --bg-page: #ffffff;
+  --fg: #111827; --muted: #6b7280; --border: #e5e7eb;
+  --done-bg: #f9fafb; --done-border: #e5e7eb; --done-fg: #374151;
+  --radius: 6px; --topbar-h: 52px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
 }
-header,footer,[data-testid="stSidebarNav"],[data-testid="stHeader"],
-[data-testid="stToolbar"],[data-testid="stDecoration"],#MainMenu{display:none!important}
-[data-testid="collapsedControl"],[data-testid="stSidebarCollapseButton"]{display:none!important}
-html,body,.stApp,[data-testid="stAppViewContainer"]{
-  background:var(--bg)!important;
-  font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif!important;
-  color:var(--fg)!important;
+.ms {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal; font-weight: normal;
+  font-size: 1rem; line-height: 1;
+  vertical-align: middle; display: inline-block;
+  color: var(--fg);
 }
-.block-container{
-  padding-top:calc(var(--topbar-h)+32px)!important;
-  padding-bottom:56px!important;
-  padding-left:32px!important;padding-right:40px!important;
-  max-width:1100px!important;
+header, footer,
+[data-testid="stSidebarNav"], [data-testid="stHeader"],
+[data-testid="stToolbar"], [data-testid="stDecoration"],
+#MainMenu { display: none !important; }
+
+html, body, .stApp, [data-testid="stAppViewContainer"] {
+  background: var(--bg) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif !important;
+  color: var(--fg) !important;
 }
-.ds-topbar{
-  position:fixed;top:0;left:0;right:0;z-index:9999;
-  height:var(--topbar-h);background:var(--bg);
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;
-  padding:0 48px 0 24px;
+.block-container {
+  padding-top: calc(var(--topbar-h) + 32px) !important;
+  padding-bottom: 56px !important;
+  padding-left: 40px !important; padding-right: 40px !important;
+  max-width: 1100px !important;
 }
-.ds-topbar-logo{
-  display:flex;align-items:center;gap:8px;
-  font-size:0.93rem;font-weight:700;color:#111827!important;text-decoration:none!important;
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"] {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important;
+  height: var(--topbar-h) !important; width: 52px !important;
+  z-index: 10001 !important;
+  background: #ffffff !important; border: none !important;
+  border-right: 1px solid #e5e7eb !important;
+  display: flex !important; align-items: center !important;
+  justify-content: center !important; cursor: pointer !important;
 }
-.ds-topbar-badge{
-  background:var(--fg);color:#fff;
-  font-size:0.62rem;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.06em;
+[data-testid="collapsedControl"] svg,
+[data-testid="stSidebarCollapseButton"] svg {
+  color: #111827 !important; fill: #111827 !important;
+  width: 18px !important; height: 18px !important;
 }
-.ds-topbar-right{font-size:0.78rem;color:var(--muted);text-decoration:none!important;}
-.ds-topbar-right:hover{color:#111827!important;}
-.ds-stepbar{
-  display:flex;align-items:center;gap:2px;flex-wrap:nowrap;
-  overflow-x:auto;scrollbar-width:none;
-  margin-bottom:28px;padding:10px 0;border-bottom:1px solid var(--border);
+[data-testid="stSidebar"] {
+  top: var(--topbar-h) !important;
+  height: calc(100vh - var(--topbar-h)) !important;
+  background: #ffffff !important; border-right: 1px solid #e5e7eb !important;
 }
-.ds-stepbar::-webkit-scrollbar{display:none;}
-.ds-step{border-radius:4px;padding:2px 7px;font-size:0.7rem;font-weight:500;white-space:nowrap;flex-shrink:0;}
-.ds-step-done{color:var(--muted);}
-.ds-step-active{background:var(--fg);color:#fff;font-weight:600;}
-.ds-step-locked,.ds-step-optional{color:#d1d5db;}
-.ds-step-arrow{color:#d1d5db;font-size:0.75rem;padding:0;flex-shrink:0;}
-.ds-divider{border:none;border-top:1px solid var(--border);margin:20px 0;}
-.ds-page{display:contents;}
-[data-testid="stMetric"]{
-  background:var(--bg)!important;border:1px solid var(--border)!important;
-  border-radius:var(--radius)!important;padding:14px 18px!important;
+[data-testid="stSidebar"] > div:first-child {
+  padding: 1.25rem 1rem 1rem !important;
+  height: 100% !important; overflow-y: auto !important;
 }
-.stButton>button{
-  width:auto!important;padding:5px 16px!important;border-radius:var(--radius)!important;
-  font-size:0.82rem!important;font-weight:500!important;
+.ds-topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  height: var(--topbar-h); background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 48px 0 calc(52px + 20px);
 }
-.stButton>button[kind="primary"]{
-  background:var(--fg)!important;border:1px solid var(--fg)!important;
-  color:#fff!important;font-weight:600!important;
+.ds-topbar-logo {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.93rem; font-weight: 700;
+  color: #111827 !important; text-decoration: none !important;
 }
-.stButton>button[kind="secondary"]{
-  background:#fff!important;border:1px solid var(--border)!important;color:var(--fg)!important;
+.ds-topbar-badge {
+  background: var(--fg); color: #fff;
+  font-size: 0.62rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px; letter-spacing: .06em;
 }
-.risk-badge{
-  display:inline-block;padding:6px 20px;border-radius:6px;
-  font-size:1rem;font-weight:700;letter-spacing:.03em;margin-top:4px;
+.ds-topbar-right {
+  font-size: 0.78rem; color: var(--muted);
+  text-decoration: none !important;
 }
-.risk-low{background:#dcfce7;color:#166534;}
-.risk-med{background:#fef9c3;color:#854d0e;}
-.risk-high{background:#fee2e2;color:#991b1b;}
+.ds-topbar-right:hover { color: #111827 !important; }
+.ds-stepbar {
+  display: flex; align-items: center; gap: 2px; flex-wrap: nowrap;
+  overflow-x: auto; scrollbar-width: none;
+  margin-bottom: 28px; padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.ds-stepbar::-webkit-scrollbar { display: none; }
+.ds-step {
+  border-radius: 4px; padding: 2px 7px;
+  font-size: 0.7rem; font-weight: 500; white-space: nowrap; flex-shrink: 0;
+}
+.ds-step-done   { color: var(--muted); }
+.ds-step-active { background: var(--fg); color: #fff; font-weight: 600; }
+.ds-step-locked { color: #d1d5db; }
+.ds-step-optional { color: #d1d5db; }
+.ds-step-arrow  { color: #d1d5db; font-size: 0.75rem; padding: 0; flex-shrink: 0; }
+.ds-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.ds-page { display: contents; }
+[data-testid="stMetric"] {
+  background: var(--bg) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important; padding: 14px 18px !important;
+  box-shadow: none !important;
+}
+.stButton { display: flex !important; justify-content: flex-start !important; }
+.stButton > button {
+  width: auto !important; min-width: 0 !important; padding: 5px 16px !important;
+  border-radius: var(--radius) !important; font-size: 0.82rem !important;
+  font-weight: 500 !important; transition: all .12s !important;
+  cursor: pointer !important; white-space: nowrap !important;
+}
+.stButton > button[kind="primary"] {
+  background: var(--fg) !important; border: 1px solid var(--fg) !important;
+  color: #fff !important; font-weight: 600 !important; box-shadow: none !important;
+}
+.stButton > button[kind="primary"]:hover {
+  background: var(--primary-hover) !important; border-color: var(--primary-hover) !important;
+}
+.stButton > button[kind="secondary"] {
+  background: #fff !important; border: 1px solid var(--border) !important;
+  color: var(--fg) !important; box-shadow: none !important;
+}
+.stButton > button[kind="secondary"]:hover {
+  border-color: var(--fg) !important; background: var(--primary-light) !important;
+}
+[data-testid="stExpander"] {
+  background: var(--bg) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important; box-shadow: none !important;
+}
+.sb-title {
+  font-size: .65rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: #6b7280; margin-bottom: 10px;
+  padding-bottom: 6px; border-bottom: 1px solid #e5e7eb;
+}
+.sb-step {
+  padding: 8px 10px; margin-bottom: 5px;
+  border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;
+}
+.sb-step-label {
+  font-size: .6rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: #6b7280; margin-bottom: 2px;
+}
+.sb-step-value { font-size: .78rem; color: #111827; font-weight: 500; line-height: 1.35; }
+.risk-badge {
+  display: inline-block; padding: 6px 20px; border-radius: 6px;
+  font-size: 1rem; font-weight: 700; letter-spacing: .03em; margin-top: 4px;
+}
+.risk-low  { background: #dcfce7; color: #166534; }
+.risk-med  { background: #fef9c3; color: #854d0e; }
+.risk-high { background: #fee2e2; color: #991b1b; }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Topbar ─────────────────────────────────────────────────────────────────────
-st.markdown(
-    '<div class="ds-topbar">'
-    '<a class="ds-topbar-logo" href="/" target="_self">'
-    '<span style="font-family:\'Material Symbols Outlined\';font-size:1.2rem">local_hospital</span>'
-    'DataSUS AI<span class="ds-topbar-badge">PREDICTION</span>'
-    '</a>'
-    '<a class="ds-topbar-right" href="/" target="_self">Inferência Individual</a>'
-    '</div>',
-    unsafe_allow_html=True,
-)
-
-# ── Session state ──────────────────────────────────────────────────────────────
+# ── Session state ───────────────────────────────────────────────────────────────
 ss = st.session_state
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+def render_topbar() -> None:
+    st.markdown(
+        '<div class="ds-topbar">'
+        '<a class="ds-topbar-logo" href="/" target="_self">'
+        '<span class="ms" style="font-size:1.2rem;color:#111827">local_hospital</span>'
+        'DataSUS AI'
+        '<span class="ds-topbar-badge">PREDICTION</span>'
+        '</a>'
+        '<a class="ds-topbar-right" href="/" target="_self">Inferência Individual</a>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_step_bar() -> None:
+    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo",
+              "Treinamento", "Resultados", "Calibração", "Benchmark", "Deploy"]
+    optionals = {8, 9, 10}
+    parts = []
+    for i, lbl in enumerate(labels, 1):
+        optional = i in optionals
+        if i < 10:
+            cls = "ds-step ds-step-done"
+            dot = "✓"
+        elif i == 10:
+            cls = "ds-step ds-step-active"
+            dot = "10"
+        else:
+            cls = "ds-step ds-step-optional"
+            dot = str(i)
+        suffix = " *" if optional else ""
+        parts.append(f'<span class="{cls}">{dot}. {lbl}{suffix}</span>')
+        if i < len(labels):
+            parts.append('<span class="ds-step-arrow">›</span>')
+    st.markdown(
+        '<div class="ds-stepbar">'
+        + "".join(parts)
+        + '<span style="margin-left:auto;font-size:0.65rem;color:#9ca3af;white-space:nowrap;flex-shrink:0;">* etapa opcional</span>'
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_sidebar() -> None:
+    with st.sidebar:
+        st.markdown('<p class="sb-title">Pipeline</p>', unsafe_allow_html=True)
+
+        if ss.get("outcome_key"):
+            o = OUTCOMES[ss["outcome_key"]]
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">1 · Desfecho</div>'
+                f'<div class="sb-step-value">{o.name}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">{", ".join(o.data_sources)}</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("raw_data"):
+            lines = "<br>".join(f"{src}: {len(df):,}" for src, df in ss["raw_data"].items())
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">2 · Dados</div>'
+                f'<div class="sb-step-value">{lines}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("cohort") is not None:
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">3 · Coorte</div>'
+                f'<div class="sb-step-value">{len(ss["cohort"]):,} registros</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("feature_config"):
+            fc = ss["feature_config"]
+            n_feat = len(fc.get("selected_features", []))
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">4 · Features</div>'
+                f'<div class="sb-step-value">{n_feat} variáveis</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("treatment_config"):
+            tc = ss["treatment_config"]
+            num_m = tc.get("num_strategy", "—")
+            cat_m = tc.get("cat_strategy", "—")
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">5 · Tratamento</div>'
+                f'<div class="sb-step-value">Num: {num_m} · Cat: {cat_m}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("model_config"):
+            mc = ss["model_config"]
+            algo_lbl = mc.get("algo_label", mc.get("algorithm", "?").upper())
+            val_tag = mc.get("val_tag_label", "")
+            n_feat = len(mc.get("selected_features", []))
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">6 · Modelo</div>'
+                f'<div class="sb-step-value">{algo_lbl}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">{val_tag} · {n_feat} feat.</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("model_results"):
+            r_ = ss["model_results"]
+            m_ = r_["mean_metrics"]
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">7 · Treinamento</div>'
+                f'<div class="sb-step-value">AUC {m_["roc_auc"]:.3f} · F1 {m_["f1"]:.3f}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">PR-AUC {m_["pr_auc"]:.3f}</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
+            cr_ = ss["calib_results"]
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">8 · Calibração</div>'
+                f'<div class="sb-step-value">{cr_["method"].capitalize()}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">Brier {cr_["brier_after"]:.4f}</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+
+# ── Topbar + sidebar ───────────────────────────────────────────────────────────
+render_topbar()
+render_sidebar()
+st.markdown('<div class="ds-page">', unsafe_allow_html=True)
 
 # ── Guard ──────────────────────────────────────────────────────────────────────
 if not ss.get("model_results") or not ss.get("outcome_key") or ss.get("cohort") is None:
     st.warning("Nenhum modelo treinado encontrado. Volte para a etapa de treinamento.")
-    if st.button("← Voltar ao Pipeline"):
+    if st.button("← Voltar ao Pipeline", type="primary"):
         st.switch_page("pages/analise.py")
     st.stop()
 
 # ── Voltar (acima do step bar) ─────────────────────────────────────────────────
-if st.button("← Voltar", type="secondary"):
-    st.switch_page("pages/analise.py")
+if st.button("← Voltar à Calibração", type="secondary"):
+    st.switch_page("pages/calibracao.py")
 
 # ── Step bar ───────────────────────────────────────────────────────────────────
-labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark", "Deploy"]
-optionals = {8, 9, 10}
-parts = []
-for i, lbl in enumerate(labels, 1):
-    optional = i in optionals
-    cls = ("ds-step ds-step-done" if i < 10
-           else "ds-step ds-step-active" if i == 10
-           else "ds-step ds-step-optional")
-    dot = "✓" if i < 10 else str(i)
-    suffix = " *" if optional else ""
-    parts.append(f'<span class="{cls}">{dot}. {lbl}{suffix}</span>')
-    if i < len(labels):
-        parts.append('<span class="ds-step-arrow">›</span>')
-st.markdown(
-    '<div class="ds-stepbar">'
-    + "".join(parts)
-    + '<span style="margin-left:auto;font-size:0.65rem;color:#9ca3af;white-space:nowrap;flex-shrink:0;">* etapa opcional</span>'
-    + "</div>",
-    unsafe_allow_html=True,
-)
+render_step_bar()
 
 # ── Lazy imports ───────────────────────────────────────────────────────────────
 pd = _pd()
@@ -178,7 +370,7 @@ X_res = X_train[feature_cols]
 num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").columns.tolist())
 cat_cols = treatment.get("cat_cols", X_res.select_dtypes(exclude="number").columns.tolist())
 
-# ── Título ────────────────────────────────────────────────────────────────────
+# ── Título ─────────────────────────────────────────────────────────────────────
 st.markdown("**Passo 10 — Deploy — Inferência Individual**")
 st.caption(
     f"Preencha os valores de um paciente e clique em **Predizer** para obter "
@@ -199,9 +391,9 @@ def _make_fmt(vals_dict: dict):
     return _fmt
 
 
-# ── Formulário de entrada ─────────────────────────────────────────────────────
+# ── Formulário de entrada ──────────────────────────────────────────────────────
 input_vals: dict = {}
-_ncols = 3  # sempre definido antes dos blocos condicionais
+_ncols = 3
 
 with st.form("deploy_form"):
     n_num = len([c for c in feature_cols if c in num_cols])
@@ -244,7 +436,7 @@ with st.form("deploy_form"):
                     if col in X_res else []
                 )
                 _vals = info.get("values", {}) if info else {}
-                _fmt  = _make_fmt(_vals) if _vals else None
+                _fmt  = _make_fmt(_vals) if _vals else str
                 input_vals[col] = cols[ci].selectbox(
                     label,
                     options=_opts if _opts else ["—"],
@@ -255,14 +447,13 @@ with st.form("deploy_form"):
 
     submitted = st.form_submit_button("Predizer", type="primary", use_container_width=False)
 
-# ── Inferência ────────────────────────────────────────────────────────────────
+# ── Inferência ─────────────────────────────────────────────────────────────────
 if submitted:
     try:
         # Monta DataFrame com os valores do usuário
         row_data = {}
         for col in feature_cols:
             val = input_vals.get(col)
-            # Converte de volta para o dtype do treino
             if col in num_cols:
                 row_data[col] = float(val) if val is not None else float("nan")
             else:
@@ -339,7 +530,7 @@ if submitted:
             )
             st.plotly_chart(shap_fig, use_container_width=True)
         else:
-            st.info("SHAP indisponível para este algoritmo (ex: Logistic Regression requer dados de fundo).")
+            st.info("SHAP indisponível para este algoritmo.")
 
         # Tabela de valores inseridos
         with st.expander("Valores inseridos para esta predição"):
