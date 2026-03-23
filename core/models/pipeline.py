@@ -113,8 +113,8 @@ def _build_model(algorithm: str, params: dict, class_weight: str | None = None):
             n_estimators=params.get("n_estimators", 300),
             learning_rate=params.get("learning_rate", 0.05),
             max_depth=params.get("max_depth", 6),
-            use_label_encoder=False,
             eval_metric="logloss",
+            verbosity=0,
             random_state=42,
         )
     if algorithm == "logreg":
