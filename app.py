@@ -156,8 +156,9 @@ try:
     N_COLS = 5
     for group_name, outcomes in OUTCOME_GROUPS.items():
         st.markdown(f'<p class="ds-group">{group_name}</p>', unsafe_allow_html=True)
-        for row_start in range(0, len(outcomes), N_COLS):
-            row = outcomes[row_start : row_start + N_COLS]
+        _sorted = sorted(outcomes, key=lambda o: (1 if "+" in o[3] else 0))
+        for row_start in range(0, len(_sorted), N_COLS):
+            row = _sorted[row_start : row_start + N_COLS]
             cols = st.columns(N_COLS)
             for col_idx, (key, icon, name, source) in enumerate(row):
                 with cols[col_idx]:

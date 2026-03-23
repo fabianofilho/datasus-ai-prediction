@@ -567,6 +567,13 @@ else:
                         X_cmp[col] = float("nan")
                 X_cmp = X_cmp[train_cols]
 
+                # Limita ao mesmo N do treino original para comparação justa
+                _train_n = results.get("sample_n")
+                if _train_n and len(X_cmp) > _train_n:
+                    _idx = X_cmp.sample(n=_train_n, random_state=42).index
+                    X_cmp = X_cmp.loc[_idx]
+                    y_cmp = y_cmp.loc[_idx]
+
                 probs_cmp = _active_model.predict_proba(X_cmp)[:, 1]
                 preds_cmp = (probs_cmp >= 0.5).astype(int)
 

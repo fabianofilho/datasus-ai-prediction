@@ -24,6 +24,8 @@ from sklearn.metrics import (
 ALGORITHMS = {
     "LightGBM": "lgbm",
     "XGBoost": "xgb",
+    "CatBoost": "catboost",
+    "TabPFN": "tabpfn",
     "Logistic Regression": "logreg",
     "Random Forest": "rf",
 }
@@ -49,6 +51,11 @@ _RANDOM_GRIDS: dict[str, dict] = {
     "logreg": {
         "model__C": [0.001, 0.01, 0.1, 1.0, 10.0, 100.0],
     },
+    "catboost": {
+        "model__iterations":   [100, 200, 300, 500],
+        "model__learning_rate": [0.01, 0.05, 0.1, 0.2],
+        "model__depth":        [4, 6, 8, 10],
+    },
 }
 
 # ── Param grids for Grid Search (focused) ────────────────────────────────────
@@ -69,6 +76,11 @@ _GRID_GRIDS: dict[str, dict] = {
     },
     "logreg": {
         "model__C": [0.01, 0.1, 1.0, 10.0],
+    },
+    "catboost": {
+        "model__iterations":    [100, 300, 500],
+        "model__learning_rate": [0.05, 0.1],
+        "model__depth":         [4, 6, 8],
     },
 }
 
@@ -114,6 +126,24 @@ def _build_model(algorithm: str, params: dict, class_weight: str | None = None):
             random_state=42,
             n_jobs=-1,
         )
+    if algorithm == "catboost":
+        from catboost import CatBoostClassifier
+        return CatBoostClassifier(
+            iterations=params.get("iterations", 300),
+            learning_rate=params.get("learning_rate", 0.05),
+            depth=params.get("depth", 6),
+            auto_class_weights="Balanced" if class_weight else None,
+            random_seed=42,
+            verbose=0,
+        )
+    if algorithm == "tabpfn":
+        try:
+            from tabpfn import TabPFNClassifier
+            return TabPFNClassifier(device="cpu", N_ensemble_configurations=16)
+        except ImportError:
+            raise ImportError(
+                "TabPFN não está instalado. Execute: pip install tabpfn"
+            )
     raise ValueError(f"Unknown algorithm: {algorithm}")
 
 
@@ -325,6 +355,12 @@ def _suggest_params(trial, algorithm: str) -> dict:
         }
     if algorithm == "logreg":
         return {"C": trial.suggest_float("C", 0.001, 100.0, log=True)}
+    if algorithm == "catboost":
+        return {
+            "iterations":    trial.suggest_int("iterations", 100, 800, step=50),
+            "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.2, log=True),
+            "depth":         trial.suggest_int("depth", 4, 10),
+        }
     return {}
 
 

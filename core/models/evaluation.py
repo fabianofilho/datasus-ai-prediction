@@ -16,6 +16,20 @@ from sklearn.calibration import calibration_curve
 from sklearn.metrics import roc_curve, precision_recall_curve
 
 
+def _unwrap_model(model):
+    """Return (estimator, preprocessor_pipeline) regardless of model type.
+
+    Handles plain sklearn Pipeline and CalibratedClassifierCV (post-calibration),
+    which is not subscriptable.
+    """
+    from sklearn.calibration import CalibratedClassifierCV
+    if isinstance(model, CalibratedClassifierCV):
+        inner = model.estimator  # the underlying pipeline
+        return inner[-1], inner[:-1]
+    # Standard Pipeline
+    return model[-1], model[:-1]
+
+
 def roc_chart(y_true: np.ndarray, oof_probs: np.ndarray) -> go.Figure:
     fpr, tpr, _ = roc_curve(y_true, oof_probs)
     auc = _trapz(tpr, fpr)
@@ -81,9 +95,7 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
     except ImportError:
         return None
 
-    # Get the underlying estimator (last step)
-    estimator = model[-1]
-    prep = model[:-1]
+    estimator, prep = _unwrap_model(model)
     X_transformed = prep.transform(X)
     if hasattr(X_transformed, "toarray"):
         X_transformed = X_transformed.toarray()
@@ -209,8 +221,7 @@ def shap_values_dict(model, X: pd.DataFrame, max_rows: int = 500) -> dict:
     except ImportError:
         return {}
 
-    estimator = model[-1]
-    prep = model[:-1]
+    estimator, prep = _unwrap_model(model)
     X_sub = X.head(max_rows)
     X_transformed = prep.transform(X_sub)
     if hasattr(X_transformed, "toarray"):
@@ -283,8 +294,7 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
     except ImportError:
         return None
 
-    estimator = model[-1]
-    prep = model[:-1]
+    estimator, prep = _unwrap_model(model)
     row = X.iloc[[case_idx]]
     X_t_raw = prep.transform(row)
     if hasattr(X_t_raw, "toarray"):

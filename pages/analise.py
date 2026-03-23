@@ -322,7 +322,7 @@ _defaults: dict = {
     "sel_states": ["SP"],
     "sel_years": [2023],
     "manual_needed": [],
-    "sample_n": 10_000,
+    "sample_n": 1_000,
     "sample_seed": 42,
 }
 for k, v in _defaults.items():
@@ -567,33 +567,38 @@ if not ss["outcome_key"]:
                "Escolha o desfecho clínico que deseja predizer. Organizado por área temática.")
     for group_name, keys in OUTCOME_GROUPS.items():
         st.markdown(f'<p class="ds-group-label">{group_name}</p>', unsafe_allow_html=True)
-        cols = st.columns(min(len(keys), 3))
-        for i, key in enumerate(keys):
-            outcome = OUTCOMES.get(key)
-            if not outcome:
-                continue
-            with cols[i % 3]:
-                is_sel = ss["outcome_key"] == key
-                cls = "ds-card selected" if is_sel else "ds-card"
-                st.markdown(
-                    f'<div class="{cls}">'
-                    f'<div class="ds-card-title">{outcome.name}</div>'
-                    f'<div class="ds-card-desc">{outcome.description[:108]}…</div>'
-                    f'<div class="ds-card-meta">{", ".join(outcome.data_sources)}'
-                    f' &nbsp;·&nbsp; ~{outcome.estimated_download_min} min</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button(
-                    "Selecionado" if is_sel else "Selecionar",
-                    key=f"sel_{key}",
-
-                    type="primary" if is_sel else "secondary",
-                ):
-                    for k in ["raw_data", "cohort", "model_config", "model_results", "manual_needed"]:
-                        ss[k] = _defaults[k]
-                    ss["outcome_key"] = key
-                    st.rerun()
+        # single-source first, multi-source last
+        _sorted_keys = sorted(
+            [k for k in keys if OUTCOMES.get(k)],
+            key=lambda k: len(OUTCOMES[k].data_sources),
+        )
+        N_COLS = 3
+        for row_start in range(0, len(_sorted_keys), N_COLS):
+            row_keys = _sorted_keys[row_start : row_start + N_COLS]
+            cols = st.columns(N_COLS)
+            for col_idx, key in enumerate(row_keys):
+                outcome = OUTCOMES[key]
+                with cols[col_idx]:
+                    is_sel = ss["outcome_key"] == key
+                    cls = "ds-card selected" if is_sel else "ds-card"
+                    st.markdown(
+                        f'<div class="{cls}">'
+                        f'<div class="ds-card-title">{outcome.name}</div>'
+                        f'<div class="ds-card-desc">{outcome.description[:108]}…</div>'
+                        f'<div class="ds-card-meta">{", ".join(outcome.data_sources)}'
+                        f' &nbsp;·&nbsp; ~{outcome.estimated_download_min} min</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(
+                        "Selecionado" if is_sel else "Selecionar",
+                        key=f"sel_{key}",
+                        type="primary" if is_sel else "secondary",
+                    ):
+                        for k in ["raw_data", "cohort", "model_config", "model_results", "manual_needed"]:
+                            ss[k] = _defaults[k]
+                        ss["outcome_key"] = key
+                        st.rerun()
     st.stop()
 
 outcome = OUTCOMES[ss["outcome_key"]]
@@ -638,7 +643,7 @@ if ss["cohort"] is None:
                     max_value=500_000,
                     value=ss["sample_n"],
                     step=5_000,
-                    help="Limita o download para evitar falta de memória. Padrão: 10.000. Use 500.000 para dados completos.",
+                    help="Limita o download para evitar falta de memória. Padrão: 1.000. Use 500.000 para dados completos.",
                 )
             with sa2:
                 ss["sample_seed"] = st.number_input(
@@ -753,41 +758,95 @@ if ss["cohort"] is None:
 
             # Completude por coluna
             with st.expander("Completude por coluna", expanded=True):
+                import plotly.express as _px_c
                 _miss_s = _df.isna().mean().sort_values(ascending=False)
                 _miss_df = pd.DataFrame({
                     "Coluna": _miss_s.index,
-                    "Missing (%)": (_miss_s.values * 100).round(1),
                     "Preenchido (%)": ((1 - _miss_s.values) * 100).round(1),
+                    "Missing (%)": (_miss_s.values * 100).round(1),
                 }).reset_index(drop=True)
-                # destaca colunas com alto missing
                 _high = _miss_df["Missing (%)"] > 50
-                st.dataframe(
-                    _miss_df.style.apply(
-                        lambda row: ["background:#fff7ed;color:#92400e" if row["Missing (%)"] > 50
-                                     else "background:#f0fdf4;color:#166534" if row["Missing (%)"] == 0
-                                     else "" for _ in row],
-                        axis=1,
-                    ),
-                    use_container_width=True,
-                    height=min(200 + _k * 8, 400),
-                    hide_index=True,
+
+                # gráfico de barras horizontais empilhadas
+                _fig_comp = _px_c.bar(
+                    _miss_df,
+                    y="Coluna",
+                    x=["Preenchido (%)", "Missing (%)"],
+                    orientation="h",
+                    color_discrete_map={"Preenchido (%)": "#22c55e", "Missing (%)": "#f97316"},
+                    labels={"value": "%", "variable": ""},
+                    height=max(300, _k * 22),
                 )
+                _fig_comp.update_layout(
+                    barmode="stack",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    margin=dict(l=0, r=0, t=30, b=0),
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    xaxis=dict(range=[0, 100], ticksuffix="%"),
+                    yaxis=dict(autorange="reversed"),
+                    font=dict(size=12),
+                )
+                st.plotly_chart(_fig_comp, use_container_width=True)
                 if _high.any():
                     st.caption(
                         f"⚠ {int(_high.sum())} coluna(s) com mais de 50% de missing — "
                         "serão imputadas pela mediana no pipeline."
                     )
 
-            # Sumário estatístico (só numéricas)
+            # Sumário estatístico
             with st.expander("Sumário estatístico"):
+                import plotly.express as _px_s
+                import math as _math
+
                 _num = _df.select_dtypes(include="number")
+                _cat = _df.select_dtypes(exclude="number")
+
                 if not _num.empty:
-                    st.dataframe(
-                        _num.describe().T.round(2),
-                        use_container_width=True,
-                    )
-                else:
-                    st.caption("Nenhuma coluna numérica encontrada.")
+                    st.markdown("**Variáveis numéricas**")
+                    st.dataframe(_num.describe().T.round(2), use_container_width=True)
+
+                if not _cat.empty:
+                    st.markdown("**Distribuição de variáveis categóricas**")
+                    _cat_cols = _cat.columns.tolist()
+                    _ncols = 2
+                    _nrows = _math.ceil(len(_cat_cols) / _ncols)
+                    for _row_i in range(_nrows):
+                        _grid = st.columns(_ncols)
+                        for _col_i in range(_ncols):
+                            _ci = _row_i * _ncols + _col_i
+                            if _ci >= len(_cat_cols):
+                                break
+                            _col_name = _cat_cols[_ci]
+                            _vc = (
+                                _df[_col_name]
+                                .astype(str)
+                                .value_counts()
+                                .reset_index()
+                            )
+                            _vc.columns = ["Categoria", "Contagem"]
+                            _fig_cat = _px_s.bar(
+                                _vc,
+                                x="Categoria",
+                                y="Contagem",
+                                title=_col_name,
+                                color="Contagem",
+                                color_continuous_scale="Blues",
+                            )
+                            _fig_cat.update_layout(
+                                coloraxis_showscale=False,
+                                margin=dict(l=0, r=0, t=40, b=0),
+                                plot_bgcolor="white",
+                                paper_bgcolor="white",
+                                showlegend=False,
+                                height=280,
+                                font=dict(size=11),
+                            )
+                            _fig_cat.update_xaxes(tickangle=-35)
+                            _grid[_col_i].plotly_chart(_fig_cat, use_container_width=True)
+
+                if _num.empty and _cat.empty:
+                    st.caption("Nenhuma coluna encontrada.")
 
             # Amostra
             with st.expander("Amostra dos dados (10 linhas)"):
@@ -896,121 +955,157 @@ if not ss.get("feature_config"):
 # ═════════════════════════════════════════════════════════════════════════════
 if not ss.get("treatment_config"):
     step_title(5, "Tratamento de Variáveis",
-               "Configure codificação para categóricas e escala para numéricas.")
+               "Classifique o tipo de cada variável e configure o tratamento.")
 
     _sel_feats = ss["feature_config"]["selected_features"]
     X_sel = X[_sel_feats]
-    _num_cols = X_sel.select_dtypes(include="number").columns.tolist()
-    _cat_cols = X_sel.select_dtypes(include=["object", "category"]).columns.tolist()
-    _low_card = [c for c in _num_cols if 1 < X_sel[c].nunique() <= 10]
+    _num_cols_orig = X_sel.select_dtypes(include="number").columns.tolist()
+    _cat_cols_orig = X_sel.select_dtypes(include=["object", "category"]).columns.tolist()
+    _low_card = [c for c in _num_cols_orig if 1 < X_sel[c].nunique() <= 10]
+
+    # ── Passo 1: Classificar tipo por variável ────────────────────────────────
+    st.markdown("**Passo 1 — Classificar tipo de cada variável**")
+    if _low_card:
+        st.caption(
+            f"Variáveis com baixa cardinalidade: **{', '.join(_low_card)}** — "
+            "podem ser tratadas como categóricas."
+        )
+
+    _type_opts = ["Numérica", "Categórica", "Remover"]
+    _type_result: dict = {}
+
+    with st.expander(f"Classificação por variável — {len(_sel_feats)} features", expanded=True):
+        _th1, _th2, _th3 = st.columns([3, 2, 1])
+        _th1.markdown("<div style='font-size:.72rem;font-weight:600;color:#6b7280'>VARIÁVEL</div>", unsafe_allow_html=True)
+        _th2.markdown("<div style='font-size:.72rem;font-weight:600;color:#6b7280'>TIPO</div>", unsafe_allow_html=True)
+        _th3.markdown("<div style='font-size:.72rem;font-weight:600;color:#6b7280'>INFO</div>", unsafe_allow_html=True)
+        for _col in _sel_feats:
+            _nuniq = X_sel[_col].nunique()
+            _inferred = "Numérica" if _col in _num_cols_orig else "Categórica"
+            _vc1, _vc2, _vc3 = st.columns([3, 2, 1])
+            with _vc1:
+                st.markdown(
+                    f"<div style='padding:5px 0;font-size:.82rem'><b>{_col}</b> "
+                    f"<span style='color:#9ca3af;font-size:.72rem'>({_nuniq} únicos)</span></div>",
+                    unsafe_allow_html=True,
+                )
+            with _vc2:
+                _type_result[_col] = st.selectbox(
+                    _col, _type_opts,
+                    index=_type_opts.index(_inferred),
+                    key=f"type_{_col}",
+                    label_visibility="collapsed",
+                )
+            with _vc3:
+                if _col in _low_card:
+                    st.markdown(
+                        "<div style='padding:5px 0;font-size:.68rem;color:#d97706'>baixa card.</div>",
+                        unsafe_allow_html=True,
+                    )
+
+    # Listas finais baseadas na classificação do usuário
+    _num_cols = [c for c, t in _type_result.items() if t == "Numérica"]
+    _cat_cols = [c for c, t in _type_result.items() if t == "Categórica"]
 
     _ti1, _ti2, _ti3 = st.columns(3)
     _ti1.metric("Numéricas", str(len(_num_cols)))
     _ti2.metric("Categóricas", str(len(_cat_cols)))
-    _ti3.metric("Num. baixa cardinalidade", str(len(_low_card)),
-                help="Variáveis numéricas com ≤ 10 valores únicos — podem ser tratadas como categóricas.")
-    if _low_card:
-        st.caption(
-            f"Variáveis com baixa cardinalidade: **{', '.join(_low_card)}** — "
-            "considere codificá-las como categóricas nos ajustes por variável."
-        )
+    _ti3.metric("Removidas", str(len(_sel_feats) - len(_num_cols) - len(_cat_cols)))
 
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-    # ── Defaults globais ──────────────────────────────────────────────────────
-    _g1, _g2 = st.columns(2)
-    with _g1:
-        st.markdown("**Variáveis Numéricas**")
-        _num_opt = st.radio(
-            "Escala",
-            ["Nenhuma (recomendado para árvores)", "Padronização (z-score)", "Normalização (min-max)"],
-            label_visibility="collapsed",
-        )
-        _num_map = {
-            "Nenhuma (recomendado para árvores)": "none",
-            "Padronização (z-score)": "standard",
-            "Normalização (min-max)": "minmax",
-        }
-        _num_default_key = _num_map[_num_opt]
+    # ── Passo 2: Configurar tratamento ────────────────────────────────────────
+    st.markdown("**Passo 2 — Configurar tratamento**")
 
-    with _g2:
-        st.markdown("**Variáveis Categóricas**")
-        _cat_opt = st.radio(
-            "Codificação",
-            ["One-Hot Encoding", "Ordinal Encoding", "Target Encoding", "Remover"],
-            label_visibility="collapsed",
-            help=(
-                "**One-Hot**: cria coluna binária por categoria (bom para poucos valores únicos). "
-                "**Ordinal**: converte em inteiro (bom para variáveis com ordem natural). "
-                "**Target**: média do target por categoria (bom para alta cardinalidade). "
-                "**Remover**: exclui a variável do modelo."
-            ),
-        )
-        _cat_map = {
-            "One-Hot Encoding": "ohe",
-            "Ordinal Encoding": "ordinal",
-            "Target Encoding": "target",
-            "Remover": "drop",
-        }
-        _cat_default_key = _cat_map[_cat_opt]
-
-    # ── Ajustes por variável ──────────────────────────────────────────────────
-    _overrides: dict = {}
     _all_num_opts = ["none", "standard", "minmax", "drop"]
     _all_cat_opts = ["ohe", "ordinal", "target", "drop"]
     _num_lbl_map = {"none": "Nenhuma", "standard": "Z-score", "minmax": "Min-Max", "drop": "Remover"}
     _cat_lbl_map = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}
 
-    with st.expander(f"Ajustes por variável — {len(_sel_feats)} features", expanded=False):
+    _num_map = {
+        "Nenhuma (recomendado para árvores)": "none",
+        "Padronização (z-score)": "standard",
+        "Normalização (min-max)": "minmax",
+    }
+    _cat_map = {
+        "One-Hot Encoding": "ohe",
+        "Ordinal Encoding": "ordinal",
+        "Target Encoding": "target",
+        "Remover": "drop",
+    }
+
+    _overrides: dict = {}
+    _g1, _g2 = st.columns(2)
+
+    with _g1:
+        st.markdown("**Variáveis Numéricas**")
+        _num_opt = st.radio(
+            "Escala padrão",
+            list(_num_map.keys()),
+            label_visibility="collapsed",
+        )
+        _num_default_key = _num_map[_num_opt]
         if _num_cols:
-            st.markdown("**Numéricas**")
+            st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
             for _col in _num_cols:
-                _vc1, _vc2, _vc3 = st.columns([3, 2, 1])
-                with _vc1:
-                    _nuniq = X_sel[_col].nunique()
+                _nuniq = X_sel[_col].nunique()
+                _cv1, _cv2 = st.columns([3, 2])
+                with _cv1:
                     st.markdown(
-                        f"<div style='padding:5px 0;font-size:.82rem'><b>{_col}</b> "
-                        f"<span style='color:#9ca3af;font-size:.72rem'>({_nuniq} únicos)</span></div>",
+                        f"<div style='padding:4px 0;font-size:.8rem'><b>{_col}</b> "
+                        f"<span style='color:#9ca3af;font-size:.7rem'>({_nuniq})</span></div>",
                         unsafe_allow_html=True,
                     )
-                with _vc2:
-                    _sel_v = st.selectbox(
+                with _cv2:
+                    _sv = st.selectbox(
                         _col, _all_num_opts,
                         format_func=lambda x: _num_lbl_map[x],
                         index=_all_num_opts.index(_num_default_key),
                         key=f"treat_n_{_col}",
                         label_visibility="collapsed",
                     )
-                    if _sel_v != _num_default_key:
-                        _overrides[_col] = _sel_v
-                with _vc3:
-                    if _col in _low_card:
-                        st.markdown(
-                            "<div style='padding:5px 0;font-size:.68rem;color:#d97706'>baixa card.</div>",
-                            unsafe_allow_html=True,
-                        )
+                    if _sv != _num_default_key:
+                        _overrides[_col] = _sv
+        else:
+            st.caption("Nenhuma variável numérica.")
 
+    with _g2:
+        st.markdown("**Variáveis Categóricas**")
+        _cat_opt = st.radio(
+            "Codificação padrão",
+            list(_cat_map.keys()),
+            label_visibility="collapsed",
+            help=(
+                "**One-Hot**: cria coluna binária por categoria. "
+                "**Ordinal**: converte em inteiro (variáveis com ordem natural). "
+                "**Target**: média do target por categoria (alta cardinalidade). "
+                "**Remover**: exclui a variável do modelo."
+            ),
+        )
+        _cat_default_key = _cat_map[_cat_opt]
         if _cat_cols:
-            st.markdown("**Categóricas**")
+            st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
             for _col in _cat_cols:
-                _vc1, _vc2 = st.columns([3, 2])
-                with _vc1:
-                    _nuniq = X_sel[_col].nunique()
+                _nuniq = X_sel[_col].nunique()
+                _cv1, _cv2 = st.columns([3, 2])
+                with _cv1:
                     st.markdown(
-                        f"<div style='padding:5px 0;font-size:.82rem'><b>{_col}</b> "
-                        f"<span style='color:#9ca3af;font-size:.72rem'>({_nuniq} únicos)</span></div>",
+                        f"<div style='padding:4px 0;font-size:.8rem'><b>{_col}</b> "
+                        f"<span style='color:#9ca3af;font-size:.7rem'>({_nuniq})</span></div>",
                         unsafe_allow_html=True,
                     )
-                with _vc2:
-                    _sel_v = st.selectbox(
+                with _cv2:
+                    _sv = st.selectbox(
                         _col, _all_cat_opts,
                         format_func=lambda x: _cat_lbl_map[x],
                         index=_all_cat_opts.index(_cat_default_key),
                         key=f"treat_c_{_col}",
                         label_visibility="collapsed",
                     )
-                    if _sel_v != _cat_default_key:
-                        _overrides[_col] = _sel_v
+                    if _sv != _cat_default_key:
+                        _overrides[_col] = _sv
+        else:
+            st.caption("Nenhuma variável categórica.")
 
     if st.button("Confirmar Tratamento", type="primary"):
         ss["treatment_config"] = {
@@ -1103,25 +1198,25 @@ if not ss.get("model_config"):
         st.markdown("**Estratégia de Hiperparâmetros**")
         hpo_mode = st.radio(
             "HPO",
-            ["Manual", "Random Search", "Grid Search", "Optuna (automático)"],
-            index=3,
+            ["Optuna (automático)", "Random Search", "Grid Search", "Manual"],
+            index=0,
             label_visibility="collapsed",
             help=(
-                "**Manual**: defina os parâmetros abaixo. "
+                "**Optuna**: otimização bayesiana automática (melhor custo-benefício). "
                 "**Random Search**: amostragem aleatória do espaço (rápido). "
                 "**Grid Search**: busca exaustiva em grade pré-definida. "
-                "**Optuna**: otimização bayesiana automática (melhor custo-benefício)."
+                "**Manual**: defina os parâmetros abaixo."
             ),
         )
         if hpo_mode == "Random Search":
-            n_iter = st.slider("Iterações (n_iter)", 10, 100, 30, 5)
-            n_trials = 50
+            n_iter = st.slider("Iterações (n_iter)", 5, 100, 10, 5)
+            n_trials = 5
         elif hpo_mode == "Optuna (automático)":
-            n_trials = st.slider("Tentativas (trials)", 10, 200, 50, 10)
-            n_iter = 30
+            n_trials = st.slider("Tentativas (trials)", 5, 200, 5, 5)
+            n_iter = 10
         else:
-            n_iter = 30
-            n_trials = 50
+            n_iter = 10
+            n_trials = 5
 
     # ── Hiperparâmetros manuais (só quando Manual selecionado) ────────────────
     params_per_algo: dict = {a: {} for a in algos}
@@ -1145,6 +1240,15 @@ if not ss.get("model_config"):
                 if _algo in ("lgbm", "xgb", "rf"):
                     _p["max_depth"] = st.slider(
                         "max_depth (−1 = sem limite)", -1, 15, -1, key=f"md_{_algo}")
+                if _algo == "catboost":
+                    _p["iterations"] = st.slider(
+                        "iterations", 50, 1000, 300, 50, key=f"it_{_algo}")
+                    _p["learning_rate"] = st.select_slider(
+                        "learning_rate",
+                        [0.005, 0.01, 0.02, 0.05, 0.1, 0.2], value=0.05,
+                        key=f"lr_{_algo}")
+                    _p["depth"] = st.slider(
+                        "depth", 2, 10, 6, key=f"dep_{_algo}")
                 if _algo == "logreg":
                     _p["C"] = st.select_slider(
                         "C (regularização)",
@@ -1190,7 +1294,7 @@ holdout_size = cfg["holdout_size"]
 balancing = cfg.get("balancing", "none")
 hpo_mode = cfg["hpo_mode"]
 n_iter = cfg.get("n_iter", 30)
-n_trials = cfg.get("n_trials", 50)
+n_trials = cfg.get("n_trials", 5)
 params_per_algo = cfg.get("params_per_algo", {algo: cfg.get("params", {})})
 selected_features = ss["feature_config"]["selected_features"]
 treatment = ss.get("treatment_config")
@@ -1236,9 +1340,10 @@ if not ss["model_results"]:
             yaxis=dict(title="ROC-AUC", range=[0.45, 1.0], gridcolor="rgba(0,0,0,0.07)"),
             xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.07)", zeroline=False),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            height=320,
+            height=420,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(t=60, b=40, l=60, r=20),
+            margin=dict(t=60, b=50, l=70, r=30),
+            font=dict(size=13),
         )
         return fig
 
@@ -1482,7 +1587,7 @@ with col1:
 with col2:
     st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
 
-st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=False)
+st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=True)
 
 st.markdown("#### Distribuição dos scores preditos")
 fig_dist = px.histogram(
@@ -1496,13 +1601,13 @@ st.plotly_chart(fig_dist, use_container_width=True)
 
 if results.get("feature_importances"):
     st.markdown("#### Importância das variáveis")
-    st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=False)
+    st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=True)
 
 st.markdown("#### SHAP — Explicabilidade Global")
 with st.spinner("Calculando SHAP…"):
     shap_fig = ev.shap_summary(results["model"], X_res.head(500))
 if shap_fig:
-    st.plotly_chart(shap_fig, use_container_width=False)
+    st.plotly_chart(shap_fig, use_container_width=True)
 else:
     st.info("SHAP indisponível para este algoritmo.")
 
