@@ -2045,8 +2045,8 @@ if ss.get("result_tab") == "metricas_clinicas":
     st.markdown("**Métricas Clínicas por Ponto de Corte**")
     st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
 
-    # ── Threshold: label inline + slider ──────────────────────────────────────
-    _th_lbl, _th_slid = st.columns([1, 7])
+    # ── Threshold: label + slider compacto (acima da matriz) ─────────────────
+    _th_lbl, _th_slid, _th_val, _th_pad = st.columns([1, 3, 1, 5])
     with _th_lbl:
         st.markdown(
             "<div style='padding-top:26px;font-size:.85rem;font-weight:600;"
@@ -2059,11 +2059,28 @@ if ss.get("result_tab") == "metricas_clinicas":
             label_visibility="collapsed",
             help="Ponto de corte para classificar como positivo (alto risco).",
         )
+    with _th_val:
+        st.markdown(
+            f"<div style='padding-top:26px;font-size:.85rem;color:#6b7280'>"
+            f"{threshold:.2f}</div>",
+            unsafe_allow_html=True,
+        )
 
     tm = ev.threshold_metrics(y_arr, oof, threshold)
 
-    # ── Matriz de confusão (quadrada) + 4 métricas em grade 2×2 ──────────────
-    _mc_left, _mc_right = st.columns([1, 1])
+    # ── Métricas derivadas extras ─────────────────────────────────────────────
+    _total  = tm["tp"] + tm["tn"] + tm["fp"] + tm["fn"]
+    _acc    = (tm["tp"] + tm["tn"]) / _total if _total > 0 else 0.0
+    _f1     = (2 * tm["sensitivity"] * tm["ppv"]) / (tm["sensitivity"] + tm["ppv"]) \
+              if (tm["sensitivity"] + tm["ppv"]) > 0 else 0.0
+    _lr_pos = tm["sensitivity"] / (1 - tm["specificity"]) \
+              if (1 - tm["specificity"]) > 1e-9 else float("inf")
+    _lr_neg = (1 - tm["sensitivity"]) / tm["specificity"] \
+              if tm["specificity"] > 1e-9 else float("inf")
+
+    # ── Layout: matriz de confusão à esquerda + 6 cards à direita ────────────
+    _mc_left, _mc_right = st.columns([5, 7])
+
     with _mc_left:
         _cm_fig = _go.Figure(_go.Heatmap(
             z=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
@@ -2071,25 +2088,57 @@ if ss.get("result_tab") == "metricas_clinicas":
             y=["Real Negativo", "Real Positivo"],
             text=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
             texttemplate="%{text}",
-            colorscale=[[0, "#f0fdf4"], [1, "#166534"]],
+            textfont=dict(size=16, color="white"),
+            colorscale=[[0, "#f0fdf4"], [0.5, "#4ade80"], [1, "#166534"]],
             showscale=False,
         ))
         _cm_fig.update_layout(
-            title="Matriz de confusão",
-            width=340, height=340,
-            margin=dict(t=40, b=30, l=100, r=20),
+            title=dict(text="Matriz de Confusão", font=dict(size=13)),
+            width=320, height=320,
+            margin=dict(t=40, b=40, l=110, r=20),
+            xaxis=dict(side="bottom"),
             yaxis=dict(autorange="reversed", scaleanchor="x", scaleratio=1),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(_cm_fig, use_container_width=False)
+        # Legenda dos quadrantes
+        st.markdown(
+            "<div style='font-size:0.72rem;color:#6b7280;line-height:1.7;"
+            "padding-left:4px;margin-top:-8px'>"
+            "<b>VP</b> Verdadeiro Positivo &nbsp;·&nbsp; <b>FP</b> Falso Positivo<br>"
+            "<b>VN</b> Verdadeiro Negativo &nbsp;·&nbsp; <b>FN</b> Falso Negativo"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
     with _mc_right:
-        st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-        _mr1, _mr2 = st.columns(2)
-        _mr1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
-        _mr2.metric("Especificidade", f"{tm['specificity']:.1%}")
+        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+        # Linha 1
+        _r1a, _r1b, _r1c = st.columns(3)
+        _r1a.metric("Sensibilidade", f"{tm['sensitivity']:.1%}",
+                    help="Taxa de verdadeiros positivos (recall)")
+        _r1b.metric("Especificidade", f"{tm['specificity']:.1%}",
+                    help="Taxa de verdadeiros negativos")
+        _r1c.metric("F1-Score", f"{_f1:.1%}",
+                    help="Média harmônica de Sensibilidade e VPP")
         st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-        _mr3, _mr4 = st.columns(2)
-        _mr3.metric("VPP", f"{tm['ppv']:.1%}")
-        _mr4.metric("VPN", f"{tm['npv']:.1%}")
+        # Linha 2
+        _r2a, _r2b, _r2c = st.columns(3)
+        _r2a.metric("VPP", f"{tm['ppv']:.1%}",
+                    help="Valor Preditivo Positivo (precisão)")
+        _r2b.metric("VPN", f"{tm['npv']:.1%}",
+                    help="Valor Preditivo Negativo")
+        _r2c.metric("Acurácia", f"{_acc:.1%}",
+                    help="Proporção de classificações corretas")
+        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+        # Linha 3
+        _r3a, _r3b, _r3c = st.columns(3)
+        _r3a.metric("LR+", f"{_lr_pos:.2f}" if _lr_pos != float('inf') else "∞",
+                    help="Razão de verossimilhança positiva (sensib. / 1–especif.)")
+        _r3b.metric("LR−", f"{_lr_neg:.2f}" if _lr_neg != float('inf') else "∞",
+                    help="Razão de verossimilhança negativa ((1–sensib.) / especif.)")
+        _r3c.metric("Positivos pred.", f"{tm['tp'] + tm['fp']:,}",
+                    help=f"VP {tm['tp']:,} + FP {tm['fp']:,}")
 
 if ss.get("result_tab") == "equidade":
     import plotly.graph_objects as _go_eq
