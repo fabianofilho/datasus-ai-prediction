@@ -508,11 +508,12 @@ def render_sidebar() -> None:
         # Step 6: Modelo configurado
         if ss.get("model_config"):
             cfg_ = ss["model_config"]
-            _vs = (
-                f"{cfg_['n_folds']}-fold CV"
-                if cfg_["val_strategy"] == "Validação cruzada (k-fold)"
-                else f"Holdout {cfg_['holdout_size']:.0%}"
-            )
+            if cfg_["val_strategy"] == "Validação cruzada (k-fold)":
+                _vs = f"{cfg_['n_folds']}-fold CV"
+            elif cfg_["val_strategy"] == "Validação Temporal":
+                _vs = f"Temporal · {cfg_.get('temporal_cutoff', '')[:7]}"
+            else:
+                _vs = f"Holdout {cfg_['holdout_size']:.0%}"
             _fc_ = ss.get("feature_config") or {}
             _nf = len(_fc_.get("selected_features", []))
             _albl = " · ".join(cfg_.get("algo_labels", [cfg_["algo_label"]]))
@@ -1183,13 +1184,15 @@ if not ss.get("model_config"):
         st.markdown("**Estratégia de Validação**")
         val_strategy = st.radio(
             "Validação",
-            ["Validação cruzada (k-fold)", "Holdout (train/test)"],
+            ["Validação cruzada (k-fold)", "Holdout (train/test)", "Validação Temporal"],
             label_visibility="collapsed",
         )
         if val_strategy == "Validação cruzada (k-fold)":
             n_folds = st.slider("Folds", 3, 10, 5)
             holdout_size = 0.20
-        else:
+            temporal_date_col = None
+            temporal_cutoff = None
+        elif val_strategy == "Holdout (train/test)":
             holdout_size = st.select_slider(
                 "Proporção de teste",
                 options=[0.10, 0.15, 0.20, 0.25, 0.30],
@@ -1197,6 +1200,49 @@ if not ss.get("model_config"):
                 format_func=lambda x: f"{x:.0%}",
             )
             n_folds = 1
+            temporal_date_col = None
+            temporal_cutoff = None
+        else:
+            # Validação Temporal
+            import pandas as _pd_tmp
+            _date_candidates = [
+                c for c in cohort.columns
+                if _pd_tmp.api.types.is_datetime64_any_dtype(cohort[c])
+                or any(kw in c.upper() for kw in ["DT_", "DTNASC", "DATA", "DATE"])
+            ]
+            temporal_date_col = st.selectbox(
+                "Coluna de data",
+                options=_date_candidates if _date_candidates else cohort.columns.tolist(),
+                help="Coluna usada para ordenar os registros no tempo.",
+            )
+            # Calcula min/max da coluna selecionada
+            try:
+                _ts = _pd_tmp.to_datetime(cohort[temporal_date_col], errors="coerce").dropna()
+                _dt_min = _ts.min().date()
+                _dt_max = _ts.max().date()
+                _dt_default = _ts.quantile(0.80).date() if len(_ts) else _dt_min
+            except Exception:
+                import datetime
+                _dt_min = datetime.date(2018, 1, 1)
+                _dt_max = datetime.date(2024, 12, 31)
+                _dt_default = datetime.date(2023, 1, 1)
+            temporal_cutoff = st.date_input(
+                "Data de corte (treino ← antes · teste → depois)",
+                value=_dt_default,
+                min_value=_dt_min,
+                max_value=_dt_max,
+                help="Registros anteriores à data de corte são usados no treino; posteriores, no teste.",
+            )
+            # Info sobre tamanho do split
+            try:
+                _ts_full = _pd_tmp.to_datetime(cohort[temporal_date_col], errors="coerce")
+                _n_train = int((_ts_full < _pd_tmp.Timestamp(temporal_cutoff)).sum())
+                _n_test  = int((_ts_full >= _pd_tmp.Timestamp(temporal_cutoff)).sum())
+                st.caption(f"Treino: {_n_train:,} · Teste: {_n_test:,}")
+            except Exception:
+                pass
+            n_folds = 1
+            holdout_size = 0.20
 
     with b2:
         st.markdown("**Balanceamento de Classes**")
@@ -1290,6 +1336,8 @@ if not ss.get("model_config"):
             "val_strategy": val_strategy,
             "n_folds": n_folds,
             "holdout_size": holdout_size,
+            "temporal_date_col": temporal_date_col,
+            "temporal_cutoff": str(temporal_cutoff) if temporal_cutoff else None,
             "balancing": balancing_key,
             "balancing_label": balancing,
             "hpo_mode": hpo_mode,
@@ -1316,6 +1364,8 @@ _algos_label = " · ".join(algo_labels)
 val_strategy = cfg["val_strategy"]
 n_folds = cfg["n_folds"]
 holdout_size = cfg["holdout_size"]
+temporal_date_col = cfg.get("temporal_date_col")
+temporal_cutoff = cfg.get("temporal_cutoff")
 balancing = cfg.get("balancing", "none")
 hpo_mode = cfg["hpo_mode"]
 n_iter = cfg.get("n_iter", 30)
@@ -1329,10 +1379,12 @@ if not ss["model_results"]:
                "Execute o treinamento com a configuração selecionada.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
-    _val_tag_label = (
-        f"{n_folds}-fold CV" if val_strategy == "Validação cruzada (k-fold)"
-        else f"Holdout {holdout_size:.0%}"
-    )
+    if val_strategy == "Validação cruzada (k-fold)":
+        _val_tag_label = f"{n_folds}-fold CV"
+    elif val_strategy == "Validação Temporal":
+        _val_tag_label = f"Temporal · corte {temporal_cutoff}"
+    else:
+        _val_tag_label = f"Holdout {holdout_size:.0%}"
     st.info(
         f"**{_algos_label}** · {_val_tag_label} · **{len(selected_features)}** features · "
         f"**{total_n:,}** registros"
@@ -1516,6 +1568,54 @@ if not ss["model_results"]:
                             treatment=treatment,
                         )
                         _r["validation_strategy"] = "cv"
+                elif val_strategy == "Validação Temporal":
+                    with st.spinner(f"Treinando {_algo_lbl} · corte temporal {temporal_cutoff}…"):
+                        import pandas as _pd_t
+                        _dates = _pd_t.to_datetime(cohort[temporal_date_col], errors="coerce")
+                        _cutoff_ts = _pd_t.Timestamp(temporal_cutoff)
+                        _train_mask = _dates < _cutoff_ts
+                        _test_mask  = _dates >= _cutoff_ts
+                        if _train_mask.sum() < 10 or _test_mask.sum() < 5:
+                            st.error(
+                                f"Split temporal insuficiente: treino={_train_mask.sum()}, "
+                                f"teste={_test_mask.sum()}. Ajuste a data de corte."
+                            )
+                            st.stop()
+                        X_tr = X_train[_train_mask.values]
+                        y_tr = y_train[_train_mask.values]
+                        X_te = X_train[_test_mask.values]
+                        y_te = y_train[_test_mask.values]
+                        _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing, treatment=treatment)
+                        _pipe.fit(X_tr, y_tr)
+                        _te_probs = _pipe.predict_proba(X_te)[:, 1]
+                        _te_preds = (_te_probs >= 0.5).astype(int)
+                        _m = {
+                            "roc_auc": float(_rauc(y_te, _te_probs)),
+                            "pr_auc": float(_ap(y_te, _te_probs)),
+                            "f1": float(_f1(y_te, _te_preds, zero_division=0)),
+                            "precision": float(_prec(y_te, _te_preds, zero_division=0)),
+                            "recall": float(_rec(y_te, _te_preds, zero_division=0)),
+                            "brier": float(_brier(y_te, _te_probs)),
+                            "fold": 1,
+                        }
+                        _final = build_pipeline(X_train, _algo, _params, balancing=balancing, treatment=treatment)
+                        _final.fit(X_train, y_train)
+                        _imp = {}
+                        if hasattr(_final[-1], "feature_importances_"):
+                            _imp = dict(zip(X_train.columns, _final[-1].feature_importances_))
+                        _r = {
+                            "fold_metrics": [_m],
+                            "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
+                            "oof_probs": _te_probs,
+                            "y_eval": y_te.values,
+                            "feature_importances": _imp,
+                            "model": _final,
+                            "X_columns": X_train.columns.tolist(),
+                            "algorithm": _algo,
+                            "validation_strategy": "temporal",
+                            "temporal_date_col": temporal_date_col,
+                            "temporal_cutoff": temporal_cutoff,
+                        }
                 else:
                     with st.spinner(f"Treinando {_algo_lbl} · holdout {holdout_size:.0%}…"):
                         X_tr, X_te, y_tr, y_te = train_test_split(
@@ -1614,7 +1714,10 @@ c5.metric("Brier Score", f"{m['brier']:.4f}")
 
 col_exp1, col_exp2 = st.columns(2)
 with col_exp1:
-    _exp_label = "Métricas por fold" if results.get("validation_strategy") != "holdout" else "Métricas do conjunto de teste"
+    _vs_r = results.get("validation_strategy", "cv")
+    _exp_label = ("Métricas por fold" if _vs_r == "cv"
+                  else "Métricas do corte temporal" if _vs_r == "temporal"
+                  else "Métricas do conjunto de teste")
     with st.expander(_exp_label):
         st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
 with col_exp2:
@@ -1632,8 +1735,8 @@ with col_exp2:
 
 X_res = X[results["X_columns"]]
 oof = results["oof_probs"]
-# Holdout: usar apenas os labels do conjunto de teste
-if results.get("validation_strategy") == "holdout":
+# Holdout/Temporal: usar apenas os labels do conjunto de teste
+if results.get("validation_strategy") in ("holdout", "temporal"):
     y_arr = results["y_eval"]
 else:
     y_arr = y.values
