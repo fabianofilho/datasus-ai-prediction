@@ -1357,33 +1357,53 @@ if not ss["model_results"]:
     def _lc_fig(lc_data: dict):
         """lc_data = {algo_label: {"sizes": [...], "val": [...], "train": [...]}}"""
         import plotly.graph_objects as _go
+
+        # Calcula range dinâmico do eixo Y com padding
+        all_vals = []
+        for d in lc_data.values():
+            all_vals.extend(d.get("val", []))
+            all_vals.extend(d.get("train", []))
+        if all_vals:
+            _ymin = max(0.0, min(all_vals) - 0.05)
+            _ymax = min(1.0, max(all_vals) + 0.05)
+        else:
+            _ymin, _ymax = 0.4, 1.0
+
         fig = _go.Figure()
         for i, (lbl, d) in enumerate(lc_data.items()):
             color = _LC_COLORS[i % len(_LC_COLORS)]
-            rgba_fill = f"rgba({int(color[1:3],16)},{int(color[3:5],16)},{int(color[5:7],16)},0.07)"
+            rgba_fill = f"rgba({int(color[1:3],16)},{int(color[3:5],16)},{int(color[5:7],16)},0.08)"
             if d["sizes"]:
                 fig.add_trace(_go.Scatter(
                     x=d["sizes"], y=d["val"], mode="lines+markers",
                     name=f"{lbl} — Validação",
-                    line=dict(color=color, width=2.5), marker=dict(size=9),
-                    fill="tozeroy", fillcolor=rgba_fill,
+                    line=dict(color=color, width=2.5), marker=dict(size=8),
+                    fill="tonexty" if i > 0 else "none",
+                    fillcolor=rgba_fill,
                 ))
                 if d["train"]:
                     fig.add_trace(_go.Scatter(
                         x=d["sizes"], y=d["train"], mode="lines+markers",
                         name=f"{lbl} — Treino",
-                        line=dict(color=color, width=1.5, dash="dot"), marker=dict(size=6),
+                        line=dict(color=color, width=1.5, dash="dot"),
+                        marker=dict(size=6, symbol="circle-open"),
                     ))
         fig.update_layout(
             title="Curva de Aprendizado — ROC-AUC por volume de dados",
             xaxis_title="Registros de treinamento",
-            yaxis=dict(title="ROC-AUC", range=[0.45, 1.0], gridcolor="rgba(0,0,0,0.07)"),
+            yaxis=dict(
+                title="ROC-AUC",
+                range=[_ymin, _ymax],
+                gridcolor="rgba(0,0,0,0.07)",
+                tickformat=".2f",
+            ),
             xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.07)", zeroline=False),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             height=420,
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(t=60, b=50, l=70, r=30),
+            margin=dict(t=70, b=50, l=70, r=30),
             font=dict(size=13),
+            hovermode="x unified",
         )
         return fig
 
