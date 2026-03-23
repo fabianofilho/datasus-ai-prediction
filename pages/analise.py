@@ -101,33 +101,15 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 .block-container {
   padding-top:    calc(var(--topbar-h) + 32px) !important;
   padding-bottom: 56px !important;
-  padding-left:   40px !important;
+  padding-left:   32px !important;
   padding-right:  40px !important;
   max-width:      1100px !important;
 }
 
-/* ── Sidebar toggle: vive dentro da topbar (aberto e fechado) ── */
+/* ── Sidebar: botões de colapso sempre ocultos ───────────────── */
 [data-testid="collapsedControl"],
 [data-testid="stSidebarCollapseButton"] {
-  position: fixed !important;
-  top: 0 !important; left: 0 !important;
-  height: var(--topbar-h) !important;
-  width: 52px !important;
-  z-index: 10001 !important;
-  background: var(--bg) !important;
-  border: none !important;
-  border-right: 1px solid var(--border) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  cursor: pointer !important;
-  color: var(--fg) !important;
-}
-[data-testid="collapsedControl"] svg,
-[data-testid="stSidebarCollapseButton"] svg {
-  color: var(--fg) !important;
-  fill: var(--fg) !important;
-  width: 18px !important; height: 18px !important;
+  display: none !important;
 }
 
 /* ── Sidebar: abaixo da topbar ───────────────────────────────── */
@@ -159,7 +141,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   height: var(--topbar-h); background: var(--bg);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 48px 0 calc(52px + 20px);
+  padding: 0 48px 0 24px;
 }
 .ds-topbar-logo {
   display: flex; align-items: center; gap: 8px;
@@ -1100,6 +1082,10 @@ if not ss.get("treatment_config"):
                 "**Remover**: exclui a variável do modelo."
             ),
         )
+
+    # Chaves padrão derivadas da seleção dos radio buttons
+    _num_default_key = _num_map[_num_opt]
+    _cat_default_key = _cat_map[_cat_opt]
 
     # ── Ajustes por variável ──────────────────────────────────────────────────
     _num_treat_opts = ["none", "standard", "minmax", "drop"]
