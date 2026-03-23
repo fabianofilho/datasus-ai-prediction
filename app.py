@@ -45,125 +45,90 @@ st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
 
 <style>
-/* Oculta elementos desnecessários */
 header, footer,
 [data-testid="stSidebar"], [data-testid="stSidebarNav"],
 [data-testid="stHeader"], [data-testid="stToolbar"],
 [data-testid="stDecoration"], #MainMenu { display: none !important; }
 
-/* Fundo branco em toda a app */
 html, body, [data-testid="stAppViewContainer"],
 [data-testid="stMain"], .main, .block-container {
     background-color: #ffffff !important;
-    color: #1e2d4a !important;
+    color: #111827 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif !important;
 }
 
 .block-container {
-    padding: 2.5rem 3rem !important;
+    padding: 3rem 3rem !important;
     max-width: 1100px !important;
 }
 
-/* Material Symbols */
 .ms {
     font-family: 'Material Symbols Outlined';
-    font-style: normal;
-    font-weight: normal;
-    font-size: 1.1rem;
-    line-height: 1;
-    vertical-align: middle;
-    display: inline-block;
-    color: #1a56db;
+    font-style: normal; font-weight: normal;
+    font-size: 1rem; line-height: 1;
+    vertical-align: middle; display: inline-block;
+    color: #111827;
 }
-.ms-lg {
-    font-size: 1.6rem;
-    margin-right: .3rem;
-}
+.ms-lg { font-size: 1.4rem; margin-right: .25rem; }
 
-/* Tipografia */
 .ds-title {
-    font-size: 1.9rem;
-    font-weight: 700;
-    color: #1e2d4a !important;
-    margin-bottom: .2rem;
-    display: flex;
-    align-items: center;
-    gap: .4rem;
+    font-size: 1.6rem; font-weight: 700;
+    color: #111827 !important; margin-bottom: .15rem;
+    display: flex; align-items: center; gap: .35rem;
 }
 .ds-sub {
-    font-size: 1rem;
-    color: #6b7d9b !important;
-    margin-bottom: 2rem;
+    font-size: 0.9rem; color: #6b7280 !important; margin-bottom: 2.5rem;
 }
 .ds-group {
-    font-size: .7rem;
-    font-weight: 700;
-    color: #6b7d9b !important;
-    text-transform: uppercase;
-    letter-spacing: .09em;
-    margin: 1.5rem 0 .4rem;
+    font-size: .68rem; font-weight: 700;
+    color: #9ca3af !important; text-transform: uppercase;
+    letter-spacing: .1em; margin: 1.75rem 0 .5rem;
+    padding-bottom: .35rem; border-bottom: 1px solid #f3f4f6;
 }
 
-/* Cards — altura fixa + flex para badge sempre na base */
+/* Cards */
 .ds-card {
-    border: 1.5px solid #dce3ed;
-    border-radius: 10px;
-    padding: .75rem 1rem;
-    margin-bottom: .5rem;
-    background: #ffffff !important;
-    height: 96px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    overflow: hidden;
+    border: 1px solid #e5e7eb; border-radius: 6px;
+    padding: .75rem 1rem; margin-bottom: .5rem;
+    background: #ffffff !important; height: 96px;
+    display: flex; flex-direction: column;
+    justify-content: space-between; overflow: hidden;
+    transition: border-color .12s;
 }
+.ds-card:hover { border-color: #9ca3af; }
 .ds-card strong {
-    font-size: .82rem;
-    color: #1e2d4a !important;
-    display: flex;
-    align-items: flex-start;
-    gap: .3rem;
-    line-height: 1.3;
-    flex: 1;
+    font-size: .81rem; color: #111827 !important;
+    display: flex; align-items: flex-start;
+    gap: .3rem; line-height: 1.3; flex: 1;
 }
-.ds-card strong .ms {
-    flex-shrink: 0;
-    margin-top: .05rem;
-}
-.ds-card.sel {
-    border-color: #1a56db;
-    background: #eff6ff !important;
-}
-.ds-card.sel .ms { color: #1a56db; }
+.ds-card strong .ms { flex-shrink: 0; margin-top: .05rem; }
+.ds-card.sel { border: 1.5px solid #111827; background: #f9fafb !important; }
 .ds-badge {
-    font-size: .68rem;
-    color: #6b7d9b !important;
-    font-weight: 500;
-    margin-top: .2rem;
+    font-size: .66rem; color: #9ca3af !important;
+    font-weight: 500; margin-top: .2rem;
 }
 
-/* Botoes — base branca */
+/* Botoes */
+div[data-testid="stButton"] {
+    display: flex !important; justify-content: flex-start !important;
+}
 div[data-testid="stButton"] > button {
-    background-color: #ffffff !important;
-    color: #1e2d4a !important;
-    border: 1.5px solid #dce3ed !important;
-    border-radius: 6px !important;
-    font-size: .8rem !important;
-    font-weight: 500 !important;
+    background-color: #ffffff !important; color: #111827 !important;
+    border: 1px solid #e5e7eb !important; border-radius: 6px !important;
+    font-size: .8rem !important; font-weight: 500 !important;
+    padding: 5px 16px !important; width: auto !important;
+    transition: all .12s !important;
 }
 div[data-testid="stButton"] > button:hover {
-    background-color: #eff6ff !important;
-    border-color: #1a56db !important;
-    color: #1a56db !important;
+    background-color: #f3f4f6 !important;
+    border-color: #111827 !important;
 }
 div[data-testid="stButton"] > button[data-testid="baseButton-primary"] {
-    background-color: #1a56db !important;
-    color: #ffffff !important;
-    border-color: #1a56db !important;
+    background-color: #111827 !important; color: #ffffff !important;
+    border-color: #111827 !important; font-weight: 600 !important;
 }
 div[data-testid="stButton"] > button[data-testid="baseButton-primary"]:hover {
-    background-color: #1648c0 !important;
-    border-color: #1648c0 !important;
-    color: #ffffff !important;
+    background-color: #374151 !important; border-color: #374151 !important;
 }
 </style>
 """, unsafe_allow_html=True)

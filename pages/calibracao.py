@@ -42,21 +42,21 @@ st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
 
 <style>
+:root {
+  --primary: #111827; --primary-hover: #374151;
+  --primary-light: #f3f4f6; --primary-ring: rgba(17,24,39,.12);
+  --bg: #ffffff; --bg-page: #ffffff;
+  --fg: #111827; --muted: #6b7280; --border: #e5e7eb;
+  --done-bg: #f9fafb; --done-border: #e5e7eb; --done-fg: #374151;
+  --radius: 6px; --topbar-h: 52px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+}
 .ms {
   font-family: 'Material Symbols Outlined';
   font-style: normal; font-weight: normal;
   font-size: 1rem; line-height: 1;
   vertical-align: middle; display: inline-block;
-  color: var(--primary);
-}
-:root {
-  --primary: #1a56db; --primary-hover: #1648c0;
-  --primary-light: #eff6ff; --primary-ring: rgba(26,86,219,.22);
-  --bg: #ffffff; --bg-page: #f0f4f8;
-  --fg: #1e2d4a; --muted: #6b7d9b; --border: #dce3ed;
-  --success: #059669; --success-bg: #f0fdf4; --success-border: #bbf7d0;
-  --radius: 8px; --topbar-h: 56px;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,.08); --shadow-md: 0 4px 12px rgba(0,0,0,.10);
+  color: var(--fg);
 }
 header, footer,
 [data-testid="stSidebar"], [data-testid="collapsedControl"],
@@ -65,93 +65,86 @@ header, footer,
 #MainMenu { display: none !important; }
 
 html, body, .stApp, [data-testid="stAppViewContainer"] {
-  background: var(--bg-page) !important;
+  background: var(--bg) !important;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif !important;
   color: var(--fg) !important;
 }
 .block-container {
-  padding-top: calc(var(--topbar-h) + 28px) !important;
+  padding-top: calc(var(--topbar-h) + 32px) !important;
   padding-bottom: 56px !important;
-  padding-left: 40px !important; padding-right: 40px !important;
-  max-width: 1180px !important; margin: 0 auto !important;
+  padding-left: 48px !important; padding-right: 48px !important;
+  max-width: 1100px !important; margin: 0 auto !important;
 }
 .ds-topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
   height: var(--topbar-h); background: var(--bg);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 40px; box-shadow: var(--shadow-sm);
+  padding: 0 48px;
 }
 .ds-topbar-logo {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 1rem; font-weight: 700; color: var(--fg);
-  text-decoration: none; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.93rem; font-weight: 700; color: var(--fg);
+  text-decoration: none;
 }
-.ds-topbar-logo:hover { color: var(--primary); }
 .ds-topbar-badge {
-  background: var(--primary); color: #fff;
-  font-size: 0.68rem; font-weight: 700;
-  padding: 2px 8px; border-radius: 20px; letter-spacing: .04em;
+  background: var(--fg); color: #fff;
+  font-size: 0.62rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px; letter-spacing: .06em;
 }
-.ds-topbar-right { font-size: 0.8rem; color: var(--muted); }
+.ds-topbar-right { font-size: 0.78rem; color: var(--muted); }
 .ds-stepbar {
   display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
-  margin-bottom: 24px; background: var(--bg);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px 16px; box-shadow: var(--shadow-sm);
+  margin-bottom: 28px; padding: 10px 0; border-bottom: 1px solid var(--border);
 }
 .ds-step {
-  border-radius: 20px; padding: 4px 14px;
-  font-size: 0.81rem; font-weight: 500;
-  white-space: nowrap; transition: all .2s;
+  border-radius: 4px; padding: 3px 12px;
+  font-size: 0.78rem; font-weight: 500; white-space: nowrap;
 }
-.ds-step-done   { background: var(--success-bg); color: #065f46; }
-.ds-step-active { background: var(--primary); color: #fff; font-weight: 700;
-                  box-shadow: 0 0 0 3px var(--primary-ring); }
-.ds-step-locked   { background: transparent; color: #9ca3af; }
-.ds-step-optional { background: transparent; color: #9ca3af; }
-.ds-step-arrow  { color: #d1d5db; font-size: 0.9rem; padding: 0 2px; }
+.ds-step-done   { color: var(--muted); }
+.ds-step-active { background: var(--fg); color: #fff; font-weight: 600; }
+.ds-step-locked { color: #d1d5db; }
+.ds-step-optional { color: #d1d5db; }
+.ds-step-arrow  { color: #d1d5db; font-size: 0.85rem; padding: 0 1px; }
 .ds-done-bar {
-  background: var(--success-bg); border: 1px solid var(--success-border);
-  border-radius: var(--radius); padding: 10px 16px; margin-bottom: 4px;
+  background: var(--done-bg); border: 1px solid var(--done-border);
+  border-radius: var(--radius); padding: 9px 14px; margin-bottom: 4px;
 }
-.ds-done-label { font-size: 0.87rem; color: #065f46; }
-.ds-section-title { font-size: 1.1rem; font-weight: 700; color: var(--fg); margin: 0 0 3px; }
-.ds-section-caption { font-size: 0.82rem; color: var(--muted); margin: 0 0 16px; }
-.ds-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+.ds-done-label { font-size: 0.84rem; color: var(--done-fg); }
+.ds-section-title { font-size: 1rem; font-weight: 700; color: var(--fg); margin: 0 0 3px; }
+.ds-section-caption { font-size: 0.8rem; color: var(--muted); margin: 0 0 16px; }
+.ds-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 [data-testid="stMetric"] {
   background: var(--bg) !important; border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important; padding: 14px 18px !important;
-  box-shadow: var(--shadow-sm) !important;
+  box-shadow: none !important;
 }
 .stButton { display: flex !important; justify-content: flex-start !important; }
 .stButton > button {
-  width: auto !important; min-width: 0 !important; padding: 6px 18px !important;
-  border-radius: var(--radius) !important; font-size: 0.84rem !important;
-  font-weight: 500 !important; transition: all .15s !important;
-  cursor: pointer !important; letter-spacing: .01em !important; white-space: nowrap !important;
+  width: auto !important; min-width: 0 !important; padding: 5px 16px !important;
+  border-radius: var(--radius) !important; font-size: 0.82rem !important;
+  font-weight: 500 !important; transition: all .12s !important;
+  cursor: pointer !important; white-space: nowrap !important;
 }
 .stButton > button[kind="primary"] {
-  background: var(--primary) !important; border: 1px solid var(--primary) !important;
+  background: var(--fg) !important; border: 1px solid var(--fg) !important;
   color: #fff !important; font-weight: 600 !important; box-shadow: none !important;
 }
 .stButton > button[kind="primary"]:hover {
   background: var(--primary-hover) !important; border-color: var(--primary-hover) !important;
-  color: #fff !important; box-shadow: 0 0 0 3px var(--primary-ring) !important;
 }
 .stButton > button[kind="secondary"] {
-  background: transparent !important; border: 1px solid var(--border) !important;
-  color: var(--muted) !important; box-shadow: none !important;
+  background: #fff !important; border: 1px solid var(--border) !important;
+  color: var(--fg) !important; box-shadow: none !important;
 }
 .stButton > button[kind="secondary"]:hover {
-  border-color: var(--primary) !important; color: var(--primary) !important;
-  background: var(--primary-light) !important;
+  border-color: var(--fg) !important; background: var(--primary-light) !important;
 }
 [data-testid="stInfo"], [data-testid="stWarning"],
 [data-testid="stSuccess"] { border-radius: var(--radius) !important; }
 [data-testid="stExpander"] {
   background: var(--bg) !important; border: 1px solid var(--border) !important;
-  border-radius: var(--radius) !important; box-shadow: var(--shadow-sm) !important;
+  border-radius: var(--radius) !important; box-shadow: none !important;
 }
 .ds-page { display: contents; }
 </style>
@@ -175,7 +168,7 @@ def render_topbar() -> None:
     st.markdown(
         '<div class="ds-topbar">'
         '<a class="ds-topbar-logo" href="/" target="_self">'
-        '<span class="ms" style="font-size:1.3rem;color:#1a56db">local_hospital</span>'
+        '<span class="ms" style="font-size:1.2rem;color:#111827">local_hospital</span>'
         'DataSUS AI'
         '<span class="ds-topbar-badge">PREDICTION</span>'
         '</a>'

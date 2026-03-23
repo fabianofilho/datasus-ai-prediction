@@ -42,270 +42,171 @@ st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
 
 <style>
-/* ════════════════════════════════════════════════════════════════
-   DESIGN SYSTEM — DataSUS AI  (baseado em review-ai-hub)
-   ════════════════════════════════════════════════════════════════ */
+/* ── Tokens — paleta preto/branco ────────────────────────────── */
+:root {
+  --primary:        #111827;
+  --primary-hover:  #374151;
+  --primary-light:  #f3f4f6;
+  --primary-ring:   rgba(17,24,39,.12);
+  --bg:             #ffffff;
+  --bg-page:        #ffffff;
+  --fg:             #111827;
+  --muted:          #6b7280;
+  --border:         #e5e7eb;
+  --done-bg:        #f9fafb;
+  --done-border:    #e5e7eb;
+  --done-fg:        #374151;
+  --radius:         6px;
+  --topbar-h:       52px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 2px 8px rgba(0,0,0,.08);
+}
 
 /* Material Symbols */
 .ms {
   font-family: 'Material Symbols Outlined';
-  font-style: normal;
-  font-weight: normal;
-  font-size: 1rem;
-  line-height: 1;
-  vertical-align: middle;
-  display: inline-block;
-  color: var(--primary);
+  font-style: normal; font-weight: normal;
+  font-size: 1rem; line-height: 1;
+  vertical-align: middle; display: inline-block;
+  color: var(--fg);
 }
 
-/* ── Tokens ─────────────────────────────────────────────────── */
-:root {
-  --primary:        #1a56db;
-  --primary-hover:  #1648c0;
-  --primary-light:  #eff6ff;
-  --primary-ring:   rgba(26,86,219,.22);
-  --bg:             #ffffff;
-  --bg-page:        #f0f4f8;
-  --fg:             #1e2d4a;
-  --muted:          #6b7d9b;
-  --border:         #dce3ed;
-  --success:        #059669;
-  --success-bg:     #f0fdf4;
-  --success-border: #bbf7d0;
-  --radius:         8px;
-  --topbar-h:       56px;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,.10);
-}
-
-/* ── Oculta tudo nativo do Streamlit ────────────────────────── */
+/* ── Oculta elementos nativos do Streamlit ──────────────────── */
 header, footer,
-[data-testid="stSidebar"],
-[data-testid="collapsedControl"],
-[data-testid="stSidebarNav"],
-[data-testid="stHeader"],
-[data-testid="stToolbar"],
-[data-testid="stDecoration"],
+[data-testid="stSidebar"], [data-testid="collapsedControl"],
+[data-testid="stSidebarNav"], [data-testid="stHeader"],
+[data-testid="stToolbar"], [data-testid="stDecoration"],
 #MainMenu { display: none !important; }
 
-/* ── Base da página ─────────────────────────────────────────── */
-html, body, .stApp,
-[data-testid="stAppViewContainer"] {
-  background: var(--bg-page) !important;
+/* ── Base ───────────────────────────────────────────────────── */
+html, body, .stApp, [data-testid="stAppViewContainer"] {
+  background: var(--bg) !important;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif !important;
   color: var(--fg) !important;
 }
 
-/* ── Container do Streamlit ─────────────────────────────────── */
+/* ── Container ──────────────────────────────────────────────── */
 .block-container {
-  padding-top:    calc(var(--topbar-h) + 28px) !important;
+  padding-top:    calc(var(--topbar-h) + 32px) !important;
   padding-bottom: 56px !important;
-  padding-left:   40px !important;
-  padding-right:  40px !important;
-  max-width:      1180px !important;
+  padding-left:   48px !important;
+  padding-right:  48px !important;
+  max-width:      1100px !important;
   margin:         0 auto !important;
 }
 
-/* ── Topbar fixo full-width ─────────────────────────────────── */
+/* ── Topbar ─────────────────────────────────────────────────── */
 .ds-topbar {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 9999;
-  height: var(--topbar-h);
-  background: var(--bg);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  height: var(--topbar-h); background: var(--bg);
   border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 40px;
-  box-shadow: var(--shadow-sm);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 48px;
 }
 .ds-topbar-logo {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 1rem; font-weight: 700; color: var(--fg);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.93rem; font-weight: 700; color: var(--fg);
   text-decoration: none;
-  cursor: pointer;
 }
-.ds-topbar-logo:hover { color: var(--primary); }
-.ds-topbar-logo:hover .ms { color: var(--primary-hover); }
+.ds-topbar-logo:hover { color: var(--primary-hover); }
 .ds-topbar-badge {
-  background: var(--primary); color: #fff;
-  font-size: 0.68rem; font-weight: 700;
-  padding: 2px 8px; border-radius: 20px;
-  letter-spacing: .04em;
+  background: var(--fg); color: #fff;
+  font-size: 0.62rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 4px;
+  letter-spacing: .06em; text-transform: uppercase;
 }
-.ds-topbar-right { font-size: 0.8rem; color: var(--muted); }
+.ds-topbar-right { font-size: 0.78rem; color: var(--muted); }
 
-/* ── Indicador de etapas ────────────────────────────────────── */
+/* ── Step bar ───────────────────────────────────────────────── */
 .ds-stepbar {
-  display: flex; align-items: center;
-  gap: 4px; flex-wrap: wrap;
-  margin-bottom: 24px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 10px 16px;
-  box-shadow: var(--shadow-sm);
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  margin-bottom: 28px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
 }
 .ds-step {
-  border-radius: 20px; padding: 4px 14px;
-  font-size: 0.81rem; font-weight: 500;
-  white-space: nowrap; transition: all .2s;
+  border-radius: 4px; padding: 3px 12px;
+  font-size: 0.78rem; font-weight: 500; white-space: nowrap;
 }
-.ds-step-done   { background: var(--success-bg); color: #065f46; }
-.ds-step-active { background: var(--primary); color: #fff; font-weight: 700;
-                  box-shadow: 0 0 0 3px var(--primary-ring); }
-.ds-step-locked   { background: transparent; color: #9ca3af; }
-.ds-step-optional { background: transparent; color: #9ca3af; border-style: dashed !important; }
-.ds-step-arrow  { color: #d1d5db; font-size: 0.9rem; padding: 0 2px; }
+.ds-step-done   { color: var(--muted); }
+.ds-step-active { background: var(--fg); color: #fff; font-weight: 600; }
+.ds-step-locked { color: #d1d5db; }
+.ds-step-optional { color: #d1d5db; }
+.ds-step-arrow  { color: #d1d5db; font-size: 0.85rem; padding: 0 1px; }
 
-/* ── Done bar (etapa concluída) ─────────────────────────────── */
+/* ── Done bar ───────────────────────────────────────────────── */
 .ds-done-bar {
-  background: var(--success-bg);
-  border: 1px solid var(--success-border);
-  border-radius: var(--radius);
-  padding: 10px 16px;
-  margin-bottom: 4px;
+  background: var(--done-bg); border: 1px solid var(--done-border);
+  border-radius: var(--radius); padding: 9px 14px; margin-bottom: 4px;
 }
-.ds-done-label { font-size: 0.87rem; color: #065f46; }
+.ds-done-label { font-size: 0.84rem; color: var(--done-fg); }
 
-/* ── Título de seção ────────────────────────────────────────── */
+/* ── Section title ──────────────────────────────────────────── */
 .ds-section-title {
-  font-size: 1.1rem; font-weight: 700;
-  color: var(--fg); margin: 0 0 3px;
+  font-size: 1rem; font-weight: 700; color: var(--fg); margin: 0 0 3px;
 }
 .ds-section-caption {
-  font-size: 0.82rem; color: var(--muted); margin: 0 0 16px;
+  font-size: 0.8rem; color: var(--muted); margin: 0 0 16px;
 }
-
-/* ── Label de grupo ─────────────────────────────────────────── */
-.ds-group-label {
-  font-size: 0.71rem; font-weight: 700;
-  color: var(--muted); text-transform: uppercase;
-  letter-spacing: .07em; margin: 18px 0 8px;
-}
-
-/* ── Card de desfecho ───────────────────────────────────────── */
-.ds-card {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px; min-height: 108px;
-  transition: box-shadow .15s, border-color .15s;
-  box-shadow: var(--shadow-sm); margin-bottom: 8px;
-}
-.ds-card:hover { box-shadow: var(--shadow-md); border-color: #93c5fd; }
-.ds-card.selected {
-  border: 2px solid var(--primary);
-  background: var(--primary-light);
-}
-.ds-card-title { font-weight: 600; font-size: 0.88rem; color: var(--fg); margin-bottom: 5px; }
-.ds-card-desc  { font-size: 0.76rem; color: var(--muted); line-height: 1.45; margin-bottom: 7px; }
-.ds-card-meta  { font-size: 0.72rem; color: #9ca3af; }
 
 /* ── Divisor ────────────────────────────────────────────────── */
-.ds-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+.ds-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 
 /* ── Métricas ───────────────────────────────────────────────── */
 [data-testid="stMetric"] {
-  background: var(--bg) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius) !important;
-  padding: 14px 18px !important;
-  box-shadow: var(--shadow-sm) !important;
+  background: var(--bg) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important; padding: 14px 18px !important;
+  box-shadow: none !important;
 }
 [data-testid="stMetricLabel"] {
-  font-size: 0.76rem !important; color: var(--muted) !important; font-weight: 500 !important;
+  font-size: 0.73rem !important; color: var(--muted) !important; font-weight: 500 !important;
 }
 [data-testid="stMetricValue"] {
-  font-size: 1.45rem !important; font-weight: 700 !important; color: var(--fg) !important;
+  font-size: 1.4rem !important; font-weight: 700 !important; color: var(--fg) !important;
 }
 
-/* ── Botões minimalistas ─────────────────────────────────────── */
-/* Container do botão: alinha à esquerda */
-.stButton {
-  display: flex !important;
-  justify-content: flex-start !important;
-}
+/* ── Botões ─────────────────────────────────────────────────── */
+.stButton { display: flex !important; justify-content: flex-start !important; }
 .stButton > button {
-  width: auto !important;
-  min-width: 0 !important;
-  padding: 6px 18px !important;
-  border-radius: var(--radius) !important;
-  font-size: 0.84rem !important;
-  font-weight: 500 !important;
-  transition: all .15s !important;
-  cursor: pointer !important;
-  letter-spacing: .01em !important;
+  width: auto !important; min-width: 0 !important;
+  padding: 5px 16px !important; border-radius: var(--radius) !important;
+  font-size: 0.82rem !important; font-weight: 500 !important;
+  transition: all .12s !important; cursor: pointer !important;
   white-space: nowrap !important;
 }
-/* Primário — azul sólido */
 .stButton > button[kind="primary"] {
-  background: var(--primary) !important;
-  border: 1px solid var(--primary) !important;
-  color: #fff !important;
-  font-weight: 600 !important;
-  box-shadow: none !important;
+  background: var(--fg) !important; border: 1px solid var(--fg) !important;
+  color: #fff !important; font-weight: 600 !important; box-shadow: none !important;
 }
 .stButton > button[kind="primary"]:hover {
-  background: var(--primary-hover) !important;
-  border-color: var(--primary-hover) !important;
+  background: var(--primary-hover) !important; border-color: var(--primary-hover) !important;
   color: #fff !important;
-  box-shadow: 0 0 0 3px var(--primary-ring) !important;
 }
-.stButton > button[kind="primary"]:focus,
-.stButton > button[kind="primary"]:active {
-  background: var(--primary-hover) !important;
-  border-color: var(--primary-hover) !important;
-  color: #fff !important;
-  box-shadow: 0 0 0 3px var(--primary-ring) !important;
-}
-/* Secundário — outline limpo */
 .stButton > button[kind="secondary"] {
-  background: transparent !important;
-  border: 1px solid var(--border) !important;
-  color: var(--muted) !important;
-  box-shadow: none !important;
+  background: #fff !important; border: 1px solid var(--border) !important;
+  color: var(--fg) !important; box-shadow: none !important;
 }
 .stButton > button[kind="secondary"]:hover {
-  border-color: var(--primary) !important;
-  color: var(--primary) !important;
+  border-color: var(--fg) !important; color: var(--fg) !important;
   background: var(--primary-light) !important;
-  box-shadow: none !important;
-}
-.stButton > button[kind="secondary"]:focus,
-.stButton > button[kind="secondary"]:active {
-  border-color: var(--primary) !important;
-  color: var(--primary) !important;
-  background: var(--primary-light) !important;
-  box-shadow: none !important;
 }
 
-/* ── Inputs — fundo branco, sem sombra interna ───────────────── */
-[data-baseweb="input"],
-[data-baseweb="select"] > div,
+/* ── Inputs ─────────────────────────────────────────────────── */
+[data-baseweb="input"], [data-baseweb="select"] > div,
 [data-baseweb="base-input"] {
-  background: var(--bg) !important;
-  border-color: var(--border) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: none !important;
+  background: var(--bg) !important; border-color: var(--border) !important;
+  border-radius: var(--radius) !important; box-shadow: none !important;
 }
 [data-testid="stMultiSelect"] > div > div,
 [data-testid="stSelectbox"] > div > div {
-  background: var(--bg) !important;
-  border-color: var(--border) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: none !important;
+  background: var(--bg) !important; border-color: var(--border) !important;
+  border-radius: var(--radius) !important; box-shadow: none !important;
 }
-/* Tags do multiselect — azul primário, sem fundo escuro */
 [data-baseweb="tag"] {
-  background: var(--primary) !important;
-  border: none !important;
-  border-radius: 4px !important;
-  padding: 0 8px !important;
+  background: var(--fg) !important; border: none !important;
+  border-radius: 4px !important; padding: 0 8px !important;
 }
-[data-baseweb="tag"] span { color: #fff !important; font-size: 0.8rem !important; }
-[data-baseweb="tag"] [role="button"] svg { fill: rgba(255,255,255,.8) !important; }
+[data-baseweb="tag"] span { color: #fff !important; font-size: 0.78rem !important; }
+[data-baseweb="tag"] [role="button"] svg { fill: rgba(255,255,255,.7) !important; }
 
 /* ── Labels ─────────────────────────────────────────────────── */
 [data-testid="stMultiSelect"] label,
@@ -313,31 +214,25 @@ html, body, .stApp,
 [data-testid="stSlider"] label,
 [data-testid="stCheckbox"] label,
 [data-testid="stFileUploader"] label {
-  color: var(--fg) !important;
-  font-size: 0.84rem !important;
-  font-weight: 500 !important;
+  color: var(--fg) !important; font-size: 0.82rem !important; font-weight: 500 !important;
 }
 
 /* ── Banners ────────────────────────────────────────────────── */
-[data-testid="stInfo"],
-[data-testid="stWarning"],
+[data-testid="stInfo"], [data-testid="stWarning"],
 [data-testid="stSuccess"] { border-radius: var(--radius) !important; }
 
 /* ── Expander ───────────────────────────────────────────────── */
 [data-testid="stExpander"] {
-  background: var(--bg) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: var(--shadow-sm) !important;
+  background: var(--bg) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important; box-shadow: none !important;
 }
 
 /* ── Dataframe ──────────────────────────────────────────────── */
 [data-testid="stDataFrame"] { border-radius: var(--radius) !important; overflow: hidden; }
 
 /* ── Spinner ────────────────────────────────────────────────── */
-[data-testid="stSpinner"] > div { border-color: var(--primary) !important; }
+[data-testid="stSpinner"] > div { border-color: var(--fg) !important; }
 
-/* ── Utilitário ─────────────────────────────────────────────── */
 .ds-page { display: contents; }
 </style>
 """, unsafe_allow_html=True)
@@ -383,7 +278,7 @@ def render_topbar() -> None:
     st.markdown(
         '<div class="ds-topbar">'
         '<a class="ds-topbar-logo" href="/" target="_self">'
-        '<span class="ms" style="font-size:1.3rem;color:#1a56db">local_hospital</span>'
+        '<span class="ms" style="font-size:1.2rem;color:#111827">local_hospital</span>'
         'DataSUS AI'
         '<span class="ds-topbar-badge">PREDICTION</span>'
         '</a>'
