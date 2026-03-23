@@ -513,7 +513,7 @@ if not ss.get("calib_results"):
 if not ss.get("show_benchmark") and not ss.get("comparison_results"):
     _bm_l, _bm_spacer, _bm_r = st.columns([3, 3, 2])
     with _bm_r:
-        if st.button("→ Ir para Benchmark entre Estados", type="secondary", use_container_width=True):
+        if st.button("→ Benchmark entre Estados", type="secondary", use_container_width=True):
             ss["show_benchmark"] = True
             st.rerun()
     st.stop()
