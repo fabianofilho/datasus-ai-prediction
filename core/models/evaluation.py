@@ -38,7 +38,9 @@ def _feat_names_after_transform(prep, original_cols: list, n_out: int) -> list:
     ``get_feature_names_out()`` first and falls back gracefully.
     """
     try:
-        return list(prep.get_feature_names_out())
+        names = list(prep.get_feature_names_out())
+        if len(names) == n_out:
+            return names
     except Exception:
         pass
     if n_out <= len(original_cols):
