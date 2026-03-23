@@ -1333,20 +1333,31 @@ if not ss["model_results"]:
     X_model = X[selected_features]
     sample_n = total_n
 
-    def _lc_fig(sizes, val_aucs, train_aucs):
+    _LC_COLORS = [
+        "#1a56db", "#e11d48", "#059669", "#7c3aed",
+        "#d97706", "#0891b2", "#be185d", "#65a30d",
+    ]
+
+    def _lc_fig(lc_data: dict):
+        """lc_data = {algo_label: {"sizes": [...], "val": [...], "train": [...]}}"""
         import plotly.graph_objects as _go
         fig = _go.Figure()
-        if sizes:
-            fig.add_trace(_go.Scatter(
-                x=sizes, y=val_aucs, mode="lines+markers", name="Validação",
-                line=dict(color="#1a56db", width=2.5), marker=dict(size=9),
-                fill="tozeroy", fillcolor="rgba(26,86,219,0.07)",
-            ))
-            if train_aucs:
+        for i, (lbl, d) in enumerate(lc_data.items()):
+            color = _LC_COLORS[i % len(_LC_COLORS)]
+            rgba_fill = f"rgba({int(color[1:3],16)},{int(color[3:5],16)},{int(color[5:7],16)},0.07)"
+            if d["sizes"]:
                 fig.add_trace(_go.Scatter(
-                    x=sizes, y=train_aucs, mode="lines+markers", name="Treino",
-                    line=dict(color="#94a3b8", width=1.5, dash="dot"), marker=dict(size=6),
+                    x=d["sizes"], y=d["val"], mode="lines+markers",
+                    name=f"{lbl} — Validação",
+                    line=dict(color=color, width=2.5), marker=dict(size=9),
+                    fill="tozeroy", fillcolor=rgba_fill,
                 ))
+                if d["train"]:
+                    fig.add_trace(_go.Scatter(
+                        x=d["sizes"], y=d["train"], mode="lines+markers",
+                        name=f"{lbl} — Treino",
+                        line=dict(color=color, width=1.5, dash="dot"), marker=dict(size=6),
+                    ))
         fig.update_layout(
             title="Curva de Aprendizado — ROC-AUC por volume de dados",
             xaxis_title="Registros de treinamento",
@@ -1362,7 +1373,7 @@ if not ss["model_results"]:
 
     _lc_chart_ph = st.empty()
     _lc_status_ph = st.empty()
-    _lc_chart_ph.plotly_chart(_lc_fig([], [], []), use_container_width=True)
+    _lc_chart_ph.plotly_chart(_lc_fig({}), use_container_width=True)
 
     _hpo_prefix = {
         "Optuna (automático)": "Optuna + ",
@@ -1379,9 +1390,10 @@ if not ss["model_results"]:
             X_train = X_model
             y_train = y
 
-            # ── Learning curve (usando o primeiro algoritmo) ───────────────────
-            _lc_sizes, _lc_val, _lc_tr = [], [], []
+            # ── Learning curve — uma curva por algoritmo, cores distintas ─────
             _fracs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]
+            _lc_data: dict = {lbl: {"sizes": [], "val": [], "train": []} for lbl in algo_labels}
+
             try:
                 _X_lc, _X_hold, _y_lc, _y_hold = train_test_split(
                     X_train, y_train, test_size=0.2, stratify=y_train, random_state=42,
@@ -1390,28 +1402,29 @@ if not ss["model_results"]:
                 _X_lc, _X_hold = X_train, X_train
                 _y_lc, _y_hold = y_train, y_train
 
-            for _frac in _fracs:
-                _n = max(30, int(len(_X_lc) * _frac))
-                try:
-                    if _frac < 1.0:
-                        _Xs, _, _ys, _ = train_test_split(
-                            _X_lc, _y_lc, train_size=_n, stratify=_y_lc, random_state=42,
-                        )
-                    else:
-                        _Xs, _ys = _X_lc, _y_lc
-                    _qp = build_pipeline(_Xs, algo, {}, balancing="none", treatment=treatment)
-                    _qp.fit(_Xs, _ys)
-                    _tr_auc = float(_roc_auc(_ys, _qp.predict_proba(_Xs)[:, 1])) if _ys.sum() > 0 else 0.5
-                    _vl_auc = float(_roc_auc(_y_hold, _qp.predict_proba(_X_hold)[:, 1])) if _y_hold.sum() > 0 else 0.5
-                except Exception:
-                    _tr_auc = _vl_auc = 0.5
-                _lc_sizes.append(_n)
-                _lc_tr.append(_tr_auc)
-                _lc_val.append(_vl_auc)
-                _lc_chart_ph.plotly_chart(_lc_fig(_lc_sizes, _lc_val, _lc_tr), use_container_width=True)
-                _lc_status_ph.caption(
-                    f"Curva de aprendizado ({algo_label}) — {int(_frac*100)}% — Val AUC: {_vl_auc:.3f}"
-                )
+            for _lc_algo, _lc_lbl in zip(algos, algo_labels):
+                for _frac in _fracs:
+                    _n = max(30, int(len(_X_lc) * _frac))
+                    try:
+                        if _frac < 1.0:
+                            _Xs, _, _ys, _ = train_test_split(
+                                _X_lc, _y_lc, train_size=_n, stratify=_y_lc, random_state=42,
+                            )
+                        else:
+                            _Xs, _ys = _X_lc, _y_lc
+                        _qp = build_pipeline(_Xs, _lc_algo, {}, balancing="none", treatment=treatment)
+                        _qp.fit(_Xs, _ys)
+                        _tr_auc = float(_roc_auc(_ys, _qp.predict_proba(_Xs)[:, 1])) if _ys.sum() > 0 else 0.5
+                        _vl_auc = float(_roc_auc(_y_hold, _qp.predict_proba(_X_hold)[:, 1])) if _y_hold.sum() > 0 else 0.5
+                    except Exception:
+                        _tr_auc = _vl_auc = 0.5
+                    _lc_data[_lc_lbl]["sizes"].append(_n)
+                    _lc_data[_lc_lbl]["train"].append(_tr_auc)
+                    _lc_data[_lc_lbl]["val"].append(_vl_auc)
+                    _lc_chart_ph.plotly_chart(_lc_fig(_lc_data), use_container_width=True)
+                    _lc_status_ph.caption(
+                        f"Curva de aprendizado ({_lc_lbl}) — {int(_frac*100)}% — Val AUC: {_vl_auc:.3f}"
+                    )
 
             # ── Loop por algoritmo: HPO + treino ──────────────────────────────
             _hpo_folds = min(n_folds, 3) if val_strategy == "Validação cruzada (k-fold)" else 3
