@@ -1749,8 +1749,8 @@ if len(_all) <= 1:
 
 # ── Toggle pills ─────────────────────────────────────────────────────────────
 _sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade"]
-_sec_labels = ["Curvas de desempenho", "Distribuição dos scores", "SHAP Global",
-               "SHAP Individual", "Métricas Clínicas", "Equidade por Subgrupo"]
+_sec_labels = ["Curvas ROC/PR", "Distribuição", "SHAP Global",
+               "SHAP Individual", "Métricas Clínicas", "Equidade"]
 if "active_sections" not in ss:
     ss["active_sections"] = set()
 _pill_cols = st.columns(len(_sec_keys))
