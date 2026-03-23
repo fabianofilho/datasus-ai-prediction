@@ -424,13 +424,15 @@ if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
     _active_model = ss["calib_results"]["cal_model"]
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 8 — CALIBRAÇÃO (opcional) — oculta quando benchmark já foi executado
+# ETAPA 8 — CALIBRAÇÃO — oculta quando benchmark ativo ou executado
 # ═════════════════════════════════════════════════════════════════════════════
-if not ss.get("comparison_results"):
+_show_calib = not ss.get("comparison_results") and not ss.get("show_benchmark")
+
+if _show_calib:
     step_title(8, "Calibração do Modelo",  # step 8 de 9
                "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
 
-if not ss.get("comparison_results") and ss["calib_results"]:
+if _show_calib and ss["calib_results"]:
     cr = ss["calib_results"]
     if cr.get("skipped"):
         st.info("Calibração pulada. O modelo original será usado no benchmark.")
@@ -464,7 +466,7 @@ if not ss.get("comparison_results") and ss["calib_results"]:
                 st.warning("Calibração piorou levemente. Considere o método alternativo.")
             else:
                 st.info("Sem variação significativa.")
-elif not ss.get("comparison_results"):
+elif _show_calib:
     c_col1, c_col2 = st.columns([2, 1])
     with c_col1:
         calib_method = st.radio(
@@ -501,7 +503,8 @@ elif not ss.get("comparison_results"):
             ss["show_benchmark"] = False
             st.rerun()
 
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+if _show_calib:
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 9 — BENCHMARK ENTRE ESTADOS (opcional) — só aparece quando ativado
@@ -509,7 +512,7 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 if not ss.get("calib_results"):
     st.stop()
 
-# Se benchmark ainda não foi ativado nem tem resultados, mostrar só o botão de acesso
+# Se benchmark não ativado nem tem resultados, mostrar só o botão de acesso
 if not ss.get("show_benchmark") and not ss.get("comparison_results"):
     _bm_l, _bm_spacer, _bm_r = st.columns([3, 3, 2])
     with _bm_r:
@@ -517,6 +520,10 @@ if not ss.get("show_benchmark") and not ss.get("comparison_results"):
             ss["show_benchmark"] = True
             st.rerun()
     st.stop()
+
+if st.button("← Voltar à Calibração", type="secondary"):
+    ss["show_benchmark"] = False
+    st.rerun()
 
 step_title(9, "Benchmark entre Estados",  # step 9 de 9
            "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
