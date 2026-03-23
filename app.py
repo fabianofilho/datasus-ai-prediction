@@ -429,8 +429,11 @@ try:
                             type="primary" if is_sel else "secondary",
                         )
                     if clicked:
-                        st.session_state.outcome_key = key
-                        st.switch_page("pages/analise.py")
+                        if status == "ok":
+                            st.session_state.outcome_key = key
+                            st.switch_page("pages/analise.py")
+                        else:
+                            st.toast("🚧 Módulo em desenvolvimento — disponível em breve.", icon="🚧")
 
 except Exception as e:
     import traceback

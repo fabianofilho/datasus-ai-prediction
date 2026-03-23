@@ -171,18 +171,18 @@ _REGISTRY: dict[str, dict] = {
 }
 
 OUTCOME_GROUPS: dict[str, list[str]] = {
+    "Saúde Materno-Infantil": [
+        "baixo_peso_nascer",
+        "prematuridade",
+        "apgar_baixo",
+        "mortalidade_neonatal",
+    ],
     "Internação Hospitalar": [
-        "mortalidade_hospitalar",
         "readmissao_30d",
         "permanencia_prolongada",
         "infeccao_hospitalar",
         "custo_elevado",
-    ],
-    "Saúde Materno-Infantil": [
-        "mortalidade_neonatal",
-        "baixo_peso_nascer",
-        "prematuridade",
-        "apgar_baixo",
+        "mortalidade_hospitalar",
     ],
     "Tuberculose e Hanseníase": [
         "abandono_tb",

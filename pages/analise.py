@@ -613,8 +613,11 @@ if not ss["outcome_key"]:
                         key=f"sel_{key}",
                         type="primary" if is_sel else "secondary",
                     ):
-                        for k in ["raw_data", "cohort", "model_config", "model_results", "manual_needed"]:
+                        for k in ["raw_data", "cohort", "feature_config", "treatment_config",
+                                  "model_config", "model_results", "calib_results",
+                                  "comparison_results", "manual_needed"]:
                             ss[k] = _defaults[k]
+                        ss.pop("result_tab", None)
                         ss["outcome_key"] = key
                         st.rerun()
     st.stop()
@@ -786,7 +789,13 @@ if ss["cohort"] is None:
 
                 if not _cat.empty:
                     st.markdown("**Distribuição de variáveis categóricas**")
-                    _cat_cols = _cat.columns.tolist()
+                    _cat_cols_all = _cat.columns.tolist()
+                    _MAX_CAT = 12
+                    _cat_cols = _cat_cols_all[:_MAX_CAT]
+                    if len(_cat_cols_all) > _MAX_CAT:
+                        st.caption(
+                            f"Exibindo {_MAX_CAT} de {len(_cat_cols_all)} variáveis categóricas."
+                        )
                     _ncols = 2
                     _nrows = _math.ceil(len(_cat_cols) / _ncols)
                     for _row_i in range(_nrows):
@@ -1513,7 +1522,7 @@ if not ss["model_results"]:
 
     _lc_chart_ph = st.empty()
     _lc_status_ph = st.empty()
-    _lc_chart_ph.plotly_chart(_lc_fig({}), use_container_width=True)
+    _lc_chart_ph.caption("📊 A curva de aprendizado será exibida durante o treinamento.")
 
     _hpo_prefix = {
         "Optuna (automático)": "Optuna + ",
@@ -1768,21 +1777,16 @@ if len(_all) <= 1:
 _sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade"]
 _sec_labels = ["Curvas ROC/PR", "Distribuição", "SHAP Global",
                "SHAP Individual", "Métricas Clínicas", "Equidade"]
-if "active_sections" not in ss:
-    ss["active_sections"] = set()
+if "result_tab" not in ss:
+    ss["result_tab"] = "curvas"
 _pill_cols = st.columns(len(_sec_keys))
 for _pi, (_pk, _pl) in enumerate(zip(_sec_keys, _sec_labels)):
     with _pill_cols[_pi]:
-        _active = _pk in ss["active_sections"]
+        _active = _pk == ss.get("result_tab")
         if st.button(_pl, key=f"pill_{_pk}",
                      type="primary" if _active else "secondary",
                      use_container_width=True):
-            _secs = set(ss["active_sections"])
-            if _pk in _secs:
-                _secs.discard(_pk)
-            else:
-                _secs.add(_pk)
-            ss["active_sections"] = _secs
+            ss["result_tab"] = _pk
             st.rerun()
 
 m = results["mean_metrics"]
@@ -1792,6 +1796,14 @@ c2.metric("Sensibilidade",  f"{m.get('recall', 0):.4f}")
 c3.metric("Especificidade", f"{m.get('specificity', 0):.4f}")
 c4.metric("PR-AUC",         f"{m['pr_auc']:.4f}")
 c5.metric("F1-Score",       f"{m['f1']:.4f}")
+
+if m.get("specificity", 1.0) < 0.02 or m.get("recall", 1.0) < 0.02:
+    st.warning(
+        "⚠ Uma ou mais métricas estão próximas de zero — típico em dados "
+        "desbalanceados com threshold padrão 0,5. Explore o ponto de corte "
+        "ideal em **Métricas Clínicas** para calibrar sensibilidade vs. "
+        "especificidade conforme o objetivo clínico."
+    )
 
 col_exp1, col_exp2 = st.columns(2)
 with col_exp1:
@@ -1822,7 +1834,7 @@ if results.get("validation_strategy") in ("holdout", "temporal"):
 else:
     y_arr = y.values
 
-if "curvas" in ss.get("active_sections", set()):
+if ss.get("result_tab") == "curvas":
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Curvas de desempenho**")
     col1, col2 = st.columns(2)
@@ -1832,7 +1844,7 @@ if "curvas" in ss.get("active_sections", set()):
         st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
     st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=True)
 
-if "distribuicao" in ss.get("active_sections", set()):
+if ss.get("result_tab") == "distribuicao":
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Distribuição dos scores preditos**")
     fig_dist = px.histogram(
@@ -1844,7 +1856,7 @@ if "distribuicao" in ss.get("active_sections", set()):
     fig_dist.update_layout(margin=dict(t=40, b=0))
     st.plotly_chart(fig_dist, use_container_width=True)
 
-if "shap_global" in ss.get("active_sections", set()):
+if ss.get("result_tab") == "shap_global":
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**SHAP — Explicabilidade Global**")
     if results.get("feature_importances"):
@@ -1856,7 +1868,7 @@ if "shap_global" in ss.get("active_sections", set()):
     else:
         st.info("SHAP indisponível para este algoritmo.")
 
-if "shap_individual" in ss.get("active_sections", set()):
+if ss.get("result_tab") == "shap_individual":
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**SHAP — Explicabilidade Individual**")
     st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
@@ -1869,7 +1881,7 @@ if "shap_individual" in ss.get("active_sections", set()):
     else:
         st.info("SHAP individual indisponível para este algoritmo.")
 
-if "metricas_clinicas" in ss.get("active_sections", set()):
+if ss.get("result_tab") == "metricas_clinicas":
     import plotly.graph_objects as _go
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Métricas Clínicas por Ponto de Corte**")
@@ -1904,7 +1916,7 @@ if "metricas_clinicas" in ss.get("active_sections", set()):
         st.metric("VPN", f"{tm['npv']:.1%}")
         st.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
 
-if "equidade" in ss.get("active_sections", set()):
+if ss.get("result_tab") == "equidade":
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Análise de Equidade por Subgrupo**")
     _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
