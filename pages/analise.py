@@ -105,10 +105,10 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 }
 .ds-topbar-logo {
   display: flex; align-items: center; gap: 8px;
-  font-size: 0.93rem; font-weight: 700; color: var(--fg);
-  text-decoration: none;
+  font-size: 0.93rem; font-weight: 700;
+  color: #111827 !important; text-decoration: none !important;
 }
-.ds-topbar-logo:hover { color: var(--primary-hover); }
+.ds-topbar-logo:hover { color: #374151 !important; }
 .ds-topbar-badge {
   background: var(--fg); color: #fff;
   font-size: 0.62rem; font-weight: 700;
@@ -312,7 +312,7 @@ def render_step_bar(step: int) -> None:
 
 
 def done_bar(text: str, change_key: str, reset_keys: list[str]) -> None:
-    col1, col2 = st.columns([13, 1])
+    col1, col2 = st.columns([10, 1])
     with col1:
         st.markdown(
             f'<div class="ds-done-bar"><span class="ds-done-label">{text}</span></div>',
