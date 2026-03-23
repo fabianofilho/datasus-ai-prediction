@@ -983,7 +983,7 @@ if not ss.get("treatment_config"):
         # fallback: pandas dtype
         return "Numérica" if col in _num_cols_orig else "Categórica"
 
-    with st.expander(f"Classificação por variável — {len(_sel_feats)} features", expanded=True):
+    with st.expander(f"Classificação por variável — {len(_sel_feats)} features", expanded=False):
         _th1, _th2, _th3 = st.columns([3, 2, 1])
         _th1.markdown("<div style='font-size:.72rem;font-weight:600;color:#6b7280'>VARIÁVEL</div>", unsafe_allow_html=True)
         _th2.markdown("<div style='font-size:.72rem;font-weight:600;color:#6b7280'>TIPO</div>", unsafe_allow_html=True)
