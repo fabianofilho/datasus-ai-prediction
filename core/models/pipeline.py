@@ -21,14 +21,27 @@ from sklearn.metrics import (
 )
 
 
-ALGORITHMS = {
+# Base algorithms always available
+ALGORITHMS: dict[str, str] = {
     "LightGBM": "lgbm",
     "XGBoost": "xgb",
-    "CatBoost": "catboost",
-    "TabPFN": "tabpfn",
     "Logistic Regression": "logreg",
     "Random Forest": "rf",
 }
+
+# Optional: CatBoost (not installed on Streamlit Cloud by default)
+try:
+    import catboost as _cb  # noqa: F401
+    ALGORITHMS["CatBoost"] = "catboost"
+except ImportError:
+    pass
+
+# Optional: TabPFN (requires torch ~1GB, not suitable for Streamlit Cloud free tier)
+try:
+    import tabpfn as _tabpfn  # noqa: F401
+    ALGORITHMS["TabPFN"] = "tabpfn"
+except ImportError:
+    pass
 
 # ── Param grids for Random Search (wide) ──────────────────────────────────────
 _RANDOM_GRIDS: dict[str, dict] = {
