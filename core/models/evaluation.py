@@ -113,18 +113,20 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
     except ImportError:
         return None
 
-    estimator, prep = _unwrap_model(model)
-    X_transformed = prep.transform(X)
-    if hasattr(X_transformed, "toarray"):
-        X_transformed = X_transformed.toarray()
-
-    col_names = X.columns.tolist()
-    feat_names = _feat_names_after_transform(prep, col_names, X_transformed.shape[1])
-    # Belt-and-suspenders: guarantee column count always matches
-    n_cols = X_transformed.shape[1]
-    if len(feat_names) != n_cols:
-        feat_names = [f"feat_{i}" for i in range(n_cols)]
-    X_t = pd.DataFrame(X_transformed, columns=feat_names)
+    try:
+        estimator, prep = _unwrap_model(model)
+        X_transformed = prep.transform(X)
+        if hasattr(X_transformed, "toarray"):
+            X_transformed = X_transformed.toarray()
+        col_names = X.columns.tolist()
+        n_cols = X_transformed.shape[1]
+        feat_names = _feat_names_after_transform(prep, col_names, n_cols)
+        # Belt-and-suspenders: guarantee column count always matches
+        if len(feat_names) != n_cols:
+            feat_names = [f"feat_{i}" for i in range(n_cols)]
+        X_t = pd.DataFrame(X_transformed, columns=feat_names)
+    except Exception:
+        return None
 
     try:
         explainer = shap.TreeExplainer(estimator)
@@ -246,18 +248,21 @@ def shap_values_dict(model, X: pd.DataFrame, max_rows: int = 500) -> dict:
     except ImportError:
         return {}
 
-    estimator, prep = _unwrap_model(model)
-    X_sub = X.head(max_rows)
-    X_transformed = prep.transform(X_sub)
-    if hasattr(X_transformed, "toarray"):
-        X_transformed = X_transformed.toarray()
-    col_names = X_sub.columns.tolist()
-    feat_names = _feat_names_after_transform(prep, col_names, X_transformed.shape[1])
-    # Belt-and-suspenders: guarantee column count always matches
-    n_cols = X_transformed.shape[1]
-    if len(feat_names) != n_cols:
-        feat_names = [f"feat_{i}" for i in range(n_cols)]
-    X_t = pd.DataFrame(X_transformed, columns=feat_names)
+    try:
+        estimator, prep = _unwrap_model(model)
+        X_sub = X.head(max_rows)
+        X_transformed = prep.transform(X_sub)
+        if hasattr(X_transformed, "toarray"):
+            X_transformed = X_transformed.toarray()
+        col_names = X_sub.columns.tolist()
+        n_cols = X_transformed.shape[1]
+        feat_names = _feat_names_after_transform(prep, col_names, n_cols)
+        # Belt-and-suspenders: guarantee column count always matches
+        if len(feat_names) != n_cols:
+            feat_names = [f"feat_{i}" for i in range(n_cols)]
+        X_t = pd.DataFrame(X_transformed, columns=feat_names)
+    except Exception:
+        return {}
 
     try:
         explainer = shap.TreeExplainer(estimator)
@@ -324,18 +329,21 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
     except ImportError:
         return None
 
-    estimator, prep = _unwrap_model(model)
-    row = X.iloc[[case_idx]]
-    X_t_raw = prep.transform(row)
-    if hasattr(X_t_raw, "toarray"):
-        X_t_raw = X_t_raw.toarray()
-    col_names = X.columns.tolist()
-    feat_names = _feat_names_after_transform(prep, col_names, X_t_raw.shape[1])
-    # Belt-and-suspenders: guarantee column count always matches
-    n_cols = X_t_raw.shape[1]
-    if len(feat_names) != n_cols:
-        feat_names = [f"feat_{i}" for i in range(n_cols)]
-    X_t = pd.DataFrame(X_t_raw, columns=feat_names)
+    try:
+        estimator, prep = _unwrap_model(model)
+        row = X.iloc[[case_idx]]
+        X_t_raw = prep.transform(row)
+        if hasattr(X_t_raw, "toarray"):
+            X_t_raw = X_t_raw.toarray()
+        col_names = X.columns.tolist()
+        n_cols = X_t_raw.shape[1]
+        feat_names = _feat_names_after_transform(prep, col_names, n_cols)
+        # Belt-and-suspenders: guarantee column count always matches
+        if len(feat_names) != n_cols:
+            feat_names = [f"feat_{i}" for i in range(n_cols)]
+        X_t = pd.DataFrame(X_t_raw, columns=feat_names)
+    except Exception:
+        return None
 
     try:
         explainer = shap.TreeExplainer(estimator)
