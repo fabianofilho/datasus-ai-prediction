@@ -1727,11 +1727,11 @@ if len(_all) > 1:
     _comp_df = pd.DataFrame([
         {
             "Algoritmo": r.get("algo_label", r.get("algorithm", "?").upper()),
-            "ROC-AUC": round(r["mean_metrics"]["roc_auc"], 4),
-            "PR-AUC":  round(r["mean_metrics"]["pr_auc"], 4),
-            "F1":      round(r["mean_metrics"]["f1"], 4),
-            "Recall":  round(r["mean_metrics"]["recall"], 4),
-            "Brier":   round(r["mean_metrics"]["brier"], 4),
+            "ROC-AUC":        round(r["mean_metrics"]["roc_auc"], 4),
+            "Sensibilidade":  round(r["mean_metrics"].get("recall", float("nan")), 4),
+            "Especificidade": round(r["mean_metrics"].get("specificity", float("nan")), 4),
+            "PR-AUC":         round(r["mean_metrics"]["pr_auc"], 4),
+            "F1":             round(r["mean_metrics"]["f1"], 4),
         }
         for r in _all
     ]).sort_values("ROC-AUC", ascending=False).reset_index(drop=True)
@@ -1758,11 +1758,11 @@ if len(_all) > 1:
 
 m = results["mean_metrics"]
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("ROC-AUC", f"{m['roc_auc']:.4f}")
-c2.metric("PR-AUC", f"{m['pr_auc']:.4f}")
-c3.metric("F1-Score", f"{m['f1']:.4f}")
-c4.metric("Recall", f"{m['recall']:.4f}")
-c5.metric("Brier Score", f"{m['brier']:.4f}")
+c1.metric("ROC-AUC",        f"{m['roc_auc']:.4f}")
+c2.metric("Sensibilidade",  f"{m.get('recall', float('nan')):.4f}")
+c3.metric("Especificidade", f"{m.get('specificity', float('nan')):.4f}")
+c4.metric("PR-AUC",         f"{m['pr_auc']:.4f}")
+c5.metric("F1-Score",       f"{m['f1']:.4f}")
 
 col_exp1, col_exp2 = st.columns(2)
 with col_exp1:

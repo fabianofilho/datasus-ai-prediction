@@ -532,13 +532,21 @@ def calibrate_model(
 
 
 def _compute_metrics(y_true, probs, preds) -> dict:
+    from sklearn.metrics import confusion_matrix
+    cm = confusion_matrix(y_true, preds)
+    if cm.shape == (2, 2):
+        tn, fp, fn, tp = cm.ravel()
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    else:
+        specificity = float("nan")
     return {
-        "roc_auc":   roc_auc_score(y_true, probs),
-        "pr_auc":    average_precision_score(y_true, probs),
-        "f1":        f1_score(y_true, preds, zero_division=0),
-        "precision": precision_score(y_true, preds, zero_division=0),
-        "recall":    recall_score(y_true, preds, zero_division=0),
-        "brier":     brier_score_loss(y_true, probs),
+        "roc_auc":     roc_auc_score(y_true, probs),
+        "pr_auc":      average_precision_score(y_true, probs),
+        "f1":          f1_score(y_true, preds, zero_division=0),
+        "precision":   precision_score(y_true, preds, zero_division=0),
+        "recall":      recall_score(y_true, preds, zero_division=0),
+        "specificity": specificity,
+        "brier":       brier_score_loss(y_true, probs),
     }
 
 
