@@ -971,8 +971,21 @@ if not ss.get("treatment_config"):
             "podem ser tratadas como categóricas."
         )
 
+    from core.features.data_dict import get_info as _dd_info
     _type_opts = ["Numérica", "Categórica", "Remover"]
     _type_result: dict = {}
+
+    def _infer_type(col: str) -> str:
+        """Infer variable type from data dictionary; fall back to pandas dtype."""
+        info = _dd_info(col)
+        if info:
+            dd_type = info.get("type", "")
+            if dd_type == "Numérica":
+                return "Numérica"
+            if dd_type in ("Categórica", "Ordinal"):
+                return "Categórica"
+        # fallback: pandas dtype
+        return "Numérica" if col in _num_cols_orig else "Categórica"
 
     with st.expander(f"Classificação por variável — {len(_sel_feats)} features", expanded=True):
         _th1, _th2, _th3 = st.columns([3, 2, 1])
@@ -981,7 +994,7 @@ if not ss.get("treatment_config"):
         _th3.markdown("<div style='font-size:.72rem;font-weight:600;color:#6b7280'>INFO</div>", unsafe_allow_html=True)
         for _col in _sel_feats:
             _nuniq = X_sel[_col].nunique()
-            _inferred = "Numérica" if _col in _num_cols_orig else "Categórica"
+            _inferred = _infer_type(_col)
             _vc1, _vc2, _vc3 = st.columns([3, 2, 1])
             with _vc1:
                 st.markdown(
