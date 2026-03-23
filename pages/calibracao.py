@@ -481,9 +481,9 @@ elif not ss.get("comparison_results"):
             "A calibração usa 25% dos dados como holdout interno para ajustar "
             "as probabilidades sem vazar informação do treino."
         )
-    col_cb1, col_cb2 = st.columns(2)
+    col_cb1, col_cb_spacer, col_cb2 = st.columns([2, 3, 2])
     with col_cb1:
-        if st.button("Executar Calibração", type="primary"):
+        if st.button("Executar Calibração", type="primary", use_container_width=True):
             with st.spinner("Executando calibração…"):
                 try:
                     cr = calibrate_model(
@@ -494,7 +494,7 @@ elif not ss.get("comparison_results"):
                 except Exception as e:
                     st.error(f"Erro na calibração: {e}")
     with col_cb2:
-        if st.button("Pular calibração", type="secondary"):
+        if st.button("Pular calibração", type="secondary", use_container_width=True):
             ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
             st.rerun()
 
