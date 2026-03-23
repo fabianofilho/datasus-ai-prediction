@@ -1783,7 +1783,7 @@ with col_exp1:
                   else "Métricas do corte temporal" if _vs_r == "temporal"
                   else "Métricas do conjunto de teste")
     with st.expander(_exp_label):
-        st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True)
+        st.dataframe(ev.fold_metrics_table(results["fold_metrics"]), use_container_width=True, hide_index=True)
 with col_exp2:
     with st.expander("Hiperparâmetros utilizados"):
         bp = results.get("best_params") or {}
