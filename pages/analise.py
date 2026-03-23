@@ -575,8 +575,6 @@ STATES, ManualUploadRequired, fetch, load_from_csv = _dl()
 
 # ─── Steps 2-3: apenas quando coorte ainda não foi construída ────────────────
 if ss["cohort"] is None:
-    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
     # ═════════════════════════════════════════════════════════════════════════
     # ETAPA 2 — DADOS
     # ═════════════════════════════════════════════════════════════════════════
@@ -697,8 +695,6 @@ if ss["cohort"] is None:
 
         st.stop()
 
-    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
     # ── Lazy: CohortBuilder (só carrega ao chegar na etapa 3) ────────────────
     CohortBuilder = _cohort()
 
@@ -721,7 +717,6 @@ if ss["cohort"] is None:
     st.stop()
 
 # ─── COHORT BUILT: Steps 4-9 ────────────────────────────────────────────────
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Lazy: CohortBuilder e pipeline ML ────────────────────────────────────────
 CohortBuilder = _cohort()
@@ -803,8 +798,6 @@ if not ss.get("feature_config"):
         ss["comparison_results"] = []
         st.rerun()
     st.stop()
-
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 5 — CONFIGURAR MODELO
@@ -953,8 +946,6 @@ if not ss.get("model_config"):
         ss["comparison_results"] = []
         st.rerun()
     st.stop()
-
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 6 — TREINAR
@@ -1184,8 +1175,6 @@ if not ss["model_results"]:
             st.error(f"Erro no treino: {e}")
             st.exception(e)
     st.stop()
-
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 7 — RESULTADOS
