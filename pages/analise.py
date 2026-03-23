@@ -41,6 +41,13 @@ def _pd():
     import pandas as pd
     return pd
 
+st.set_page_config(
+    page_title="DataSUS AI — Análise",
+    page_icon="🏥",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
 
@@ -76,7 +83,6 @@ st.markdown("""
 
 /* ── Oculta elementos nativos do Streamlit ──────────────────── */
 header, footer,
-[data-testid="stSidebar"], [data-testid="collapsedControl"],
 [data-testid="stSidebarNav"], [data-testid="stHeader"],
 [data-testid="stToolbar"], [data-testid="stDecoration"],
 #MainMenu { display: none !important; }
@@ -92,10 +98,44 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 .block-container {
   padding-top:    calc(var(--topbar-h) + 32px) !important;
   padding-bottom: 56px !important;
-  padding-left:   48px !important;
-  padding-right:  48px !important;
+  padding-left:   40px !important;
+  padding-right:  40px !important;
   max-width:      1100px !important;
-  margin:         0 auto !important;
+}
+
+/* ── Sidebar toggle: vive dentro da topbar ───────────────────── */
+[data-testid="collapsedControl"] {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important;
+  height: var(--topbar-h) !important;
+  width: 52px !important;
+  z-index: 10001 !important;
+  background: var(--bg) !important;
+  border: none !important;
+  border-right: 1px solid var(--border) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  color: var(--fg) !important;
+}
+[data-testid="collapsedControl"] svg {
+  color: var(--fg) !important;
+  fill: var(--fg) !important;
+  width: 18px !important; height: 18px !important;
+}
+
+/* ── Sidebar: abaixo da topbar ───────────────────────────────── */
+[data-testid="stSidebar"] {
+  top: var(--topbar-h) !important;
+  height: calc(100vh - var(--topbar-h)) !important;
+  background: var(--bg) !important;
+  border-right: 1px solid var(--border) !important;
+}
+[data-testid="stSidebar"] > div:first-child {
+  padding: 1.25rem 1rem 1rem !important;
+  height: 100% !important;
+  overflow-y: auto !important;
 }
 
 /* ── Topbar ─────────────────────────────────────────────────── */
@@ -104,7 +144,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   height: var(--topbar-h); background: var(--bg);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 48px;
+  padding: 0 48px 0 calc(52px + 20px);
 }
 .ds-topbar-logo {
   display: flex; align-items: center; gap: 8px;
@@ -118,7 +158,11 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   padding: 2px 7px; border-radius: 4px;
   letter-spacing: .06em; text-transform: uppercase;
 }
-.ds-topbar-right { font-size: 0.78rem; color: var(--muted); }
+.ds-topbar-right {
+  font-size: 0.78rem; color: var(--muted);
+  text-decoration: none !important;
+}
+.ds-topbar-right:hover { color: var(--fg) !important; }
 
 /* ── Step bar ───────────────────────────────────────────────── */
 .ds-stepbar {
@@ -237,6 +281,24 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 [data-testid="stSpinner"] > div { border-color: var(--fg) !important; }
 
 .ds-page { display: contents; }
+
+.sb-title {
+  font-size: .65rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: var(--muted); margin-bottom: 10px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.sb-step {
+  padding: 8px 10px; margin-bottom: 5px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--done-bg);
+}
+.sb-step-label {
+  font-size: .6rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted); margin-bottom: 2px;
+}
+.sb-step-value {
+  font-size: .78rem; color: var(--fg); font-weight: 500; line-height: 1.35;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -246,6 +308,7 @@ _defaults: dict = {
     "outcome_key": None,
     "raw_data": {},
     "cohort": None,
+    "feature_config": None,
     "model_config": None,
     "model_results": None,
     "calib_results": None,
@@ -264,12 +327,14 @@ for k, v in _defaults.items():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def current_step() -> int:
     if ss.get("comparison_results"):
-        return 8
+        return 9
     if ss.get("calib_results"):
-        return 7
+        return 8
     if ss["model_results"]:
-        return 6
+        return 7
     if ss.get("model_config"):
+        return 6
+    if ss.get("feature_config"):
         return 5
     if ss["cohort"] is not None:
         return 4
@@ -288,15 +353,15 @@ def render_topbar() -> None:
         'DataSUS AI'
         '<span class="ds-topbar-badge">PREDICTION</span>'
         '</a>'
-        '<div class="ds-topbar-right">Modelagem preditiva em saúde pública</div>'
+        '<a class="ds-topbar-right" href="/" target="_self">Modelagem preditiva em saúde pública</a>'
         '</div>',
         unsafe_allow_html=True,
     )
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
-    optionals = {7, 8}
+    labels = ["Desfecho", "Dados", "Coorte", "Features", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
+    optionals = {8, 9}
     parts = []
     for i, lbl in enumerate(labels):
         n = i + 1
@@ -340,8 +405,123 @@ def step_title(n: int, title: str, caption: str = "") -> None:
     )
 
 
+def render_sidebar() -> None:
+    with st.sidebar:
+        st.markdown('<p class="sb-title">Configuração</p>', unsafe_allow_html=True)
+
+        # Step 1: Desfecho
+        if ss.get("outcome_key"):
+            o = OUTCOMES[ss["outcome_key"]]
+            src_txt = ", ".join(o.data_sources)
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">1 · Desfecho</div>'
+                f'<div class="sb-step-value">{o.name}<br>'
+                f'<span style="font-size:.7rem;color:var(--muted)">{src_txt}</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Editar", key="sb_chg_outcome"):
+                for k in ["outcome_key", "raw_data", "cohort", "model_config",
+                          "model_results", "calib_results", "comparison_results", "manual_needed"]:
+                    ss[k] = _defaults[k]
+                st.rerun()
+
+        # Step 2: Dados
+        if ss.get("raw_data"):
+            lines = "<br>".join(f"{src}: {len(df):,}" for src, df in ss["raw_data"].items())
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">2 · Dados</div>'
+                f'<div class="sb-step-value">{lines}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Editar", key="sb_chg_data"):
+                for k in ["raw_data", "cohort", "model_config", "model_results",
+                          "calib_results", "comparison_results", "manual_needed"]:
+                    ss[k] = _defaults[k]
+                st.rerun()
+
+        # Step 3: Coorte
+        if ss.get("cohort") is not None:
+            n_ = len(ss["cohort"])
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">3 · Coorte</div>'
+                f'<div class="sb-step-value">{n_:,} registros</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Editar", key="sb_chg_cohort"):
+                ss["cohort"] = None
+                for k in ["feature_config", "model_config", "model_results", "calib_results", "comparison_results"]:
+                    ss[k] = _defaults[k]
+                st.rerun()
+
+        # Step 4: Features
+        if ss.get("feature_config"):
+            fc_ = ss["feature_config"]
+            n_f = len(fc_["selected_features"])
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">4 · Features</div>'
+                f'<div class="sb-step-value">{n_f} variáveis</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Editar", key="sb_chg_features"):
+                for k in ["feature_config", "model_config", "model_results", "calib_results", "comparison_results"]:
+                    ss[k] = _defaults[k]
+                st.rerun()
+
+        # Step 5: Modelo configurado
+        if ss.get("model_config"):
+            cfg_ = ss["model_config"]
+            _vs = (
+                f"{cfg_['n_folds']}-fold CV"
+                if cfg_["val_strategy"] == "Validação cruzada (k-fold)"
+                else f"Holdout {cfg_['holdout_size']:.0%}"
+            )
+            _fc_ = ss.get("feature_config") or {}
+            _nf = len(_fc_.get("selected_features", []))
+            _albl = " · ".join(cfg_.get("algo_labels", [cfg_["algo_label"]]))
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">5 · Modelo</div>'
+                f'<div class="sb-step-value">{_albl}<br>'
+                f'<span style="font-size:.7rem;color:var(--muted)">{_vs} · {_nf} features</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Editar", key="sb_chg_model_config"):
+                for k in ["model_config", "model_results", "calib_results", "comparison_results"]:
+                    ss[k] = _defaults[k]
+                st.rerun()
+
+        # Step 5: Treinamento
+        if ss.get("model_results"):
+            r_ = ss["model_results"]
+            m_ = r_["mean_metrics"]
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">6 · Treinamento</div>'
+                f'<div class="sb-step-value">'
+                f'AUC {m_["roc_auc"]:.3f} · F1 {m_["f1"]:.3f}<br>'
+                f'<span style="font-size:.7rem;color:var(--muted)">PR-AUC {m_["pr_auc"]:.3f}</span>'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Retreinar", key="sb_chg_model"):
+                for k in ["model_results", "calib_results", "comparison_results"]:
+                    ss[k] = _defaults[k]
+                st.rerun()
+
+
 # ── Topbar + wrapper ──────────────────────────────────────────────────────────
 render_topbar()
+render_sidebar()
 st.markdown('<div class="ds-page">', unsafe_allow_html=True)
 render_step_bar(current_step())
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
@@ -350,14 +530,7 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 1 — DESFECHO
 # ═════════════════════════════════════════════════════════════════════════════
-if ss["outcome_key"]:
-    o = OUTCOMES[ss["outcome_key"]]
-    done_bar(
-        f'<strong>{o.name}</strong> &nbsp;·&nbsp; {", ".join(o.data_sources)}',
-        "chg_outcome",
-        ["outcome_key", "raw_data", "cohort", "model_config", "model_results", "manual_needed"],
-    )
-else:
+if not ss["outcome_key"]:
     step_title(1, "Selecionar Desfecho",
                "Escolha o desfecho clínico que deseja predizer. Organizado por área temática.")
     for group_name, keys in OUTCOME_GROUPS.items():
@@ -405,17 +578,7 @@ if ss["cohort"] is None:
     # ═════════════════════════════════════════════════════════════════════════
     # ETAPA 2 — DADOS
     # ═════════════════════════════════════════════════════════════════════════
-    if ss["raw_data"]:
-        summary = " &nbsp;·&nbsp; ".join(
-            f"{src}: <strong>{len(df):,}</strong>" for src, df in ss["raw_data"].items()
-        )
-        done_bar(summary, "chg_data",
-                 ["raw_data", "cohort", "model_config", "model_results", "manual_needed"])
-        with st.expander("Ver preview dos dados"):
-            for src, df in ss["raw_data"].items():
-                st.caption(f"**{src}** — {len(df):,} registros, {df.shape[1]} colunas")
-                st.dataframe(df.head(8), use_container_width=True)
-    else:
+    if not ss["raw_data"]:
         step_title(2, "Baixar Dados",
                    f"Fontes necessárias para este desfecho: {', '.join(outcome.data_sources)}")
 
@@ -555,7 +718,7 @@ if ss["cohort"] is None:
                 st.exception(e)
     st.stop()
 
-# ─── COHORT BUILT: Steps 4-6 ────────────────────────────────────────────────
+# ─── COHORT BUILT: Steps 4-9 ────────────────────────────────────────────────
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Lazy: CohortBuilder e pipeline ML ────────────────────────────────────────
@@ -567,24 +730,85 @@ builder = CohortBuilder(outcome)
 X, y = builder.get_Xy(cohort)
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 4 — CONFIGURAR MODELO
+# ETAPA 4 — FEATURES
 # ═════════════════════════════════════════════════════════════════════════════
-if ss.get("model_config"):
-    cfg = ss["model_config"]
-    _n_feat = len(cfg["selected_features"])
-    _val_short = (
-        f"{cfg['n_folds']}-fold CV"
-        if cfg["val_strategy"] == "Validação cruzada (k-fold)"
-        else f"Holdout {cfg['holdout_size']:.0%}"
+if not ss.get("feature_config"):
+    from core.features.data_dict import get_info as _feat_info
+
+    step_title(4, "Selecionar Features",
+               "Escolha as variáveis a incluir no modelo e consulte o dicionário de dados.")
+
+    bal = builder.class_balance(cohort)
+    total_n = bal["total"]
+    all_features = X.columns.tolist()
+    st.info(
+        f"**{total_n:,}** registros · prevalência **{bal['prevalence']:.1%}** · "
+        f"**{len(all_features)}** features disponíveis"
     )
-    done_bar(
-        f'<strong>{cfg["algo_label"]}</strong> &nbsp;·&nbsp; {_val_short} &nbsp;·&nbsp; {_n_feat} features',
-        "chg_model_config",
-        ["model_config", "model_results", "calib_results", "comparison_results"],
+
+    selected_features = st.multiselect(
+        "Features para o modelo",
+        all_features,
+        default=all_features,
+        help="Selecione as variáveis a usar no modelo. Remova features irrelevantes ou com alto missing.",
     )
-else:
-    step_title(4, "Configurar Modelo",
-               "Configure o algoritmo, validação e hiperparâmetros.")
+    if not selected_features:
+        st.warning("Selecione pelo menos uma feature.")
+        st.stop()
+
+    # ── Dicionário de dados ────────────────────────────────────────────────
+    with st.expander(f"Dicionário de dados — {len(selected_features)} features selecionadas", expanded=False):
+        _type_colors = {
+            "Numérica": "#111827",
+            "Categórica": "#374151",
+            "Ordinal": "#374151",
+            "Derivada": "#6b7280",
+        }
+        for _feat in selected_features:
+            _info = _feat_info(_feat)
+            _col_a, _col_b = st.columns([3, 1])
+            with _col_a:
+                if _info:
+                    st.markdown(
+                        f"**{_feat}** &nbsp;—&nbsp; {_info['label']}  \n"
+                        f"<span style='font-size:.8rem;color:#4b5563'>{_info['desc']}</span>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        f"**{_feat}**  \n"
+                        f"<span style='font-size:.8rem;color:#9ca3af'>Sem descrição disponível.</span>",
+                        unsafe_allow_html=True,
+                    )
+            with _col_b:
+                _type_lbl = _info.get("type", "") if _info else ""
+                if _type_lbl:
+                    st.markdown(
+                        f"<div style='text-align:right;margin-top:2px'>"
+                        f"<span style='font-size:.68rem;font-weight:600;color:{_type_colors.get(_type_lbl,\"#6b7280\")};'"
+                        f">{_type_lbl}</span></div>",
+                        unsafe_allow_html=True,
+                    )
+            st.markdown("<hr style='border:none;border-top:1px solid #f3f4f6;margin:6px 0'>",
+                        unsafe_allow_html=True)
+
+    if st.button("Confirmar Features", type="primary"):
+        ss["feature_config"] = {"selected_features": selected_features}
+        ss["model_config"] = None
+        ss["model_results"] = None
+        ss["calib_results"] = None
+        ss["comparison_results"] = []
+        st.rerun()
+    st.stop()
+
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ETAPA 5 — CONFIGURAR MODELO
+# ═════════════════════════════════════════════════════════════════════════════
+if not ss.get("model_config"):
+    step_title(5, "Configurar Modelo",
+               "Configure os algoritmos, validação e hiperparâmetros.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
     st.info(
@@ -593,15 +817,30 @@ else:
     )
 
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**Algoritmo e validação**")
-        algo_label = st.selectbox("Algoritmo", list(ALGORITHMS.keys()))
-        algo = ALGORITHMS[algo_label]
+
+    # ── Algoritmos ────────────────────────────────────────────────────────────
+    algo_labels = st.multiselect(
+        "Algoritmos",
+        list(ALGORITHMS.keys()),
+        default=["LightGBM"],
+        help="Selecione um ou mais algoritmos para treinar e comparar.",
+    )
+    if not algo_labels:
+        st.warning("Selecione pelo menos um algoritmo.")
+        st.stop()
+    algos = [ALGORITHMS[l] for l in algo_labels]
+
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+    # ── 3 blocos de configuração ──────────────────────────────────────────────
+    b1, b2, b3 = st.columns(3)
+
+    with b1:
+        st.markdown("**Estratégia de Validação**")
         val_strategy = st.radio(
-            "Estratégia de validação",
+            "Validação",
             ["Validação cruzada (k-fold)", "Holdout (train/test)"],
-            horizontal=True,
+            label_visibility="collapsed",
         )
         if val_strategy == "Validação cruzada (k-fold)":
             n_folds = st.slider("Folds", 3, 10, 5)
@@ -615,17 +854,17 @@ else:
             )
             n_folds = 1
 
-        st.markdown("**Balanceamento de classes**")
+    with b2:
+        st.markdown("**Balanceamento de Classes**")
         balancing = st.radio(
             "Balanceamento",
             ["Nenhum", "Class Weight", "SMOTE (oversample)", "SMOTE + Undersampling"],
-            horizontal=False,
             label_visibility="collapsed",
             help=(
                 "**Nenhum**: sem ajuste. "
                 "**Class Weight**: penaliza erros na classe minoritária via class_weight='balanced'. "
                 "**SMOTE (oversample)**: gera amostras sintéticas da classe minoritária. "
-                "**SMOTE + Undersampling**: combina SMOTE com remoção de exemplos majoritários (SMOTETomek)."
+                "**SMOTE + Undersampling**: combina SMOTE com remoção de exemplos (SMOTETomek)."
             ),
         )
         _bal_map = {
@@ -636,16 +875,17 @@ else:
         }
         balancing_key = _bal_map[balancing]
 
-        st.markdown("**Estratégia de hiperparâmetros**")
+    with b3:
+        st.markdown("**Estratégia de Hiperparâmetros**")
         hpo_mode = st.radio(
             "HPO",
             ["Manual", "Random Search", "Grid Search", "Optuna (automático)"],
-            horizontal=False,
+            index=3,
             label_visibility="collapsed",
             help=(
-                "**Manual**: defina os parâmetros à direita. "
-                "**Random Search**: amostragem aleatória do espaço de hiperparâmetros (rápido). "
-                "**Grid Search**: busca exaustiva em grade pré-definida (preciso, porém lento). "
+                "**Manual**: defina os parâmetros abaixo. "
+                "**Random Search**: amostragem aleatória do espaço (rápido). "
+                "**Grid Search**: busca exaustiva em grade pré-definida. "
                 "**Optuna**: otimização bayesiana automática (melhor custo-benefício)."
             ),
         )
@@ -659,39 +899,41 @@ else:
             n_iter = 30
             n_trials = 50
 
-    with c2:
-        if hpo_mode == "Manual":
-            st.markdown("**Hiperparâmetros**")
-            params: dict = {}
-            if algo in ("lgbm", "xgb", "rf"):
-                params["n_estimators"] = st.slider("Árvores (n_estimators)", 50, 1000, 300, 50)
-            if algo in ("lgbm", "xgb"):
-                params["learning_rate"] = st.select_slider(
-                    "Learning rate", [0.005, 0.01, 0.02, 0.05, 0.1, 0.2], value=0.05)
-            if algo in ("lgbm", "xgb", "rf"):
-                params["max_depth"] = st.slider("max_depth (−1 = sem limite)", -1, 15, -1)
-            if algo == "logreg":
-                params["C"] = st.select_slider("C (regularização)", [0.001, 0.01, 0.1, 1.0, 10.0], value=1.0)
-        else:
-            params = {}
-            _hpo_desc = {
-                "Random Search": f"Random Search buscará {n_iter} combinações aleatórias.",
-                "Grid Search":   "Grid Search testará todas as combinações da grade pré-definida.",
-                "Optuna (automático)": f"Optuna buscará os melhores hiperparâmetros em {n_trials} trials.",
-            }
-            st.caption(_hpo_desc.get(hpo_mode, ""))
-
-    selected_features = st.multiselect(
-        "Features para o modelo", X.columns.tolist(), default=X.columns.tolist(),
-    )
-    if not selected_features:
-        st.warning("Selecione pelo menos uma feature.")
-        st.stop()
+    # ── Hiperparâmetros manuais (só quando Manual selecionado) ────────────────
+    params_per_algo: dict = {a: {} for a in algos}
+    if hpo_mode == "Manual":
+        st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+        st.markdown("**Hiperparâmetros**")
+        _pcols = st.columns(max(len(algos), 1))
+        for _i, (_algo, _lbl) in enumerate(zip(algos, algo_labels)):
+            with _pcols[_i]:
+                if len(algos) > 1:
+                    st.caption(f"**{_lbl}**")
+                _p: dict = {}
+                if _algo in ("lgbm", "xgb", "rf"):
+                    _p["n_estimators"] = st.slider(
+                        "n_estimators", 50, 1000, 300, 50, key=f"ne_{_algo}")
+                if _algo in ("lgbm", "xgb"):
+                    _p["learning_rate"] = st.select_slider(
+                        "learning_rate",
+                        [0.005, 0.01, 0.02, 0.05, 0.1, 0.2], value=0.05,
+                        key=f"lr_{_algo}")
+                if _algo in ("lgbm", "xgb", "rf"):
+                    _p["max_depth"] = st.slider(
+                        "max_depth (−1 = sem limite)", -1, 15, -1, key=f"md_{_algo}")
+                if _algo == "logreg":
+                    _p["C"] = st.select_slider(
+                        "C (regularização)",
+                        [0.001, 0.01, 0.1, 1.0, 10.0], value=1.0,
+                        key=f"c_{_algo}")
+                params_per_algo[_algo] = _p
 
     if st.button("Confirmar Configuração", type="primary"):
         ss["model_config"] = {
-            "algo": algo,
-            "algo_label": algo_label,
+            "algos": algos,
+            "algo_labels": algo_labels,
+            "algo": algos[0],
+            "algo_label": algo_labels[0],
             "val_strategy": val_strategy,
             "n_folds": n_folds,
             "holdout_size": holdout_size,
@@ -700,8 +942,8 @@ else:
             "hpo_mode": hpo_mode,
             "n_iter": n_iter,
             "n_trials": n_trials,
-            "params": params,
-            "selected_features": selected_features,
+            "params": params_per_algo.get(algos[0], {}),
+            "params_per_algo": params_per_algo,
         }
         ss["model_results"] = None
         ss["calib_results"] = None
@@ -712,11 +954,14 @@ else:
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 5 — TREINAR
+# ETAPA 6 — TREINAR
 # ═════════════════════════════════════════════════════════════════════════════
 cfg = ss["model_config"]
-algo = cfg["algo"]
-algo_label = cfg["algo_label"]
+algos = cfg.get("algos", [cfg["algo"]])
+algo_labels = cfg.get("algo_labels", [cfg["algo_label"]])
+algo = algos[0]
+algo_label = algo_labels[0]
+_algos_label = " · ".join(algo_labels)
 val_strategy = cfg["val_strategy"]
 n_folds = cfg["n_folds"]
 holdout_size = cfg["holdout_size"]
@@ -724,30 +969,11 @@ balancing = cfg.get("balancing", "none")
 hpo_mode = cfg["hpo_mode"]
 n_iter = cfg.get("n_iter", 30)
 n_trials = cfg.get("n_trials", 50)
-params = cfg["params"]
-selected_features = cfg["selected_features"]
+params_per_algo = cfg.get("params_per_algo", {algo: cfg.get("params", {})})
+selected_features = ss["feature_config"]["selected_features"]
 
-if ss["model_results"]:
-    results = ss["model_results"]
-    m = results["mean_metrics"]
-    sample_info = ""
-    if results.get("sample_n") and results["sample_n"] < len(cohort):
-        sample_info = f' &nbsp;·&nbsp; amostra <strong>{results["sample_n"]:,}</strong>'
-    hpo_tag = " · Optuna" if results.get("hpo_mode") == "Optuna (automático)" else ""
-    if results.get("validation_strategy") == "holdout":
-        val_tag = f' · Holdout {results.get("holdout_size", 0.2):.0%}'
-    else:
-        val_tag = ""
-    done_bar(
-        f'<strong>{results["algorithm"].upper()}</strong>{hpo_tag}{val_tag} &nbsp;·&nbsp; '
-        f'AUC <strong>{m["roc_auc"]:.3f}</strong> &nbsp;·&nbsp; '
-        f'F1 <strong>{m["f1"]:.3f}</strong> &nbsp;·&nbsp; '
-        f'PR-AUC <strong>{m["pr_auc"]:.3f}</strong>{sample_info}',
-        "chg_model",
-        ["model_results", "calib_results", "comparison_results"],
-    )
-else:
-    step_title(5, "Treinar Modelo",
+if not ss["model_results"]:
+    step_title(6, "Treinar Modelo",
                "Execute o treinamento com a configuração selecionada.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
@@ -756,7 +982,7 @@ else:
         else f"Holdout {holdout_size:.0%}"
     )
     st.info(
-        f"**{algo_label}** · {_val_tag_label} · **{len(selected_features)}** features · "
+        f"**{_algos_label}** · {_val_tag_label} · **{len(selected_features)}** features · "
         f"**{total_n:,}** registros"
         + (f" · {cfg.get('balancing_label', '')}" if balancing != "none" else "")
         + (f" · Optuna {n_trials} trials" if hpo_mode == "Optuna (automático)" else "")
@@ -802,7 +1028,7 @@ else:
         "Random Search": "Random Search + ",
         "Grid Search": "Grid Search + ",
     }.get(hpo_mode, "")
-    btn_label = f"{_hpo_prefix}Treinar {algo_label} · {_val_tag_label}"
+    btn_label = f"{_hpo_prefix}Treinar {_algos_label} · {_val_tag_label}"
 
     if st.button(btn_label, type="primary"):
         try:
@@ -811,13 +1037,8 @@ else:
 
             X_train = X_model
             y_train = y
-            if sample_n < total_n:
-                X_train, _, y_train, _ = train_test_split(
-                    X_train, y_train, train_size=int(sample_n),
-                    stratify=y_train, random_state=42,
-                )
 
-            # ── Learning curve ────────────────────────────────────────────────
+            # ── Learning curve (usando o primeiro algoritmo) ───────────────────
             _lc_sizes, _lc_val, _lc_tr = [], [], []
             _fracs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]
             try:
@@ -837,7 +1058,7 @@ else:
                         )
                     else:
                         _Xs, _ys = _X_lc, _y_lc
-                    _qp = build_pipeline(_Xs, algo, params, balancing="none")
+                    _qp = build_pipeline(_Xs, algo, {}, balancing="none")
                     _qp.fit(_Xs, _ys)
                     _tr_auc = float(_roc_auc(_ys, _qp.predict_proba(_Xs)[:, 1])) if _ys.sum() > 0 else 0.5
                     _vl_auc = float(_roc_auc(_y_hold, _qp.predict_proba(_X_hold)[:, 1])) if _y_hold.sum() > 0 else 0.5
@@ -848,106 +1069,113 @@ else:
                 _lc_val.append(_vl_auc)
                 _lc_chart_ph.plotly_chart(_lc_fig(_lc_sizes, _lc_val, _lc_tr), use_container_width=True)
                 _lc_status_ph.caption(
-                    f"Fração {int(_frac*100)}% — {_n:,} registros — Val AUC: {_vl_auc:.3f}"
+                    f"Curva de aprendizado ({algo_label}) — {int(_frac*100)}% — Val AUC: {_vl_auc:.3f}"
                 )
 
-            _lc_status_ph.caption("Finalizando treino…")
-
-            # ── HPO automático ────────────────────────────────────────────────
+            # ── Loop por algoritmo: HPO + treino ──────────────────────────────
             _hpo_folds = min(n_folds, 3) if val_strategy == "Validação cruzada (k-fold)" else 3
-            if hpo_mode == "Optuna (automático)":
-                prog = st.progress(0.0, text="Iniciando Optuna…")
+            _all_results = []
 
-                def _optuna_cb(done, total, best):
-                    prog.progress(done / total,
-                                  text=f"Optuna: trial {done}/{total} — melhor ROC-AUC {best:.4f}")
+            for _algo, _algo_lbl in zip(algos, algo_labels):
+                _lc_status_ph.caption(f"Treinando {_algo_lbl}…")
+                _params = dict(params_per_algo.get(_algo, {}))
 
-                params = optimize_hyperparams(
-                    X_train, y_train, algorithm=algo,
-                    n_trials=n_trials, n_folds=_hpo_folds,
-                    balancing=balancing, progress_callback=_optuna_cb,
+                # HPO
+                if hpo_mode == "Optuna (automático)":
+                    _prog = st.progress(0.0, text=f"Optuna — {_algo_lbl}…")
+                    def _opt_cb(done, total, best, _p=_prog, _l=_algo_lbl):
+                        _p.progress(done / total,
+                                    text=f"Optuna {_l}: {done}/{total} — AUC {best:.4f}")
+                    _params = optimize_hyperparams(
+                        X_train, y_train, algorithm=_algo,
+                        n_trials=n_trials, n_folds=_hpo_folds,
+                        balancing=balancing, progress_callback=_opt_cb,
+                    )
+                    _prog.progress(1.0, text=f"Optuna {_algo_lbl} concluído")
+
+                elif hpo_mode == "Random Search":
+                    _prog = st.progress(0.0, text=f"Random Search — {_algo_lbl}…")
+                    def _rs_cb(done, total, best, _p=_prog, _l=_algo_lbl):
+                        _p.progress(1.0, text=f"Random Search {_l} — AUC {best:.4f}")
+                    with st.spinner(f"Random Search: {_algo_lbl}…"):
+                        _params = random_search(
+                            X_train, y_train, algorithm=_algo,
+                            n_iter=n_iter, n_folds=_hpo_folds,
+                            balancing=balancing, progress_callback=_rs_cb,
+                        )
+                    _prog.progress(1.0, text=f"Random Search {_algo_lbl} concluído")
+
+                elif hpo_mode == "Grid Search":
+                    with st.spinner(f"Grid Search — {_algo_lbl}…"):
+                        _params = grid_search(
+                            X_train, y_train, algorithm=_algo,
+                            n_folds=_hpo_folds, balancing=balancing,
+                        )
+
+                # Treino
+                import numpy as _np
+                from sklearn.metrics import (
+                    roc_auc_score as _rauc, average_precision_score as _ap,
+                    f1_score as _f1, precision_score as _prec,
+                    recall_score as _rec, brier_score_loss as _brier,
                 )
-                prog.progress(1.0, text=f"Optuna concluído — {n_trials} trials")
+                if val_strategy == "Validação cruzada (k-fold)":
+                    with st.spinner(f"Treinando {_algo_lbl} · {n_folds}-fold CV…"):
+                        _r = train_cv(
+                            X=X_train, y=y_train, algorithm=_algo,
+                            params=_params, n_folds=n_folds, balancing=balancing,
+                        )
+                        _r["validation_strategy"] = "cv"
+                else:
+                    with st.spinner(f"Treinando {_algo_lbl} · holdout {holdout_size:.0%}…"):
+                        X_tr, X_te, y_tr, y_te = train_test_split(
+                            X_train, y_train, test_size=holdout_size,
+                            stratify=y_train, random_state=42,
+                        )
+                        _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing)
+                        _pipe.fit(X_tr, y_tr)
+                        _te_probs = _pipe.predict_proba(X_te)[:, 1]
+                        _te_preds = (_te_probs >= 0.5).astype(int)
+                        _m = {
+                            "roc_auc": float(_rauc(y_te, _te_probs)),
+                            "pr_auc": float(_ap(y_te, _te_probs)),
+                            "f1": float(_f1(y_te, _te_preds, zero_division=0)),
+                            "precision": float(_prec(y_te, _te_preds, zero_division=0)),
+                            "recall": float(_rec(y_te, _te_preds, zero_division=0)),
+                            "brier": float(_brier(y_te, _te_probs)),
+                            "fold": 1,
+                        }
+                        _final = build_pipeline(X_train, _algo, _params, balancing=balancing)
+                        _final.fit(X_train, y_train)
+                        _imp = {}
+                        if hasattr(_final[-1], "feature_importances_"):
+                            _imp = dict(zip(X_train.columns, _final[-1].feature_importances_))
+                        _r = {
+                            "fold_metrics": [_m],
+                            "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
+                            "oof_probs": _te_probs,
+                            "y_eval": y_te.values,
+                            "feature_importances": _imp,
+                            "model": _final,
+                            "X_columns": X_train.columns.tolist(),
+                            "algorithm": _algo,
+                            "validation_strategy": "holdout",
+                            "holdout_size": holdout_size,
+                        }
 
-            elif hpo_mode == "Random Search":
-                prog = st.progress(0.0, text="Iniciando Random Search…")
+                _r["sample_n"] = len(X_train)
+                _r["best_params"] = _params
+                _r["hpo_mode"] = hpo_mode
+                _r["algo_label"] = _algo_lbl
+                _all_results.append(_r)
 
-                def _rs_cb(done, total, best):
-                    prog.progress(1.0, text=f"Random Search — melhor ROC-AUC {best:.4f}")
-
-                with st.spinner(f"Random Search: {n_iter} iterações…"):
-                    params = random_search(
-                        X_train, y_train, algorithm=algo,
-                        n_iter=n_iter, n_folds=_hpo_folds,
-                        balancing=balancing, progress_callback=_rs_cb,
-                    )
-                prog.progress(1.0, text=f"Random Search concluído — {n_iter} iterações")
-
-            elif hpo_mode == "Grid Search":
-                with st.spinner("Grid Search — testando combinações…"):
-                    params = grid_search(
-                        X_train, y_train, algorithm=algo,
-                        n_folds=_hpo_folds, balancing=balancing,
-                    )
-                st.caption(f"Grid Search concluído. Melhores params: {params}")
-
-            # ── Treino final ──────────────────────────────────────────────────
-            if val_strategy == "Validação cruzada (k-fold)":
-                with st.spinner(f"Treinando {algo_label} com {n_folds}-fold CV…"):
-                    results = train_cv(
-                        X=X_train, y=y_train, algorithm=algo,
-                        params=params, n_folds=n_folds, balancing=balancing,
-                    )
-                    results["validation_strategy"] = "cv"
-            else:
-                with st.spinner(f"Treinando {algo_label} — holdout {holdout_size:.0%}…"):
-                    import numpy as _np
-                    from sklearn.metrics import (
-                        roc_auc_score as _rauc, average_precision_score as _ap,
-                        f1_score as _f1, precision_score as _prec,
-                        recall_score as _rec, brier_score_loss as _brier,
-                    )
-                    X_tr, X_te, y_tr, y_te = train_test_split(
-                        X_train, y_train, test_size=holdout_size,
-                        stratify=y_train, random_state=42,
-                    )
-                    _pipe = build_pipeline(X_tr, algo, params, balancing=balancing)
-                    _pipe.fit(X_tr, y_tr)
-                    _te_probs = _pipe.predict_proba(X_te)[:, 1]
-                    _te_preds = (_te_probs >= 0.5).astype(int)
-                    _m = {
-                        "roc_auc": float(_rauc(y_te, _te_probs)),
-                        "pr_auc": float(_ap(y_te, _te_probs)),
-                        "f1": float(_f1(y_te, _te_preds, zero_division=0)),
-                        "precision": float(_prec(y_te, _te_preds, zero_division=0)),
-                        "recall": float(_rec(y_te, _te_preds, zero_division=0)),
-                        "brier": float(_brier(y_te, _te_probs)),
-                        "fold": 1,
-                    }
-                    # Refit on full training set
-                    _final = build_pipeline(X_train, algo, params, balancing=balancing)
-                    _final.fit(X_train, y_train)
-                    _imp = {}
-                    _m2 = _final[-1]
-                    if hasattr(_m2, "feature_importances_"):
-                        _imp = dict(zip(X_train.columns, _m2.feature_importances_))
-                    results = {
-                        "fold_metrics": [_m],
-                        "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
-                        "oof_probs": _te_probs,
-                        "y_eval": y_te.values,
-                        "feature_importances": _imp,
-                        "model": _final,
-                        "X_columns": X_train.columns.tolist(),
-                        "algorithm": algo,
-                        "validation_strategy": "holdout",
-                        "holdout_size": holdout_size,
-                    }
-
-            results["sample_n"] = len(X_train)
-            results["best_params"] = params
-            results["hpo_mode"] = hpo_mode
-            ss["model_results"] = results
+            # ── Melhor resultado ──────────────────────────────────────────────
+            _best = max(_all_results, key=lambda r: r["mean_metrics"]["roc_auc"])
+            _best["all_results"] = _all_results
+            _lc_status_ph.caption(
+                f"Concluído. Melhor: {_best.get('algo_label', '')} — AUC {_best['mean_metrics']['roc_auc']:.4f}"
+            )
+            ss["model_results"] = _best
             st.rerun()
         except Exception as e:
             st.error(f"Erro no treino: {e}")
@@ -957,13 +1185,36 @@ else:
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 6 — RESULTADOS
+# ETAPA 7 — RESULTADOS
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(6, "Resultados do Modelo",
+step_title(7, "Resultados do Modelo",
            "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
 
 ev = _ev()
 results = ss["model_results"]
+
+# ── Comparação de algoritmos (quando múltiplos foram treinados) ───────────────
+_all = results.get("all_results", [])
+if len(_all) > 1:
+    st.markdown("#### Comparação de Algoritmos")
+    _comp_df = pd.DataFrame([
+        {
+            "Algoritmo": r.get("algo_label", r.get("algorithm", "?").upper()),
+            "ROC-AUC": round(r["mean_metrics"]["roc_auc"], 4),
+            "PR-AUC":  round(r["mean_metrics"]["pr_auc"], 4),
+            "F1":      round(r["mean_metrics"]["f1"], 4),
+            "Recall":  round(r["mean_metrics"]["recall"], 4),
+            "Brier":   round(r["mean_metrics"]["brier"], 4),
+        }
+        for r in _all
+    ]).sort_values("ROC-AUC", ascending=False).reset_index(drop=True)
+    st.dataframe(_comp_df, use_container_width=True, hide_index=True)
+    st.caption(
+        f"Detalhes abaixo referentes ao melhor modelo: "
+        f"**{results.get('algo_label', results.get('algorithm', '').upper())}**"
+        f" (ROC-AUC {results['mean_metrics']['roc_auc']:.4f})"
+    )
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 m = results["mean_metrics"]
 c1, c2, c3, c4, c5 = st.columns(5)

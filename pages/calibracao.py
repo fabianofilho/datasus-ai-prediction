@@ -37,6 +37,13 @@ def _px():
     return px
 
 
+st.set_page_config(
+    page_title="DataSUS AI — Calibração",
+    page_icon="🏥",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 # ── CSS + topbar (shared design system) ───────────────────────────────────────
 st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
@@ -59,7 +66,6 @@ st.markdown("""
   color: var(--fg);
 }
 header, footer,
-[data-testid="stSidebar"], [data-testid="collapsedControl"],
 [data-testid="stSidebarNav"], [data-testid="stHeader"],
 [data-testid="stToolbar"], [data-testid="stDecoration"],
 #MainMenu { display: none !important; }
@@ -72,15 +78,38 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 .block-container {
   padding-top: calc(var(--topbar-h) + 32px) !important;
   padding-bottom: 56px !important;
-  padding-left: 48px !important; padding-right: 48px !important;
-  max-width: 1100px !important; margin: 0 auto !important;
+  padding-left: 40px !important; padding-right: 40px !important;
+  max-width: 1100px !important;
+}
+[data-testid="collapsedControl"] {
+  position: fixed !important;
+  top: 0 !important; left: 0 !important;
+  height: var(--topbar-h) !important; width: 52px !important;
+  z-index: 10001 !important;
+  background: #ffffff !important; border: none !important;
+  border-right: 1px solid #e5e7eb !important;
+  display: flex !important; align-items: center !important;
+  justify-content: center !important; cursor: pointer !important;
+}
+[data-testid="collapsedControl"] svg {
+  color: #111827 !important; fill: #111827 !important;
+  width: 18px !important; height: 18px !important;
+}
+[data-testid="stSidebar"] {
+  top: var(--topbar-h) !important;
+  height: calc(100vh - var(--topbar-h)) !important;
+  background: #ffffff !important; border-right: 1px solid #e5e7eb !important;
+}
+[data-testid="stSidebar"] > div:first-child {
+  padding: 1.25rem 1rem 1rem !important;
+  height: 100% !important; overflow-y: auto !important;
 }
 .ds-topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
   height: var(--topbar-h); background: var(--bg);
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 48px;
+  padding: 0 48px 0 calc(52px + 20px);
 }
 .ds-topbar-logo {
   display: flex; align-items: center; gap: 8px;
@@ -92,7 +121,11 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   font-size: 0.62rem; font-weight: 700;
   padding: 2px 7px; border-radius: 4px; letter-spacing: .06em;
 }
-.ds-topbar-right { font-size: 0.78rem; color: var(--muted); }
+.ds-topbar-right {
+  font-size: 0.78rem; color: var(--muted);
+  text-decoration: none !important;
+}
+.ds-topbar-right:hover { color: #111827 !important; }
 .ds-stepbar {
   display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
   margin-bottom: 28px; padding: 10px 0; border-bottom: 1px solid var(--border);
@@ -147,6 +180,20 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   border-radius: var(--radius) !important; box-shadow: none !important;
 }
 .ds-page { display: contents; }
+.sb-title {
+  font-size: .65rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .1em; color: #6b7280; margin-bottom: 10px;
+  padding-bottom: 6px; border-bottom: 1px solid #e5e7eb;
+}
+.sb-step {
+  padding: 8px 10px; margin-bottom: 5px;
+  border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;
+}
+.sb-step-label {
+  font-size: .6rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .08em; color: #6b7280; margin-bottom: 2px;
+}
+.sb-step-value { font-size: .78rem; color: #111827; font-weight: 500; line-height: 1.35; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -172,15 +219,15 @@ def render_topbar() -> None:
         'DataSUS AI'
         '<span class="ds-topbar-badge">PREDICTION</span>'
         '</a>'
-        '<div class="ds-topbar-right">Calibração e Benchmark</div>'
+        '<a class="ds-topbar-right" href="/" target="_self">Calibração e Benchmark</a>'
         '</div>',
         unsafe_allow_html=True,
     )
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Coorte", "Modelo", "Resultados", "Calibração", "Benchmark"]
-    optionals = {6, 7}
+    labels = ["Desfecho", "Dados", "Coorte", "Features", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
+    optionals = {8, 9}
     parts = []
     for i, lbl in enumerate(labels, 1):
         optional = i in optionals
@@ -225,8 +272,96 @@ def step_title(n: int, title: str, caption: str = "") -> None:
     )
 
 
+def render_sidebar() -> None:
+    with st.sidebar:
+        st.markdown('<p class="sb-title">Configuração</p>', unsafe_allow_html=True)
+
+        if ss.get("outcome_key"):
+            o = OUTCOMES[ss["outcome_key"]]
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">1 · Desfecho</div>'
+                f'<div class="sb-step-value">{o.name}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">{", ".join(o.data_sources)}</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("raw_data"):
+            lines = "<br>".join(f"{src}: {len(df):,}" for src, df in ss["raw_data"].items())
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">2 · Dados</div>'
+                f'<div class="sb-step-value">{lines}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("cohort") is not None:
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">3 · Coorte</div>'
+                f'<div class="sb-step-value">{len(ss["cohort"]):,} registros</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("feature_config"):
+            _n_f = len(ss["feature_config"].get("selected_features", []))
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">4 · Features</div>'
+                f'<div class="sb-step-value">{_n_f} variáveis</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("model_config"):
+            cfg_ = ss["model_config"]
+            _vs = (
+                f"{cfg_['n_folds']}-fold CV"
+                if cfg_["val_strategy"] == "Validação cruzada (k-fold)"
+                else f"Holdout {cfg_['holdout_size']:.0%}"
+            )
+            _albl = " · ".join(cfg_.get("algo_labels", [cfg_["algo_label"]]))
+            _fc_ = ss.get("feature_config") or {}
+            _nf = len(_fc_.get("selected_features", []))
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">5 · Modelo</div>'
+                f'<div class="sb-step-value">{_albl}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">{_vs} · {_nf} feat.</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("model_results"):
+            r_ = ss["model_results"]
+            m_ = r_["mean_metrics"]
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">6 · Treinamento</div>'
+                f'<div class="sb-step-value">AUC {m_["roc_auc"]:.3f} · F1 {m_["f1"]:.3f}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">PR-AUC {m_["pr_auc"]:.3f}</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
+            cr_ = ss["calib_results"]
+            st.markdown(
+                f'<div class="sb-step">'
+                f'<div class="sb-step-label">8 · Calibração</div>'
+                f'<div class="sb-step-value">{cr_["method"].capitalize()}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">Brier {cr_["brier_after"]:.4f}</span></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+
 # ── Topbar ─────────────────────────────────────────────────────────────────────
 render_topbar()
+render_sidebar()
 st.markdown('<div class="ds-page">', unsafe_allow_html=True)
 
 # ── Guard: precisa ter modelo treinado ─────────────────────────────────────────
@@ -237,7 +372,7 @@ if not ss["model_results"] or not ss["outcome_key"] or ss["cohort"] is None:
     st.stop()
 
 # ── Stepbar ────────────────────────────────────────────────────────────────────
-_step = 7 if ss.get("comparison_results") else 6
+_step = 9 if ss.get("comparison_results") else 8
 render_step_bar(_step)
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
@@ -269,9 +404,9 @@ if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
     _active_model = ss["calib_results"]["cal_model"]
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 6 — CALIBRAÇÃO (opcional)
+# ETAPA 8 — CALIBRAÇÃO (opcional)
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(6, "Calibração do Modelo",
+step_title(8, "Calibração do Modelo",
            "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
 
 if ss["calib_results"]:
@@ -346,9 +481,9 @@ else:
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 7 — BENCHMARK ENTRE ESTADOS (opcional)
+# ETAPA 9 — BENCHMARK ENTRE ESTADOS (opcional)
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(7, "Benchmark entre Estados",
+step_title(9, "Benchmark entre Estados",
            "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
 
 if ss["comparison_results"]:
