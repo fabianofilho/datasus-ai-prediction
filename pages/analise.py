@@ -346,6 +346,19 @@ def current_step() -> int:
 
 
 def render_topbar() -> None:
+    _ok = ss.get("outcome_key")
+    if _ok:
+        _o = OUTCOMES[_ok]
+        _right = (
+            f'<span style="display:flex;align-items:center;gap:6px;">'
+            f'<span style="font-size:0.72rem;color:#9ca3af;">Módulo:</span>'
+            f'<span style="font-size:0.82rem;font-weight:600;color:#111827;">'
+            f'{_o.icon}&nbsp;{_o.name}'
+            f'</span>'
+            f'</span>'
+        )
+    else:
+        _right = '<a class="ds-topbar-right" href="/" target="_self">Modelagem preditiva em saúde pública</a>'
     st.markdown(
         '<div class="ds-topbar">'
         '<a class="ds-topbar-logo" href="/" target="_self">'
@@ -353,7 +366,7 @@ def render_topbar() -> None:
         'DataSUS AI'
         '<span class="ds-topbar-badge">PREDICTION</span>'
         '</a>'
-        '<a class="ds-topbar-right" href="/" target="_self">Modelagem preditiva em saúde pública</a>'
+        + _right +
         '</div>',
         unsafe_allow_html=True,
     )
@@ -378,7 +391,11 @@ def render_step_bar(step: int) -> None:
         if i < len(labels) - 1:
             parts.append('<span class="ds-step-arrow">›</span>')
     st.markdown(
-        '<div class="ds-stepbar">' + "".join(parts) + "</div>",
+        '<div class="ds-stepbar">'
+        + "".join(parts)
+        + '<span style="margin-left:auto;font-size:0.65rem;color:#9ca3af;white-space:nowrap;flex-shrink:0;">'
+        + '* etapa opcional</span>'
+        + "</div>",
         unsafe_allow_html=True,
     )
 
