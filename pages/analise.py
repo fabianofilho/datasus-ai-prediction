@@ -837,38 +837,115 @@ if ss["cohort"] is None:
                 if _num.empty and _cat.empty:
                     st.caption("Nenhuma coluna encontrada.")
 
-            # Completude por coluna
+            # Completude por coluna — visualização de padrão de ausências
             with st.expander("Completude por coluna", expanded=False):
-                import plotly.express as _px_c
-                _miss_s = _df.isna().mean().sort_values(ascending=False)
-                _miss_df = pd.DataFrame({
-                    "Coluna": _miss_s.index,
-                    "Preenchido (%)": ((1 - _miss_s.values) * 100).round(1),
-                    "Missing (%)": (_miss_s.values * 100).round(1),
-                }).reset_index(drop=True)
-                _high = _miss_df["Missing (%)"] > 50
+                import plotly.graph_objects as _go_miss
+                import numpy as _np_miss
+                from plotly.subplots import make_subplots as _make_sub
 
-                # gráfico de barras horizontais empilhadas
-                _fig_comp = _px_c.bar(
-                    _miss_df,
-                    y="Coluna",
-                    x=["Preenchido (%)", "Missing (%)"],
-                    orientation="h",
-                    color_discrete_map={"Preenchido (%)": "#22c55e", "Missing (%)": "#f97316"},
-                    labels={"value": "%", "variable": ""},
-                    height=max(300, _k * 22),
+                _miss_s = _df.isna().mean().sort_values(ascending=True)  # menor missing à esquerda
+                _high = (_miss_s * 100) > 50
+
+                # Amostra de até 300 linhas para manter performance
+                _MAX_VIS = 300
+                _df_vis = (
+                    _df.sample(n=_MAX_VIS, random_state=42).reset_index(drop=True)
+                    if len(_df) > _MAX_VIS else _df.reset_index(drop=True)
                 )
-                _fig_comp.update_layout(
-                    barmode="stack",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                    margin=dict(l=0, r=0, t=30, b=0),
+                # Ordena colunas: mais completas à esquerda
+                _col_ord = _miss_s.index.tolist()
+                _present = (~_df_vis[_col_ord].isna()).astype(int)
+                _n_rows, _n_cols = _present.shape
+
+                # completude por linha (para sparkline lateral)
+                _row_comp = _present.mean(axis=1).values
+
+                # ── subplots: matriz + sparkline ──────────────────────────────
+                _mfig = _make_sub(
+                    rows=1, cols=2,
+                    column_widths=[0.92, 0.08],
+                    horizontal_spacing=0.01,
+                )
+
+                # Heatmap principal
+                _mfig.add_trace(
+                    _go_miss.Heatmap(
+                        z=_present.values,
+                        x=_col_ord,
+                        y=list(range(1, _n_rows + 1)),
+                        colorscale=[[0, "#ffffff"], [1, "#374151"]],
+                        showscale=False,
+                        xgap=1, ygap=0,
+                        customdata=_np_miss.where(_present.values == 1, "Preenchido", "Missing"),
+                        hovertemplate="Coluna: %{x}<br>Linha: %{y}<br>%{customdata}<extra></extra>",
+                    ),
+                    row=1, col=1,
+                )
+
+                # Sparkline de completude por linha (lado direito)
+                _mfig.add_trace(
+                    _go_miss.Scatter(
+                        x=_row_comp,
+                        y=list(range(1, _n_rows + 1)),
+                        mode="lines",
+                        line=dict(color="#374151", width=1),
+                        showlegend=False,
+                        hovertemplate="Completude: %{x:.0%}<extra></extra>",
+                    ),
+                    row=1, col=2,
+                )
+
+                _chart_h = max(340, min(_n_rows * 2, 520))
+                _mfig.update_layout(
+                    height=_chart_h,
+                    margin=dict(t=60, b=20, l=10, r=10),
                     plot_bgcolor="white",
                     paper_bgcolor="white",
-                    xaxis=dict(range=[0, 100], ticksuffix="%"),
-                    yaxis=dict(autorange="reversed"),
-                    font=dict(size=12),
+                    font=dict(size=10),
                 )
-                st.plotly_chart(_fig_comp, use_container_width=True)
+                # Eixo X do heatmap — labels rotacionados no topo
+                _mfig.update_xaxes(
+                    tickangle=-60, side="top",
+                    showgrid=False, row=1, col=1,
+                )
+                # Eixo Y — mostra início e fim
+                _mfig.update_yaxes(
+                    autorange="reversed",
+                    tickvals=[1, _n_rows],
+                    ticktext=["1", str(len(_df_vis))],
+                    showgrid=False, row=1, col=1,
+                )
+                # Sparkline: eixo X (0–1), sem labels
+                _mfig.update_xaxes(
+                    range=[0, 1], showticklabels=False,
+                    showgrid=False, row=1, col=2,
+                )
+                _mfig.update_yaxes(
+                    autorange="reversed", showticklabels=True,
+                    tickvals=[1, _n_rows],
+                    ticktext=["1", str(len(_df_vis))],
+                    showgrid=False, row=1, col=2,
+                )
+
+                st.caption(
+                    f"Matriz de ausências — branco = missing, cinza = preenchido · "
+                    f"{len(_df_vis)} observações exibidas"
+                    + (f" (amostra de {len(_df)})" if len(_df) > _MAX_VIS else "")
+                )
+                st.plotly_chart(_mfig, use_container_width=True)
+
+                # Resumo quantitativo compacto abaixo da matriz
+                _miss_pct_df = pd.DataFrame({
+                    "Coluna": _miss_s.index,
+                    "Missing (%)": (_miss_s.values * 100).round(1),
+                }).sort_values("Missing (%)", ascending=False)
+                _cols_with_miss = _miss_pct_df[_miss_pct_df["Missing (%)"] > 0]
+                if not _cols_with_miss.empty:
+                    with st.expander(f"{len(_cols_with_miss)} coluna(s) com dados ausentes"):
+                        st.dataframe(
+                            _cols_with_miss.reset_index(drop=True),
+                            use_container_width=True, hide_index=True,
+                        )
                 if _high.any():
                     st.caption(
                         f"{int(_high.sum())} coluna(s) com mais de 50% de missing — "
