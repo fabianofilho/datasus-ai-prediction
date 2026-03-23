@@ -346,10 +346,10 @@ def current_step() -> int:
         return 5
     if ss.get("feature_config"):
         return 4
-    if ss["cohort"] is not None or ss["raw_data"]:
-        return 3
-    if ss["outcome_key"]:
-        return 2
+    if ss["cohort"] is not None:
+        return 3  # coorte pronta → seleção de features
+    if ss["raw_data"] or ss["outcome_key"]:
+        return 2  # dados baixados ou desfecho selecionado → ainda no passo Dados/Coorte
     return 1
 
 
