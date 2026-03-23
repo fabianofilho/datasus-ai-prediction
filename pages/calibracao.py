@@ -269,6 +269,7 @@ def done_bar(text: str, change_key: str, reset_keys: list[str]) -> None:
         if st.button("Editar", key=change_key, help="Alterar"):
             for k in reset_keys:
                 ss[k] = _defaults[k]
+            ss["show_benchmark"] = False
             st.rerun()
 
 
@@ -490,12 +491,14 @@ elif not ss.get("comparison_results"):
                         results["model"], X_res, y, method=calib_method,
                     )
                     ss["calib_results"] = cr
+                    ss["show_benchmark"] = False
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro na calibração: {e}")
     with col_cb2:
         if st.button("Pular calibração", type="secondary", use_container_width=True):
             ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
+            ss["show_benchmark"] = False
             st.rerun()
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
