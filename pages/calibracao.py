@@ -501,8 +501,11 @@ elif not ss.get("comparison_results"):
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 9 — BENCHMARK ENTRE ESTADOS (opcional)
+# ETAPA 9 — BENCHMARK ENTRE ESTADOS (opcional) — só aparece após calibração
 # ═════════════════════════════════════════════════════════════════════════════
+if not ss.get("calib_results"):
+    st.stop()
+
 step_title(9, "Benchmark entre Estados",  # step 9 de 9
            "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
 
