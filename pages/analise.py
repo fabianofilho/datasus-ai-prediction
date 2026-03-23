@@ -1695,7 +1695,19 @@ if not ss["model_results"]:
                 _X_lc, _X_hold = X_train, X_train
                 _y_lc, _y_hold = y_train, y_train
 
+            # ── Per-model debug containers (criados antes dos loops) ──────────
+            _mstatus: dict = {}
+            _mdetail: dict = {}
+            st.markdown("**Progresso por modelo:**")
+            for _lbl in algo_labels:
+                _nc1, _nc2 = st.columns([1, 4])
+                _nc1.markdown(f"**{_lbl}**")
+                _mstatus[_lbl] = _nc2.empty()
+                _mdetail[_lbl] = st.empty()
+                _mstatus[_lbl].caption("⏳ Aguardando…")
+
             for _lc_algo, _lc_lbl in zip(algos, algo_labels):
+                _mstatus[_lc_lbl].caption("📊 Calculando curva de aprendizado…")
                 for _frac in _fracs:
                     _n = max(30, int(len(_X_lc) * _frac))
                     try:
@@ -1715,9 +1727,14 @@ if not ss["model_results"]:
                     _lc_data[_lc_lbl]["train"].append(_tr_auc)
                     _lc_data[_lc_lbl]["val"].append(_vl_auc)
                     _lc_chart_ph.plotly_chart(_lc_fig(_lc_data), use_container_width=True)
+                    _mdetail[_lc_lbl].caption(
+                        f"  LC {int(_frac*100)}% ({_n:,} amostras) — Val AUC: {_vl_auc:.3f}"
+                    )
                     _lc_status_ph.caption(
                         f"Curva de aprendizado ({_lc_lbl}) — {int(_frac*100)}% — Val AUC: {_vl_auc:.3f}"
                     )
+                _mstatus[_lc_lbl].caption("✓ Curva de aprendizado concluída")
+                _mdetail[_lc_lbl].empty()
 
             # ── Loop por algoritmo: HPO + treino ──────────────────────────────
             _hpo_folds = min(n_folds, 3) if val_strategy == "Validação cruzada (k-fold)" else 3
@@ -1732,15 +1749,17 @@ if not ss["model_results"]:
 
             for _algo, _algo_lbl in zip(algos, algo_labels):
                 try:
-                    _lc_status_ph.caption(f"Treinando {_algo_lbl}…")
                     _params = dict(params_per_algo.get(_algo, {}))
 
                     # HPO
                     if hpo_mode == "Optuna (automático)":
+                        _mstatus[_algo_lbl].caption("🔍 Optuna — buscando hiperparâmetros…")
                         _prog = st.progress(0.0, text=f"Optuna — {_algo_lbl}…")
-                        def _opt_cb(done, total, best, _p=_prog, _l=_algo_lbl):
+                        _ph_detail = _mdetail[_algo_lbl]
+                        def _opt_cb(done, total, best, _p=_prog, _l=_algo_lbl, _ph=_ph_detail):
                             _p.progress(done / total,
                                         text=f"Optuna {_l}: {done}/{total} — AUC {best:.4f}")
+                            _ph.caption(f"  Trial {done}/{total} — melhor AUC: {best:.4f}")
                         _params = optimize_hyperparams(
                             X_train, y_train, algorithm=_algo,
                             n_trials=n_trials, n_folds=_hpo_folds,
@@ -1748,11 +1767,16 @@ if not ss["model_results"]:
                             progress_callback=_opt_cb,
                         )
                         _prog.progress(1.0, text=f"Optuna {_algo_lbl} concluído")
+                        _mdetail[_algo_lbl].empty()
 
                     elif hpo_mode == "Random Search":
+                        _mstatus[_algo_lbl].caption("🔍 Random Search — buscando hiperparâmetros…")
                         _prog = st.progress(0.0, text=f"Random Search — {_algo_lbl}…")
-                        def _rs_cb(done, total, best, _p=_prog, _l=_algo_lbl):
-                            _p.progress(1.0, text=f"Random Search {_l} — AUC {best:.4f}")
+                        _ph_detail = _mdetail[_algo_lbl]
+                        def _rs_cb(done, total, best, _p=_prog, _l=_algo_lbl, _ph=_ph_detail):
+                            _p.progress(done / total,
+                                        text=f"Random Search {_l}: {done}/{total} — AUC {best:.4f}")
+                            _ph.caption(f"  Iteração {done}/{total} — AUC: {best:.4f}")
                         with st.spinner(f"Random Search: {_algo_lbl}…"):
                             _params = random_search(
                                 X_train, y_train, algorithm=_algo,
@@ -1761,8 +1785,10 @@ if not ss["model_results"]:
                                 progress_callback=_rs_cb,
                             )
                         _prog.progress(1.0, text=f"Random Search {_algo_lbl} concluído")
+                        _mdetail[_algo_lbl].empty()
 
                     elif hpo_mode == "Grid Search":
+                        _mstatus[_algo_lbl].caption("🔍 Grid Search — buscando hiperparâmetros…")
                         with st.spinner(f"Grid Search — {_algo_lbl}…"):
                             _params = grid_search(
                                 X_train, y_train, algorithm=_algo,
@@ -1772,6 +1798,7 @@ if not ss["model_results"]:
 
                     # Treino
                     if val_strategy == "Validação cruzada (k-fold)":
+                        _mstatus[_algo_lbl].caption(f"🔄 Treinando — {n_folds}-fold CV…")
                         with st.spinner(f"Treinando {_algo_lbl} · {n_folds}-fold CV…"):
                             _r = train_cv(
                                 X=X_train, y=y_train, algorithm=_algo,
@@ -1780,6 +1807,7 @@ if not ss["model_results"]:
                             )
                             _r["validation_strategy"] = "cv"
                     elif val_strategy == "Validação Temporal":
+                        _mstatus[_algo_lbl].caption(f"🔄 Treinando — corte temporal {temporal_cutoff}…")
                         with st.spinner(f"Treinando {_algo_lbl} · corte temporal {temporal_cutoff}…"):
                             import pandas as _pd_t
                             _dates = _pd_t.to_datetime(cohort[temporal_date_col], errors="coerce")
@@ -1827,6 +1855,7 @@ if not ss["model_results"]:
                                 "temporal_cutoff": temporal_cutoff,
                             }
                     else:
+                        _mstatus[_algo_lbl].caption(f"🔄 Treinando — holdout {holdout_size:.0%}…")
                         with st.spinner(f"Treinando {_algo_lbl} · holdout {holdout_size:.0%}…"):
                             X_tr, X_te, y_tr, y_te = train_test_split(
                                 X_train, y_train, test_size=holdout_size,
@@ -1868,8 +1897,13 @@ if not ss["model_results"]:
                     _r["hpo_mode"] = hpo_mode
                     _r["algo_label"] = _algo_lbl
                     _all_results.append(_r)
+                    _mstatus[_algo_lbl].caption(
+                        f"✅ Concluído — AUC {_r['mean_metrics']['roc_auc']:.4f}"
+                    )
+                    _mdetail[_algo_lbl].empty()
 
                 except Exception as _algo_err:
+                    _mstatus[_algo_lbl].caption(f"❌ Erro — {_algo_err}")
                     st.warning(f"{_algo_lbl}: erro durante treinamento — {_algo_err}")
 
             # ── Guarda — ao menos um modelo precisa ter treinado ──────────────
