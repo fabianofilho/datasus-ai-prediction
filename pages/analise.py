@@ -1624,13 +1624,16 @@ if not ss["model_results"]:
             if d["sizes"]:
                 fig.add_trace(_go.Scatter(
                     x=d["sizes"], y=d["val"], mode="lines+markers",
-                    name=f"{lbl} — Validação",
+                    name="Validação",
+                    legendgroup=lbl,
+                    legendgrouptitle=dict(text=lbl, font=dict(size=11, color="#374151")),
                     line=dict(color=color, width=2.5), marker=dict(size=8),
                 ))
                 if d["train"]:
                     fig.add_trace(_go.Scatter(
                         x=d["sizes"], y=d["train"], mode="lines+markers",
-                        name=f"{lbl} — Treino",
+                        name="Treino",
+                        legendgroup=lbl,
                         line=dict(color=color, width=1.5, dash="dot"),
                         marker=dict(size=6, symbol="circle-open"),
                     ))
@@ -1646,8 +1649,15 @@ if not ss["model_results"]:
             xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.07)", zeroline=False),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             height=450,
-            legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="center", x=0.5),
-            margin=dict(t=50, b=90, l=70, r=30),
+            legend=dict(
+                orientation="v",
+                yanchor="middle", y=0.5,
+                xanchor="left", x=1.02,
+                groupclick="toggleitem",
+                tracegroupgap=12,
+                font=dict(size=12),
+            ),
+            margin=dict(t=50, b=40, l=70, r=180),
             font=dict(size=13),
             hovermode="x unified",
         )
@@ -1712,150 +1722,159 @@ if not ss["model_results"]:
             _hpo_folds = min(n_folds, 3) if val_strategy == "Validação cruzada (k-fold)" else 3
             _all_results = []
 
+            import numpy as _np
+            from sklearn.metrics import (
+                roc_auc_score as _rauc, average_precision_score as _ap,
+                f1_score as _f1, precision_score as _prec,
+                recall_score as _rec, brier_score_loss as _brier,
+            )
+
             for _algo, _algo_lbl in zip(algos, algo_labels):
-                _lc_status_ph.caption(f"Treinando {_algo_lbl}…")
-                _params = dict(params_per_algo.get(_algo, {}))
+                try:
+                    _lc_status_ph.caption(f"Treinando {_algo_lbl}…")
+                    _params = dict(params_per_algo.get(_algo, {}))
 
-                # HPO
-                if hpo_mode == "Optuna (automático)":
-                    _prog = st.progress(0.0, text=f"Optuna — {_algo_lbl}…")
-                    def _opt_cb(done, total, best, _p=_prog, _l=_algo_lbl):
-                        _p.progress(done / total,
-                                    text=f"Optuna {_l}: {done}/{total} — AUC {best:.4f}")
-                    _params = optimize_hyperparams(
-                        X_train, y_train, algorithm=_algo,
-                        n_trials=n_trials, n_folds=_hpo_folds,
-                        balancing=balancing, treatment=treatment,
-                        progress_callback=_opt_cb,
-                    )
-                    _prog.progress(1.0, text=f"Optuna {_algo_lbl} concluído")
-
-                elif hpo_mode == "Random Search":
-                    _prog = st.progress(0.0, text=f"Random Search — {_algo_lbl}…")
-                    def _rs_cb(done, total, best, _p=_prog, _l=_algo_lbl):
-                        _p.progress(1.0, text=f"Random Search {_l} — AUC {best:.4f}")
-                    with st.spinner(f"Random Search: {_algo_lbl}…"):
-                        _params = random_search(
+                    # HPO
+                    if hpo_mode == "Optuna (automático)":
+                        _prog = st.progress(0.0, text=f"Optuna — {_algo_lbl}…")
+                        def _opt_cb(done, total, best, _p=_prog, _l=_algo_lbl):
+                            _p.progress(done / total,
+                                        text=f"Optuna {_l}: {done}/{total} — AUC {best:.4f}")
+                        _params = optimize_hyperparams(
                             X_train, y_train, algorithm=_algo,
-                            n_iter=n_iter, n_folds=_hpo_folds,
+                            n_trials=n_trials, n_folds=_hpo_folds,
                             balancing=balancing, treatment=treatment,
-                            progress_callback=_rs_cb,
+                            progress_callback=_opt_cb,
                         )
-                    _prog.progress(1.0, text=f"Random Search {_algo_lbl} concluído")
+                        _prog.progress(1.0, text=f"Optuna {_algo_lbl} concluído")
 
-                elif hpo_mode == "Grid Search":
-                    with st.spinner(f"Grid Search — {_algo_lbl}…"):
-                        _params = grid_search(
-                            X_train, y_train, algorithm=_algo,
-                            n_folds=_hpo_folds, balancing=balancing,
-                            treatment=treatment,
-                        )
-
-                # Treino
-                import numpy as _np
-                from sklearn.metrics import (
-                    roc_auc_score as _rauc, average_precision_score as _ap,
-                    f1_score as _f1, precision_score as _prec,
-                    recall_score as _rec, brier_score_loss as _brier,
-                )
-                if val_strategy == "Validação cruzada (k-fold)":
-                    with st.spinner(f"Treinando {_algo_lbl} · {n_folds}-fold CV…"):
-                        _r = train_cv(
-                            X=X_train, y=y_train, algorithm=_algo,
-                            params=_params, n_folds=n_folds, balancing=balancing,
-                            treatment=treatment,
-                        )
-                        _r["validation_strategy"] = "cv"
-                elif val_strategy == "Validação Temporal":
-                    with st.spinner(f"Treinando {_algo_lbl} · corte temporal {temporal_cutoff}…"):
-                        import pandas as _pd_t
-                        _dates = _pd_t.to_datetime(cohort[temporal_date_col], errors="coerce")
-                        _cutoff_ts = _pd_t.Timestamp(temporal_cutoff)
-                        _train_mask = _dates < _cutoff_ts
-                        _test_mask  = _dates >= _cutoff_ts
-                        if _train_mask.sum() < 10 or _test_mask.sum() < 5:
-                            st.error(
-                                f"Split temporal insuficiente: treino={_train_mask.sum()}, "
-                                f"teste={_test_mask.sum()}. Ajuste a data de corte."
+                    elif hpo_mode == "Random Search":
+                        _prog = st.progress(0.0, text=f"Random Search — {_algo_lbl}…")
+                        def _rs_cb(done, total, best, _p=_prog, _l=_algo_lbl):
+                            _p.progress(1.0, text=f"Random Search {_l} — AUC {best:.4f}")
+                        with st.spinner(f"Random Search: {_algo_lbl}…"):
+                            _params = random_search(
+                                X_train, y_train, algorithm=_algo,
+                                n_iter=n_iter, n_folds=_hpo_folds,
+                                balancing=balancing, treatment=treatment,
+                                progress_callback=_rs_cb,
                             )
-                            st.stop()
-                        X_tr = X_train[_train_mask.values]
-                        y_tr = y_train[_train_mask.values]
-                        X_te = X_train[_test_mask.values]
-                        y_te = y_train[_test_mask.values]
-                        _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing, treatment=treatment)
-                        _pipe.fit(X_tr, y_tr)
-                        _te_probs = _pipe.predict_proba(X_te)[:, 1]
-                        _te_preds = (_te_probs >= 0.5).astype(int)
-                        _m = {
-                            "roc_auc": float(_rauc(y_te, _te_probs)),
-                            "pr_auc": float(_ap(y_te, _te_probs)),
-                            "f1": float(_f1(y_te, _te_preds, zero_division=0)),
-                            "precision": float(_prec(y_te, _te_preds, zero_division=0)),
-                            "recall": float(_rec(y_te, _te_preds, zero_division=0)),
-                            "brier": float(_brier(y_te, _te_probs)),
-                            "fold": 1,
-                        }
-                        _final = build_pipeline(X_train, _algo, _params, balancing=balancing, treatment=treatment)
-                        _final.fit(X_train, y_train)
-                        _imp = {}
-                        if hasattr(_final[-1], "feature_importances_"):
-                            _imp = dict(zip(X_train.columns, _final[-1].feature_importances_))
-                        _r = {
-                            "fold_metrics": [_m],
-                            "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
-                            "oof_probs": _te_probs,
-                            "y_eval": y_te.values,
-                            "feature_importances": _imp,
-                            "model": _final,
-                            "X_columns": X_train.columns.tolist(),
-                            "algorithm": _algo,
-                            "validation_strategy": "temporal",
-                            "temporal_date_col": temporal_date_col,
-                            "temporal_cutoff": temporal_cutoff,
-                        }
-                else:
-                    with st.spinner(f"Treinando {_algo_lbl} · holdout {holdout_size:.0%}…"):
-                        X_tr, X_te, y_tr, y_te = train_test_split(
-                            X_train, y_train, test_size=holdout_size,
-                            stratify=y_train, random_state=42,
-                        )
-                        _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing, treatment=treatment)
-                        _pipe.fit(X_tr, y_tr)
-                        _te_probs = _pipe.predict_proba(X_te)[:, 1]
-                        _te_preds = (_te_probs >= 0.5).astype(int)
-                        _m = {
-                            "roc_auc": float(_rauc(y_te, _te_probs)),
-                            "pr_auc": float(_ap(y_te, _te_probs)),
-                            "f1": float(_f1(y_te, _te_preds, zero_division=0)),
-                            "precision": float(_prec(y_te, _te_preds, zero_division=0)),
-                            "recall": float(_rec(y_te, _te_preds, zero_division=0)),
-                            "brier": float(_brier(y_te, _te_probs)),
-                            "fold": 1,
-                        }
-                        _final = build_pipeline(X_train, _algo, _params, balancing=balancing, treatment=treatment)
-                        _final.fit(X_train, y_train)
-                        _imp = {}
-                        if hasattr(_final[-1], "feature_importances_"):
-                            _imp = dict(zip(X_train.columns, _final[-1].feature_importances_))
-                        _r = {
-                            "fold_metrics": [_m],
-                            "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
-                            "oof_probs": _te_probs,
-                            "y_eval": y_te.values,
-                            "feature_importances": _imp,
-                            "model": _final,
-                            "X_columns": X_train.columns.tolist(),
-                            "algorithm": _algo,
-                            "validation_strategy": "holdout",
-                            "holdout_size": holdout_size,
-                        }
+                        _prog.progress(1.0, text=f"Random Search {_algo_lbl} concluído")
 
-                _r["sample_n"] = len(X_train)
-                _r["best_params"] = _params
-                _r["hpo_mode"] = hpo_mode
-                _r["algo_label"] = _algo_lbl
-                _all_results.append(_r)
+                    elif hpo_mode == "Grid Search":
+                        with st.spinner(f"Grid Search — {_algo_lbl}…"):
+                            _params = grid_search(
+                                X_train, y_train, algorithm=_algo,
+                                n_folds=_hpo_folds, balancing=balancing,
+                                treatment=treatment,
+                            )
+
+                    # Treino
+                    if val_strategy == "Validação cruzada (k-fold)":
+                        with st.spinner(f"Treinando {_algo_lbl} · {n_folds}-fold CV…"):
+                            _r = train_cv(
+                                X=X_train, y=y_train, algorithm=_algo,
+                                params=_params, n_folds=n_folds, balancing=balancing,
+                                treatment=treatment,
+                            )
+                            _r["validation_strategy"] = "cv"
+                    elif val_strategy == "Validação Temporal":
+                        with st.spinner(f"Treinando {_algo_lbl} · corte temporal {temporal_cutoff}…"):
+                            import pandas as _pd_t
+                            _dates = _pd_t.to_datetime(cohort[temporal_date_col], errors="coerce")
+                            _cutoff_ts = _pd_t.Timestamp(temporal_cutoff)
+                            _train_mask = _dates < _cutoff_ts
+                            _test_mask  = _dates >= _cutoff_ts
+                            if _train_mask.sum() < 10 or _test_mask.sum() < 5:
+                                raise ValueError(
+                                    f"Split temporal insuficiente: treino={_train_mask.sum()}, "
+                                    f"teste={_test_mask.sum()}. Ajuste a data de corte."
+                                )
+                            X_tr = X_train[_train_mask.values]
+                            y_tr = y_train[_train_mask.values]
+                            X_te = X_train[_test_mask.values]
+                            y_te = y_train[_test_mask.values]
+                            _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing, treatment=treatment)
+                            _pipe.fit(X_tr, y_tr)
+                            _te_probs = _pipe.predict_proba(X_te)[:, 1]
+                            _te_preds = (_te_probs >= 0.5).astype(int)
+                            _m = {
+                                "roc_auc": float(_rauc(y_te, _te_probs)),
+                                "pr_auc": float(_ap(y_te, _te_probs)),
+                                "f1": float(_f1(y_te, _te_preds, zero_division=0)),
+                                "precision": float(_prec(y_te, _te_preds, zero_division=0)),
+                                "recall": float(_rec(y_te, _te_preds, zero_division=0)),
+                                "brier": float(_brier(y_te, _te_probs)),
+                                "fold": 1,
+                            }
+                            _final = build_pipeline(X_train, _algo, _params, balancing=balancing, treatment=treatment)
+                            _final.fit(X_train, y_train)
+                            _imp = {}
+                            if hasattr(_final[-1], "feature_importances_"):
+                                _imp = dict(zip(X_train.columns, _final[-1].feature_importances_))
+                            _r = {
+                                "fold_metrics": [_m],
+                                "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
+                                "oof_probs": _te_probs,
+                                "y_eval": y_te.values,
+                                "feature_importances": _imp,
+                                "model": _final,
+                                "X_columns": X_train.columns.tolist(),
+                                "algorithm": _algo,
+                                "validation_strategy": "temporal",
+                                "temporal_date_col": temporal_date_col,
+                                "temporal_cutoff": temporal_cutoff,
+                            }
+                    else:
+                        with st.spinner(f"Treinando {_algo_lbl} · holdout {holdout_size:.0%}…"):
+                            X_tr, X_te, y_tr, y_te = train_test_split(
+                                X_train, y_train, test_size=holdout_size,
+                                stratify=y_train, random_state=42,
+                            )
+                            _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing, treatment=treatment)
+                            _pipe.fit(X_tr, y_tr)
+                            _te_probs = _pipe.predict_proba(X_te)[:, 1]
+                            _te_preds = (_te_probs >= 0.5).astype(int)
+                            _m = {
+                                "roc_auc": float(_rauc(y_te, _te_probs)),
+                                "pr_auc": float(_ap(y_te, _te_probs)),
+                                "f1": float(_f1(y_te, _te_preds, zero_division=0)),
+                                "precision": float(_prec(y_te, _te_preds, zero_division=0)),
+                                "recall": float(_rec(y_te, _te_preds, zero_division=0)),
+                                "brier": float(_brier(y_te, _te_probs)),
+                                "fold": 1,
+                            }
+                            _final = build_pipeline(X_train, _algo, _params, balancing=balancing, treatment=treatment)
+                            _final.fit(X_train, y_train)
+                            _imp = {}
+                            if hasattr(_final[-1], "feature_importances_"):
+                                _imp = dict(zip(X_train.columns, _final[-1].feature_importances_))
+                            _r = {
+                                "fold_metrics": [_m],
+                                "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
+                                "oof_probs": _te_probs,
+                                "y_eval": y_te.values,
+                                "feature_importances": _imp,
+                                "model": _final,
+                                "X_columns": X_train.columns.tolist(),
+                                "algorithm": _algo,
+                                "validation_strategy": "holdout",
+                                "holdout_size": holdout_size,
+                            }
+
+                    _r["sample_n"] = len(X_train)
+                    _r["best_params"] = _params
+                    _r["hpo_mode"] = hpo_mode
+                    _r["algo_label"] = _algo_lbl
+                    _all_results.append(_r)
+
+                except Exception as _algo_err:
+                    st.warning(f"{_algo_lbl}: erro durante treinamento — {_algo_err}")
+
+            # ── Guarda — ao menos um modelo precisa ter treinado ──────────────
+            if not _all_results:
+                st.error("Nenhum algoritmo foi treinado com sucesso. Verifique os dados e tente novamente.")
+                st.stop()
 
             # ── Melhor resultado ──────────────────────────────────────────────
             _best = max(_all_results, key=lambda r: r["mean_metrics"]["roc_auc"])
@@ -1864,7 +1883,7 @@ if not ss["model_results"]:
                 f"Concluído. Melhor: {_best.get('algo_label', '')} — AUC {_best['mean_metrics']['roc_auc']:.4f}"
             )
             ss["model_results"] = _best
-            ss["active_sections"] = set()
+            ss["result_tab"] = "curvas"
             st.rerun()
         except Exception as e:
             st.error(f"Erro no treino: {e}")
