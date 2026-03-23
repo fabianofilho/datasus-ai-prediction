@@ -374,7 +374,7 @@ def render_sidebar() -> None:
             cr_ = ss["calib_results"]
             st.markdown(
                 f'<div class="sb-step">'
-                f'<div class="sb-step-label">9 · Calibração</div>'
+                f'<div class="sb-step-label">8 · Calibração</div>'
                 f'<div class="sb-step-value">{cr_["method"].capitalize()}<br>'
                 f'<span style="font-size:.7rem;color:#6b7280">Brier {cr_["brier_after"]:.4f}</span></div>'
                 f'</div>',
@@ -399,7 +399,7 @@ if st.button("← Voltar ao Modelo", type="secondary"):
     st.switch_page("pages/analise.py")
 
 # ── Stepbar ────────────────────────────────────────────────────────────────────
-_step = 9 if ss.get("comparison_results") else 8
+_step = 9 if (ss.get("comparison_results") or ss.get("show_benchmark")) else 8
 render_step_bar(_step)
 
 # ── Lazy modules ───────────────────────────────────────────────────────────────

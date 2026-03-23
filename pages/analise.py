@@ -448,9 +448,11 @@ def render_sidebar() -> None:
                 unsafe_allow_html=True,
             )
             if st.button("Editar", key="sb_chg_outcome"):
-                for k in ["outcome_key", "raw_data", "cohort", "model_config",
-                          "model_results", "calib_results", "comparison_results", "manual_needed"]:
+                for k in ["outcome_key", "raw_data", "cohort", "feature_config",
+                          "treatment_config", "model_config", "model_results",
+                          "calib_results", "comparison_results", "manual_needed"]:
                     ss[k] = _defaults[k]
+                ss.pop("result_tab", None)
                 st.rerun()
 
         # Step 2: Dados
@@ -464,9 +466,11 @@ def render_sidebar() -> None:
                 unsafe_allow_html=True,
             )
             if st.button("Editar", key="sb_chg_data"):
-                for k in ["raw_data", "cohort", "model_config", "model_results",
-                          "calib_results", "comparison_results", "manual_needed"]:
+                for k in ["raw_data", "cohort", "feature_config", "treatment_config",
+                          "model_config", "model_results", "calib_results",
+                          "comparison_results", "manual_needed"]:
                     ss[k] = _defaults[k]
+                ss.pop("result_tab", None)
                 st.rerun()
 
         # Step 3: Coorte
@@ -646,7 +650,7 @@ if ss["cohort"] is None:
             ss["sel_years"] = st.multiselect("Anos", list(range(2018, 2025)), default=ss["sel_years"])
 
         if not ss["sel_states"] or not ss["sel_years"]:
-            st.info("Selecione pelo menos um estado e um ano para continuar.")
+            st.warning("Selecione pelo menos um estado e um ano para continuar.")
             st.stop()
 
         with c3:
@@ -1179,7 +1183,18 @@ if not ss.get("treatment_config"):
     _eff_num_cols = [c for c in _sel_feats if _eff_type.get(c, "num" if c in _num_cols else "cat") == "num"]
     _eff_cat_cols = [c for c in _sel_feats if _eff_type.get(c, "num" if c in _num_cols else "cat") == "cat"]
 
-    if st.button("Confirmar Tratamento", type="primary"):
+    # Guard: verificar se há ao menos uma variável não removida
+    _all_removed = all(
+        _treat_override.get(c, _num_default_key if _eff_type.get(c, "num" if c in _num_cols else "cat") == "num" else _cat_default_key) == "drop"
+        for c in _sel_feats
+    )
+    if _all_removed:
+        st.error(
+            "⚠ Todas as variáveis estão marcadas como 'Remover' — "
+            "o modelo precisa de pelo menos uma feature. Ajuste o tratamento antes de confirmar."
+        )
+
+    if st.button("Confirmar Tratamento", type="primary", disabled=_all_removed):
         ss["treatment_config"] = {
             "num_cols": _eff_num_cols,
             "cat_cols": _eff_cat_cols,
@@ -1796,6 +1811,11 @@ c2.metric("Sensibilidade",  f"{m.get('recall', 0):.4f}")
 c3.metric("Especificidade", f"{m.get('specificity', 0):.4f}")
 c4.metric("PR-AUC",         f"{m['pr_auc']:.4f}")
 c5.metric("F1-Score",       f"{m['f1']:.4f}")
+
+st.caption(
+    "Referência (saúde pública): ROC-AUC ≥ 0,75 = bom · ≥ 0,85 = excelente · "
+    "Sensibilidade e Especificidade calculadas com threshold 0,5 (ajustável em Métricas Clínicas)."
+)
 
 if m.get("specificity", 1.0) < 0.02 or m.get("recall", 1.0) < 0.02:
     st.warning(

@@ -8,16 +8,19 @@ _SINASC: dict[str, dict] = {
         "label": "Tipo de Gravidez",
         "desc": "Classificação do número de fetos: Única (1), Dupla (2), Tripla e mais (3).",
         "type": "Categórica",
+        "values": {"1": "Única", "2": "Dupla", "3": "Tripla e mais"},
     },
     "PARTO": {
         "label": "Tipo de Parto",
         "desc": "Tipo de parto realizado: Vaginal (1), Cesáreo (2).",
         "type": "Categórica",
+        "values": {"1": "Vaginal", "2": "Cesáreo"},
     },
     "CONSULTAS": {
         "label": "Consultas Pré-Natal",
         "desc": "Número de consultas de pré-natal realizadas: Nenhuma (1), 1–3 (2), 4–6 (3), 7 ou mais (4).",
         "type": "Ordinal",
+        "values": {"1": "Nenhuma", "2": "1–3 consultas", "3": "4–6 consultas", "4": "7 ou mais", "9": "Ignorado"},
     },
     "IDADEMAE": {
         "label": "Idade da Mãe (anos)",
@@ -28,41 +31,49 @@ _SINASC: dict[str, dict] = {
         "label": "Escolaridade da Mãe",
         "desc": "Anos de estudo da mãe: Nenhuma (1), 1–3 anos (2), 4–7 anos (3), 8–11 anos (4), 12+ anos (5), Ignorado (9).",
         "type": "Ordinal",
+        "values": {"1": "Sem escolaridade", "2": "1–3 anos", "3": "4–7 anos", "4": "8–11 anos", "5": "12 ou mais anos", "9": "Ignorado"},
     },
     "RACACORMAE": {
         "label": "Raça/Cor da Mãe",
         "desc": "Raça ou cor da pele da mãe: Branca (1), Preta (2), Amarela (3), Parda (4), Indígena (5).",
         "type": "Categórica",
+        "values": {"1": "Branca", "2": "Preta", "3": "Amarela", "4": "Parda", "5": "Indígena"},
     },
     "ESTCIVMAE": {
         "label": "Estado Civil da Mãe",
         "desc": "Estado civil da mãe: Solteira (1), Casada (2), Viúva (3), Separada (4), União consensual (5).",
         "type": "Categórica",
+        "values": {"1": "Solteira", "2": "Casada", "3": "Viúva", "4": "Separada judicialmente", "5": "União consensual"},
     },
     "SEXO": {
         "label": "Sexo do Recém-Nascido",
         "desc": "Sexo registrado ao nascer: Masculino (1), Feminino (2), Ignorado (0).",
         "type": "Categórica",
+        "values": {"0": "Ignorado", "1": "Masculino", "2": "Feminino"},
     },
     "TPAPRESENT": {
         "label": "Apresentação do RN",
         "desc": "Apresentação fetal durante o parto: Cefálica (1), Pélvica/podálica (2), Transversa (3).",
         "type": "Categórica",
+        "values": {"1": "Cefálica", "2": "Pélvica/podálica", "3": "Transversa"},
     },
     "STTRABPART": {
         "label": "Trabalho de Parto Induzido",
         "desc": "Indica se o trabalho de parto foi induzido: Sim (1), Não (2), Não se aplica (3).",
         "type": "Categórica",
+        "values": {"1": "Sim", "2": "Não", "3": "Não se aplica"},
     },
     "STCESPARTO": {
         "label": "Cesárea antes do Trabalho de Parto",
         "desc": "Cesárea ocorreu antes do início do trabalho de parto: Sim (1), Não (2), Não se aplica (3).",
         "type": "Categórica",
+        "values": {"1": "Sim", "2": "Não", "3": "Não se aplica"},
     },
     "IDANOMAL": {
         "label": "Anomalia Congênita",
         "desc": "Presença de anomalia congênita detectada ao nascimento: Sim (1), Não (2).",
         "type": "Categórica",
+        "values": {"1": "Sim", "2": "Não"},
     },
     "PESO": {
         "label": "Peso ao Nascer (gramas)",
@@ -73,6 +84,7 @@ _SINASC: dict[str, dict] = {
         "label": "Semanas de Gestação",
         "desc": "Duração da gestação em semanas: < 22 sem (1), 22–27 sem (2), 28–31 sem (3), 32–36 sem (4), 37–41 sem (5), 42+ sem (6).",
         "type": "Ordinal",
+        "values": {"1": "< 22 semanas", "2": "22–27 semanas", "3": "28–31 semanas", "4": "32–36 semanas", "5": "37–41 semanas", "6": "42 ou mais semanas"},
     },
     "APGAR1": {
         "label": "Apgar no 1º Minuto",
@@ -93,11 +105,19 @@ _SINASC: dict[str, dict] = {
         "label": "Local do Parto",
         "desc": "Local onde ocorreu o parto: Hospital (1), Outro estabelecimento de saúde (2), Domicílio (3), Outros (4).",
         "type": "Categórica",
+        "values": {"1": "Hospital", "2": "Outro estab. de saúde", "3": "Domicílio", "4": "Outros"},
+    },
+    "preterm": {
+        "label": "Pré-termo (derivada)",
+        "desc": "Indica se o nascimento foi pré-termo (< 37 semanas de gestação). Variável binária derivada de GESTACAO.",
+        "type": "Categórica",
+        "values": {"0": "Não pré-termo (≥ 37 sem)", "1": "Pré-termo (< 37 sem)"},
     },
     "age_group_mae": {
         "label": "Faixa Etária da Mãe (derivada)",
         "desc": "Faixa etária da mãe derivada de IDADEMAE: adolescente (<18), adulta jovem (18–34), tardia (≥35). Variável criada durante o processamento.",
         "type": "Derivada",
+        "values": {"1": "Adolescente (< 18 anos)", "2": "Adulta jovem (18–34 anos)", "3": "Tardia (≥ 35 anos)"},
     },
     "CODMUNNASC": {
         "label": "Município de Nascimento",

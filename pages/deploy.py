@@ -220,10 +220,16 @@ with st.form("deploy_form"):
                 label = info.get("label", col)
                 desc  = info.get("desc", "")
                 _opts = sorted(X_res[col].dropna().astype(str).unique().tolist()) if col in X_res else []
-                _default = _opts[0] if _opts else ""
+                _vals = info.get("values", {}) if info else {}
+                def _fmt_opt(v, _v=_vals):
+                    # normalise "1.0" → "1" for dict lookup
+                    k = v.split(".")[0] if "." in v and v.endswith(".0") else v
+                    lbl = _v.get(k) or _v.get(v)
+                    return f"{lbl} ({v})" if lbl else v
                 input_vals[col] = cols[ci].selectbox(
                     label,
                     options=_opts if _opts else ["—"],
+                    format_func=_fmt_opt if _vals else None,
                     help=desc or col,
                     key=f"inp_{col}",
                 )
