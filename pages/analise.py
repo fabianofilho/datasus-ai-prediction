@@ -1705,6 +1705,7 @@ if not ss["model_results"]:
                 f"Concluído. Melhor: {_best.get('algo_label', '')} — AUC {_best['mean_metrics']['roc_auc']:.4f}"
             )
             ss["model_results"] = _best
+            ss["active_sections"] = set()
             st.rerun()
         except Exception as e:
             st.error(f"Erro no treino: {e}")
@@ -1746,18 +1747,26 @@ if len(_all) > 1:
 if len(_all) <= 1:
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-_pill_style = "font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb"
-st.markdown(
-    f"""<div style="display:flex;flex-wrap:wrap;gap:.5rem;margin:0 0 1rem">
-      <a href="#curvas-de-desempenho"    style="{_pill_style}">Curvas de desempenho</a>
-      <a href="#distribuicao-dos-scores" style="{_pill_style}">Distribuição dos scores</a>
-      <a href="#shap-global"             style="{_pill_style}">SHAP Global</a>
-      <a href="#shap-individual"         style="{_pill_style}">SHAP Individual</a>
-      <a href="#metricas-clinicas"       style="{_pill_style}">Métricas Clínicas</a>
-      <a href="#equidade"                style="{_pill_style}">Equidade por Subgrupo</a>
-    </div>""",
-    unsafe_allow_html=True,
-)
+# ── Toggle pills ─────────────────────────────────────────────────────────────
+_sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade"]
+_sec_labels = ["Curvas de desempenho", "Distribuição dos scores", "SHAP Global",
+               "SHAP Individual", "Métricas Clínicas", "Equidade por Subgrupo"]
+if "active_sections" not in ss:
+    ss["active_sections"] = set()
+_pill_cols = st.columns(len(_sec_keys))
+for _pi, (_pk, _pl) in enumerate(zip(_sec_keys, _sec_labels)):
+    with _pill_cols[_pi]:
+        _active = _pk in ss["active_sections"]
+        if st.button(_pl, key=f"pill_{_pk}",
+                     type="primary" if _active else "secondary",
+                     use_container_width=True):
+            _secs = set(ss["active_sections"])
+            if _pk in _secs:
+                _secs.discard(_pk)
+            else:
+                _secs.add(_pk)
+            ss["active_sections"] = _secs
+            st.rerun()
 
 m = results["mean_metrics"]
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -1796,101 +1805,101 @@ if results.get("validation_strategy") in ("holdout", "temporal"):
 else:
     y_arr = y.values
 
-st.markdown('<div id="curvas-de-desempenho"></div>', unsafe_allow_html=True)
-st.markdown("#### Curvas de desempenho")
-col1, col2 = st.columns(2)
-with col1:
-    st.plotly_chart(ev.roc_chart(y_arr, oof), use_container_width=True)
-with col2:
-    st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
+if "curvas" in ss.get("active_sections", set()):
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("**Curvas de desempenho**")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.plotly_chart(ev.roc_chart(y_arr, oof), use_container_width=True)
+    with col2:
+        st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
+    st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=True)
 
-st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=True)
-
-st.markdown('<div id="distribuicao-dos-scores"></div>', unsafe_allow_html=True)
-st.markdown("#### Distribuição dos scores preditos")
-fig_dist = px.histogram(
-    x=oof, color=y_arr.astype(str), nbins=50, barmode="overlay", opacity=0.65,
-    labels={"x": "Score predito", "color": "Desfecho real"},
-    color_discrete_map={"0": "#3b82f6", "1": "#ef4444"},
-    title="Scores por classe real",
-)
-fig_dist.update_layout(margin=dict(t=40, b=0))
-st.plotly_chart(fig_dist, use_container_width=True)
-
-if results.get("feature_importances"):
-    st.markdown("#### Importância das variáveis")
-    st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=True)
-
-st.markdown('<div id="shap-global"></div>', unsafe_allow_html=True)
-st.markdown("#### SHAP — Explicabilidade Global")
-with st.spinner("Calculando SHAP…"):
-    shap_fig = ev.shap_summary(results["model"], X_res.head(500))
-if shap_fig:
-    st.plotly_chart(shap_fig, use_container_width=True)
-else:
-    st.info("SHAP indisponível para este algoritmo.")
-
-# ── SHAP Local ────────────────────────────────────────────────────────────────
-st.markdown('<div id="shap-individual"></div>', unsafe_allow_html=True)
-st.markdown("#### SHAP — Explicabilidade Individual")
-st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
-case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
-                            value=0, step=1)
-with st.spinner("Calculando SHAP individual…"):
-    wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
-if wf_fig:
-    st.plotly_chart(wf_fig, use_container_width=True)
-else:
-    st.info("SHAP individual indisponível para este algoritmo.")
-
-# ── Métricas Clínicas por Threshold ──────────────────────────────────────────
-st.markdown('<div id="metricas-clinicas"></div>', unsafe_allow_html=True)
-st.markdown("#### Métricas Clínicas por Ponto de Corte")
-st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
-threshold = st.slider(
-    "Threshold", 0.01, 0.99, 0.50, 0.01,
-    help="Ponto de corte para classificar como positivo (alto risco).",
-)
-tm = ev.threshold_metrics(y_arr, oof, threshold)
-mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-mc1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
-mc2.metric("Especificidade", f"{tm['specificity']:.1%}")
-mc3.metric("VPP", f"{tm['ppv']:.1%}")
-mc4.metric("VPN", f"{tm['npv']:.1%}")
-mc5.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
-with st.expander("Matriz de confusão"):
-    cm_df = pd.DataFrame(
-        [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
-        index=["Real Negativo", "Real Positivo"],
-        columns=["Pred Negativo", "Pred Positivo"],
+if "distribuicao" in ss.get("active_sections", set()):
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("**Distribuição dos scores preditos**")
+    fig_dist = px.histogram(
+        x=oof, color=y_arr.astype(str), nbins=50, barmode="overlay", opacity=0.65,
+        labels={"x": "Score predito", "color": "Desfecho real"},
+        color_discrete_map={"0": "#3b82f6", "1": "#ef4444"},
+        title="Scores por classe real",
     )
-    st.dataframe(cm_df, use_container_width=False)
+    fig_dist.update_layout(margin=dict(t=40, b=0))
+    st.plotly_chart(fig_dist, use_container_width=True)
 
-# ── Análise de Equidade por Subgrupo ─────────────────────────────────────────
-st.markdown('<div id="equidade"></div>', unsafe_allow_html=True)
-st.markdown("#### Análise de Equidade por Subgrupo")
-_fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
-_fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
-if _fairness_cols:
-    group_col = st.selectbox("Estratificar por", _fairness_cols,
-                              help="Analisa se o modelo performa igualmente para diferentes grupos.")
-    _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
-    sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
-    if not sub_df.empty:
-        st.dataframe(sub_df, use_container_width=True, hide_index=True)
-        fig_eq = px.bar(
-            sub_df, x="Subgrupo", y="ROC-AUC",
-            color="ROC-AUC", color_continuous_scale="RdYlGn",
-            range_color=[0.5, 1.0], title=f"ROC-AUC por {group_col}",
-            text="ROC-AUC",
-        )
-        fig_eq.update_traces(textposition="outside")
-        fig_eq.update_layout(height=360, showlegend=False)
-        st.plotly_chart(fig_eq, use_container_width=True)
+if "shap_global" in ss.get("active_sections", set()):
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("**SHAP — Explicabilidade Global**")
+    if results.get("feature_importances"):
+        st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=True)
+    with st.spinner("Calculando SHAP…"):
+        shap_fig = ev.shap_summary(results["model"], X_res.head(500))
+    if shap_fig:
+        st.plotly_chart(shap_fig, use_container_width=True)
     else:
-        st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
-else:
-    st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
+        st.info("SHAP indisponível para este algoritmo.")
+
+if "shap_individual" in ss.get("active_sections", set()):
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("**SHAP — Explicabilidade Individual**")
+    st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
+    case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
+                                value=0, step=1)
+    with st.spinner("Calculando SHAP individual…"):
+        wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
+    if wf_fig:
+        st.plotly_chart(wf_fig, use_container_width=True)
+    else:
+        st.info("SHAP individual indisponível para este algoritmo.")
+
+if "metricas_clinicas" in ss.get("active_sections", set()):
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("**Métricas Clínicas por Ponto de Corte**")
+    st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
+    threshold = st.slider(
+        "Threshold", 0.01, 0.99, 0.50, 0.01,
+        help="Ponto de corte para classificar como positivo (alto risco).",
+    )
+    tm = ev.threshold_metrics(y_arr, oof, threshold)
+    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+    mc1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
+    mc2.metric("Especificidade", f"{tm['specificity']:.1%}")
+    mc3.metric("VPP", f"{tm['ppv']:.1%}")
+    mc4.metric("VPN", f"{tm['npv']:.1%}")
+    mc5.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
+    with st.expander("Matriz de confusão"):
+        cm_df = pd.DataFrame(
+            [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
+            index=["Real Negativo", "Real Positivo"],
+            columns=["Pred Negativo", "Pred Positivo"],
+        )
+        st.dataframe(cm_df, use_container_width=False)
+
+if "equidade" in ss.get("active_sections", set()):
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("**Análise de Equidade por Subgrupo**")
+    _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
+    _fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
+    if _fairness_cols:
+        group_col = st.selectbox("Estratificar por", _fairness_cols,
+                                  help="Analisa se o modelo performa igualmente para diferentes grupos.")
+        _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
+        sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
+        if not sub_df.empty:
+            st.dataframe(sub_df, use_container_width=True, hide_index=True)
+            fig_eq = px.bar(
+                sub_df, x="Subgrupo", y="ROC-AUC",
+                color="ROC-AUC", color_continuous_scale="RdYlGn",
+                range_color=[0.5, 1.0], title=f"ROC-AUC por {group_col}",
+                text="ROC-AUC",
+            )
+            fig_eq.update_traces(textposition="outside")
+            fig_eq.update_layout(height=360, showlegend=False)
+            st.plotly_chart(fig_eq, use_container_width=True)
+        else:
+            st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
+    else:
+        st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
 
 st.markdown("#### Exportar predições")
 export_df = pd.DataFrame({
