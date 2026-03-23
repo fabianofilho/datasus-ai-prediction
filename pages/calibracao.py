@@ -423,12 +423,13 @@ if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
     _active_model = ss["calib_results"]["cal_model"]
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 8 — CALIBRAÇÃO (opcional)
+# ETAPA 8 — CALIBRAÇÃO (opcional) — oculta quando benchmark já foi executado
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(8, "Calibração do Modelo",
-           "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
+if not ss.get("comparison_results"):
+    step_title(8, "Calibração do Modelo",
+               "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
 
-if ss["calib_results"]:
+if not ss.get("comparison_results") and ss["calib_results"]:
     cr = ss["calib_results"]
     if cr.get("skipped"):
         st.info("Calibração pulada. O modelo original será usado no benchmark.")
@@ -462,7 +463,7 @@ if ss["calib_results"]:
                 st.warning("Calibração piorou levemente. Considere o método alternativo.")
             else:
                 st.info("Sem variação significativa.")
-else:
+elif not ss.get("comparison_results"):
     c_col1, c_col2 = st.columns([2, 1])
     with c_col1:
         calib_method = st.radio(
