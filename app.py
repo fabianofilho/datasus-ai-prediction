@@ -398,7 +398,7 @@ try:
 
                 note_html = f'<div class="ds-card-note">{note}</div>' if note else ""
                 if linkage:
-                    note_html += f'<div class="ds-card-note" style="color:#b45309">⚠ {linkage}</div>'
+                    note_html += f'<div class="ds-card-note" style="color:#b45309;display:flex;align-items:center;gap:4px"><span class="ms" style="font-size:.8rem">warning</span> {linkage}</div>'
 
                 with cols[col_idx]:
                     st.markdown(
@@ -433,7 +433,7 @@ try:
                             st.session_state.outcome_key = key
                             st.switch_page("pages/analise.py")
                         else:
-                            st.toast("🚧 Módulo em desenvolvimento — disponível em breve.", icon="🚧")
+                            st.toast("Módulo em desenvolvimento — disponível em breve.")
 
 except Exception as e:
     import traceback

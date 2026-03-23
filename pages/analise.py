@@ -352,9 +352,8 @@ def render_topbar() -> None:
         _right = (
             f'<span style="display:flex;align-items:center;gap:6px;">'
             f'<span style="font-size:0.72rem;color:#9ca3af;">Módulo:</span>'
-            f'<span style="font-size:0.82rem;font-weight:600;color:#111827;">'
-            f'{_o.icon}&nbsp;{_o.name}'
-            f'</span>'
+            f'<span class="ms" style="font-size:1rem;color:#111827">{_o.icon}</span>'
+            f'<span style="font-size:0.82rem;font-weight:600;color:#111827;">{_o.name}</span>'
             f'</span>'
         )
     else:
@@ -872,7 +871,7 @@ if ss["cohort"] is None:
                 st.plotly_chart(_fig_comp, use_container_width=True)
                 if _high.any():
                     st.caption(
-                        f"⚠ {int(_high.sum())} coluna(s) com mais de 50% de missing — "
+                        f"{int(_high.sum())} coluna(s) com mais de 50% de missing — "
                         "serão imputadas pela mediana no pipeline."
                     )
 
@@ -1193,7 +1192,7 @@ if not ss.get("treatment_config"):
     )
     if _all_removed:
         st.error(
-            "⚠ Todas as variáveis estão marcadas como 'Remover' — "
+            "Todas as variáveis estão marcadas como 'Remover' — "
             "o modelo precisa de pelo menos uma feature. Ajuste o tratamento antes de confirmar."
         )
 
@@ -1540,7 +1539,7 @@ if not ss["model_results"]:
 
     _lc_chart_ph = st.empty()
     _lc_status_ph = st.empty()
-    _lc_chart_ph.caption("📊 A curva de aprendizado será exibida durante o treinamento.")
+    _lc_chart_ph.caption("A curva de aprendizado será exibida durante o treinamento.")
 
     _hpo_prefix = {
         "Optuna (automático)": "Optuna + ",
@@ -1822,7 +1821,7 @@ st.caption(
 
 if m.get("specificity", 1.0) < 0.02 or m.get("recall", 1.0) < 0.02:
     st.warning(
-        "⚠ Uma ou mais métricas estão próximas de zero — típico em dados "
+        "Uma ou mais métricas estão próximas de zero — típico em dados "
         "desbalanceados com threshold padrão 0,5. Explore o ponto de corte "
         "ideal em **Métricas Clínicas** para calibrar sensibilidade vs. "
         "especificidade conforme o objetivo clínico."

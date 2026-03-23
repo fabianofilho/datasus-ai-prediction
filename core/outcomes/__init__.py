@@ -16,7 +16,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Mortalidade Hospitalar",
         "description": "Prediz óbito durante a internação hospitalar usando dados do SIH linkados ao SIM.",
         "data_sources": ["SIH", "SIM"],
-        "icon": "💀",
+        "icon": "monitor_heart",
         "estimated_download_min": 15,
     },
     "readmissao_30d": {
@@ -25,7 +25,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Readmissão Hospitalar 30 dias",
         "description": "Prediz se um paciente será reinternado em até 30 dias após a alta hospitalar.",
         "data_sources": ["SIH"],
-        "icon": "🔁",
+        "icon": "sync",
         "estimated_download_min": 10,
     },
     "permanencia_prolongada": {
@@ -34,7 +34,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Permanência Hospitalar Prolongada",
         "description": "Prediz internações com duração acima do percentil 90 para o mesmo grupo diagnóstico.",
         "data_sources": ["SIH"],
-        "icon": "🛏️",
+        "icon": "bed",
         "estimated_download_min": 10,
     },
     "infeccao_hospitalar": {
@@ -43,7 +43,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Infecção Hospitalar",
         "description": "Prediz ocorrência de infecção adquirida durante a internação (CID T80-T88).",
         "data_sources": ["SIH"],
-        "icon": "🦠",
+        "icon": "coronavirus",
         "estimated_download_min": 10,
     },
     "custo_elevado": {
@@ -52,7 +52,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Custo Hospitalar Elevado",
         "description": "Prediz internações com custo acima do percentil 90 no mesmo grupo de procedimentos.",
         "data_sources": ["SIH"],
-        "icon": "💰",
+        "icon": "payments",
         "estimated_download_min": 10,
     },
     # Saúde Materno-Infantil
@@ -62,7 +62,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Mortalidade Neonatal",
         "description": "Prediz óbito neonatal (0-27 dias) linkando SINASC ao SIM.",
         "data_sources": ["SINASC", "SIM"],
-        "icon": "👶",
+        "icon": "child_care",
         "estimated_download_min": 12,
     },
     "baixo_peso_nascer": {
@@ -71,7 +71,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Baixo Peso ao Nascer",
         "description": "Prediz nascimentos com peso inferior a 2.500g a partir de dados do SINASC.",
         "data_sources": ["SINASC"],
-        "icon": "⚖️",
+        "icon": "scale",
         "estimated_download_min": 5,
     },
     "prematuridade": {
@@ -80,7 +80,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Prematuridade",
         "description": "Prediz nascimentos com menos de 37 semanas de gestação.",
         "data_sources": ["SINASC"],
-        "icon": "🍼",
+        "icon": "baby_changing_station",
         "estimated_download_min": 5,
     },
     "apgar_baixo": {
@@ -89,7 +89,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Apgar Baixo no 5º Minuto",
         "description": "Prediz Apgar < 7 no 5º minuto, indicador de asfixia perinatal.",
         "data_sources": ["SINASC"],
-        "icon": "❤️",
+        "icon": "cardiology",
         "estimated_download_min": 5,
     },
     # Tuberculose e Hanseníase
@@ -99,7 +99,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Abandono de Tratamento TB",
         "description": "Prediz abandono do tratamento de tuberculose antes da cura.",
         "data_sources": ["SINAN_TB"],
-        "icon": "🫁",
+        "icon": "pulmonology",
         "estimated_download_min": 8,
     },
     "abandono_hanseniase": {
@@ -108,7 +108,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Abandono de Tratamento — Hanseníase",
         "description": "Prediz abandono do tratamento de hanseníase antes da alta por cura.",
         "data_sources": ["SINAN_HANS"],
-        "icon": "🩺",
+        "icon": "stethoscope",
         "estimated_download_min": 5,
     },
     # Arboviroses
@@ -118,7 +118,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Dengue com Sinais de Alarme ou Grave",
         "description": "Prediz evolução para dengue grave ou com sinais de alarme no SINAN.",
         "data_sources": ["SINAN_DENG"],
-        "icon": "🦟",
+        "icon": "pest_control",
         "estimated_download_min": 8,
     },
     "chikungunya_hospitalizado": {
@@ -127,7 +127,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Hospitalização por Chikungunya",
         "description": "Prediz necessidade de hospitalização em casos notificados de chikungunya.",
         "data_sources": ["SINAN_CHIK"],
-        "icon": "🦟",
+        "icon": "local_hospital",
         "estimated_download_min": 6,
     },
     # HIV e ISTs
@@ -137,7 +137,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Óbito por AIDS",
         "description": "Prediz óbito em casos notificados de AIDS no SINAN.",
         "data_sources": ["SINAN_AIDS"],
-        "icon": "🎗️",
+        "icon": "medical_information",
         "estimated_download_min": 5,
     },
     "sifilis_nao_cura": {
@@ -146,7 +146,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Não-Cura de Sífilis Adquirida",
         "description": "Prediz encerramento sem cura (abandono, óbito, transferência) em casos de sífilis.",
         "data_sources": ["SINAN_SIFA"],
-        "icon": "💊",
+        "icon": "medication",
         "estimated_download_min": 5,
     },
     # Violência e Intoxicações
@@ -156,7 +156,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Risco de Violência Autoprovocada / Suicídio",
         "description": "Prediz violência autoprovocada com base em notificações do SINAN.",
         "data_sources": ["SINAN_VIOL"],
-        "icon": "🧠",
+        "icon": "psychology",
         "estimated_download_min": 10,
     },
     "intoxicacao_grave": {
@@ -165,7 +165,7 @@ _REGISTRY: dict[str, dict] = {
         "name":   "Desfecho Adverso em Intoxicação Exógena",
         "description": "Prediz desfecho grave (óbito ou sequela) em intoxicações exógenas notificadas.",
         "data_sources": ["SINAN_IEXO"],
-        "icon": "⚠️",
+        "icon": "dangerous",
         "estimated_download_min": 10,
     },
 }
@@ -213,7 +213,7 @@ class _LazyOutcome:
         self.name                  = meta["name"]
         self.description           = meta["description"]
         self.data_sources          = meta["data_sources"]
-        self.icon                  = meta.get("icon", "🏥")
+        self.icon                  = meta.get("icon", "local_hospital")
         self.estimated_download_min = meta.get("estimated_download_min", 5)
         self._meta                 = meta
         self._instance             = None
