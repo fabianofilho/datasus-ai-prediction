@@ -1162,6 +1162,22 @@ if not ss.get("model_config"):
         st.stop()
     algos = [ALGORITHMS[l] for l in algo_labels]
 
+    # Aviso TabPFN sobre limite de amostras
+    if "tabpfn" in algos:
+        from core.models.pipeline import TABPFN_MAX_TRAIN_SAMPLES, TABPFN_WARN_TRAIN_SAMPLES
+        _n_total = builder.class_balance(cohort)["total"]
+        if _n_total > TABPFN_MAX_TRAIN_SAMPLES:
+            st.error(
+                f"**TabPFN não suporta mais de {TABPFN_MAX_TRAIN_SAMPLES:,} amostras** "
+                f"(coorte atual: {_n_total:,}). "
+                "Reduza o tamanho da amostra no Passo 2 ou remova TabPFN da seleção."
+            )
+        elif _n_total > TABPFN_WARN_TRAIN_SAMPLES:
+            st.warning(
+                f"**TabPFN:** desempenho ótimo com até {TABPFN_WARN_TRAIN_SAMPLES:,} amostras "
+                f"(coorte atual: {_n_total:,}). Acima disso o modelo pode ser mais lento e menos preciso."
+            )
+
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
     # ── 3 blocos de configuração ──────────────────────────────────────────────

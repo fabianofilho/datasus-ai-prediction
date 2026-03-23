@@ -139,7 +139,7 @@ def _build_model(algorithm: str, params: dict, class_weight: str | None = None):
     if algorithm == "tabpfn":
         try:
             from tabpfn import TabPFNClassifier
-            return TabPFNClassifier(device="cpu", N_ensemble_configurations=16)
+            return TabPFNClassifier(n_estimators=8, device="auto", random_state=42)
         except ImportError:
             raise ImportError(
                 "TabPFN não está instalado. Execute: pip install tabpfn"
@@ -234,6 +234,10 @@ def _build_preprocessor(
     return ColumnTransformer(transformers, remainder="drop")
 
 
+TABPFN_MAX_TRAIN_SAMPLES = 10_000   # hard limit — TabPFN não é escalável além disso
+TABPFN_WARN_TRAIN_SAMPLES = 1_000   # acima disso o desempenho pode degradar
+
+
 def build_pipeline(
     X: pd.DataFrame,
     algorithm: str = "lgbm",
@@ -244,6 +248,13 @@ def build_pipeline(
 ) -> Pipeline:
     """Build full sklearn/imblearn Pipeline with preprocessing + optional balancing."""
     params = params or {}
+
+    if algorithm == "tabpfn" and len(X) > TABPFN_MAX_TRAIN_SAMPLES:
+        raise ValueError(
+            f"TabPFN suporta no máximo {TABPFN_MAX_TRAIN_SAMPLES:,} amostras de treino, "
+            f"mas foram fornecidas {len(X):,}. "
+            "Reduza o tamanho da amostra no Passo 2 ou escolha outro algoritmo."
+        )
 
     preprocessor = _build_preprocessor(X, treatment, algorithm)
     cw = _class_weight_for_balancing(balancing)
