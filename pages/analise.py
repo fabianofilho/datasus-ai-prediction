@@ -1741,20 +1741,23 @@ if len(_all) > 1:
         f"**{results.get('algo_label', results.get('algorithm', '').upper())}**"
         f" (ROC-AUC {results['mean_metrics']['roc_auc']:.4f})"
     )
-    st.markdown(
-        """
-        <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin:.75rem 0 0">
-          <a href="#curvas-de-desempenho"       style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">📈 Curvas de desempenho</a>
-          <a href="#distribuicao-dos-scores"    style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">📊 Distribuição dos scores</a>
-          <a href="#shap-global"                style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">🔍 SHAP Global</a>
-          <a href="#shap-individual"            style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">🔎 SHAP Individual</a>
-          <a href="#metricas-clinicas"          style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">⚕️ Métricas Clínicas</a>
-          <a href="#equidade"                   style="font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb">⚖️ Equidade por Subgrupo</a>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+if len(_all) <= 1:
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+_pill_style = "font-size:.75rem;padding:3px 10px;border:1px solid #e5e7eb;border-radius:4px;text-decoration:none;color:#374151;background:#f9fafb"
+st.markdown(
+    f"""<div style="display:flex;flex-wrap:wrap;gap:.5rem;margin:0 0 1rem">
+      <a href="#curvas-de-desempenho"    style="{_pill_style}">Curvas de desempenho</a>
+      <a href="#distribuicao-dos-scores" style="{_pill_style}">Distribuição dos scores</a>
+      <a href="#shap-global"             style="{_pill_style}">SHAP Global</a>
+      <a href="#shap-individual"         style="{_pill_style}">SHAP Individual</a>
+      <a href="#metricas-clinicas"       style="{_pill_style}">Métricas Clínicas</a>
+      <a href="#equidade"                style="{_pill_style}">Equidade por Subgrupo</a>
+    </div>""",
+    unsafe_allow_html=True,
+)
 
 m = results["mean_metrics"]
 c1, c2, c3, c4, c5 = st.columns(5)

@@ -68,14 +68,16 @@ html,body,.stApp,[data-testid="stAppViewContainer"]{
 .ds-topbar-right{font-size:0.78rem;color:var(--muted);text-decoration:none!important;}
 .ds-topbar-right:hover{color:#111827!important;}
 .ds-stepbar{
-  display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+  display:flex;align-items:center;gap:2px;flex-wrap:nowrap;
+  overflow-x:auto;scrollbar-width:none;
   margin-bottom:28px;padding:10px 0;border-bottom:1px solid var(--border);
 }
-.ds-step{border-radius:4px;padding:3px 12px;font-size:0.78rem;font-weight:500;white-space:nowrap;}
+.ds-stepbar::-webkit-scrollbar{display:none;}
+.ds-step{border-radius:4px;padding:2px 7px;font-size:0.7rem;font-weight:500;white-space:nowrap;flex-shrink:0;}
 .ds-step-done{color:var(--muted);}
 .ds-step-active{background:var(--fg);color:#fff;font-weight:600;}
 .ds-step-locked,.ds-step-optional{color:#d1d5db;}
-.ds-step-arrow{color:#d1d5db;font-size:0.85rem;padding:0 1px;}
+.ds-step-arrow{color:#d1d5db;font-size:0.75rem;padding:0;flex-shrink:0;}
 .ds-divider{border:none;border-top:1px solid var(--border);margin:20px 0;}
 .ds-page{display:contents;}
 [data-testid="stMetric"]{
@@ -170,7 +172,7 @@ num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").colum
 cat_cols = treatment.get("cat_cols", X_res.select_dtypes(exclude="number").columns.tolist())
 
 # ── Título ────────────────────────────────────────────────────────────────────
-st.markdown("## Passo 10 — Deploy — Inferência Individual")
+st.markdown("**Passo 10 — Deploy — Inferência Individual**")
 st.caption(
     f"Preencha os valores de um paciente e clique em **Predizer** para obter "
     f"a probabilidade de **{outcome.name}** com explicação SHAP individual."
