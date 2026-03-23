@@ -1046,21 +1046,47 @@ if not ss.get("treatment_config"):
     }
 
     _overrides: dict = {}
-    _g1, _g2 = st.columns(2)
 
-    with _g1:
+    # ── Row 1: radio buttons (altura independente por coluna) ──────────────────
+    _r1, _r2 = st.columns(2)
+    with _r1:
         st.markdown("**Variáveis Numéricas**")
         _num_opt = st.radio(
             "Escala padrão",
             list(_num_map.keys()),
             label_visibility="collapsed",
         )
-        _num_default_key = _num_map[_num_opt]
-        # Reset individual overrides when default changes
-        if ss.get("_prev_num_default") != _num_default_key:
-            for _c in _num_cols:
-                ss.pop(f"treat_n_{_c}", None)
-        ss["_prev_num_default"] = _num_default_key
+    with _r2:
+        st.markdown("**Variáveis Categóricas**")
+        _cat_opt = st.radio(
+            "Codificação padrão",
+            list(_cat_map.keys()),
+            label_visibility="collapsed",
+            help=(
+                "**One-Hot**: cria coluna binária por categoria. "
+                "**Ordinal**: converte em inteiro (variáveis com ordem natural). "
+                "**Target**: média do target por categoria (alta cardinalidade). "
+                "**Remover**: exclui a variável do modelo."
+            ),
+        )
+
+    _num_default_key = _num_map[_num_opt]
+    _cat_default_key = _cat_map[_cat_opt]
+
+    # Reset individual overrides when defaults change
+    if ss.get("_prev_num_default") != _num_default_key:
+        for _c in _num_cols:
+            ss.pop(f"treat_n_{_c}", None)
+    ss["_prev_num_default"] = _num_default_key
+
+    if ss.get("_prev_cat_default") != _cat_default_key:
+        for _c in _cat_cols:
+            ss.pop(f"treat_c_{_c}", None)
+    ss["_prev_cat_default"] = _cat_default_key
+
+    # ── Row 2: expanders alinhados ─────────────────────────────────────────────
+    _e1, _e2 = st.columns(2)
+    with _e1:
         if _num_cols:
             with st.expander(f"Ajustar por variável ({len(_num_cols)})", expanded=False):
                 for _col in _num_cols:
@@ -1084,26 +1110,7 @@ if not ss.get("treatment_config"):
                             _overrides[_col] = _sv
         else:
             st.caption("Nenhuma variável numérica.")
-
-    with _g2:
-        st.markdown("**Variáveis Categóricas**")
-        _cat_opt = st.radio(
-            "Codificação padrão",
-            list(_cat_map.keys()),
-            label_visibility="collapsed",
-            help=(
-                "**One-Hot**: cria coluna binária por categoria. "
-                "**Ordinal**: converte em inteiro (variáveis com ordem natural). "
-                "**Target**: média do target por categoria (alta cardinalidade). "
-                "**Remover**: exclui a variável do modelo."
-            ),
-        )
-        _cat_default_key = _cat_map[_cat_opt]
-        # Reset individual overrides when default changes
-        if ss.get("_prev_cat_default") != _cat_default_key:
-            for _c in _cat_cols:
-                ss.pop(f"treat_c_{_c}", None)
-        ss["_prev_cat_default"] = _cat_default_key
+    with _e2:
         if _cat_cols:
             with st.expander(f"Ajustar por variável ({len(_cat_cols)})", expanded=False):
                 for _col in _cat_cols:
