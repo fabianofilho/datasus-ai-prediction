@@ -371,7 +371,17 @@ def subgroup_metrics_table(
 
 def fold_metrics_table(fold_metrics: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(fold_metrics)
-    df = df.rename(columns={"roc_auc": "ROC-AUC", "pr_auc": "PR-AUC", "f1": "F1", "precision": "Precisão", "recall": "Recall", "brier": "Brier", "fold": "Fold"})
+    df = df.rename(columns={
+        "roc_auc":     "ROC-AUC",
+        "recall":      "Sensibilidade",
+        "specificity": "Especificidade",
+        "pr_auc":      "PR-AUC",
+        "f1":          "F1",
+        "fold":        "Fold",
+    })
+    cols_order = ["Fold", "ROC-AUC", "Sensibilidade", "Especificidade", "PR-AUC", "F1"]
+    cols_present = [c for c in cols_order if c in df.columns]
+    df = df[cols_present]
     numeric = [c for c in df.columns if c != "Fold"]
     df[numeric] = df[numeric].round(4)
     return df
