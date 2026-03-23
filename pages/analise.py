@@ -2020,11 +2020,14 @@ if ss.get("result_tab") == "shap_global":
     if results.get("feature_importances"):
         st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=True)
     with st.spinner("Calculando SHAP…"):
-        shap_fig = ev.shap_summary(results["model"], X_res.head(500))
+        try:
+            shap_fig = ev.shap_summary(results["model"], X_res.head(500))
+        except Exception:
+            shap_fig = None
     if shap_fig:
         st.plotly_chart(shap_fig, use_container_width=True)
     else:
-        st.info("SHAP indisponível para este algoritmo.")
+        info_box("SHAP indisponível para este algoritmo ou configuração de pré-processamento.")
 
 if ss.get("result_tab") == "shap_individual":
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
@@ -2033,11 +2036,14 @@ if ss.get("result_tab") == "shap_individual":
     case_idx = st.number_input("Índice do caso", min_value=0, max_value=len(X_res) - 1,
                                 value=0, step=1)
     with st.spinner("Calculando SHAP individual…"):
-        wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
+        try:
+            wf_fig = ev.shap_waterfall_chart(results["model"], X_res, int(case_idx))
+        except Exception:
+            wf_fig = None
     if wf_fig:
         st.plotly_chart(wf_fig, use_container_width=True)
     else:
-        st.info("SHAP individual indisponível para este algoritmo.")
+        info_box("SHAP individual indisponível para este algoritmo ou configuração de pré-processamento.")
 
 if ss.get("result_tab") == "metricas_clinicas":
     import plotly.graph_objects as _go
@@ -2078,10 +2084,9 @@ if ss.get("result_tab") == "metricas_clinicas":
     _lr_neg = (1 - tm["sensitivity"]) / tm["specificity"] \
               if tm["specificity"] > 1e-9 else float("inf")
 
-    # ── Layout: matriz de confusão à esquerda + 6 cards à direita ────────────
-    _mc_left, _mc_right = st.columns([5, 7])
-
-    with _mc_left:
+    # ── Matriz de confusão (centrada) ─────────────────────────────────────────
+    _cm_col, _cm_gap = st.columns([5, 7])
+    with _cm_col:
         _cm_fig = _go.Figure(_go.Heatmap(
             z=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
             x=["Pred Negativo", "Pred Positivo"],
@@ -2101,7 +2106,6 @@ if ss.get("result_tab") == "metricas_clinicas":
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(_cm_fig, use_container_width=False)
-        # Legenda dos quadrantes
         st.markdown(
             "<div style='font-size:0.72rem;color:#6b7280;line-height:1.7;"
             "padding-left:4px;margin-top:-8px'>"
@@ -2111,34 +2115,34 @@ if ss.get("result_tab") == "metricas_clinicas":
             unsafe_allow_html=True,
         )
 
-    with _mc_right:
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-        # Linha 1
-        _r1a, _r1b, _r1c = st.columns(3)
-        _r1a.metric("Sensibilidade", f"{tm['sensitivity']:.1%}",
-                    help="Taxa de verdadeiros positivos (recall)")
-        _r1b.metric("Especificidade", f"{tm['specificity']:.1%}",
-                    help="Taxa de verdadeiros negativos")
-        _r1c.metric("F1-Score", f"{_f1:.1%}",
-                    help="Média harmônica de Sensibilidade e VPP")
-        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-        # Linha 2
-        _r2a, _r2b, _r2c = st.columns(3)
-        _r2a.metric("VPP", f"{tm['ppv']:.1%}",
-                    help="Valor Preditivo Positivo (precisão)")
-        _r2b.metric("VPN", f"{tm['npv']:.1%}",
-                    help="Valor Preditivo Negativo")
-        _r2c.metric("Acurácia", f"{_acc:.1%}",
-                    help="Proporção de classificações corretas")
-        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-        # Linha 3
-        _r3a, _r3b, _r3c = st.columns(3)
-        _r3a.metric("LR+", f"{_lr_pos:.2f}" if _lr_pos != float('inf') else "∞",
-                    help="Razão de verossimilhança positiva (sensib. / 1–especif.)")
-        _r3b.metric("LR−", f"{_lr_neg:.2f}" if _lr_neg != float('inf') else "∞",
-                    help="Razão de verossimilhança negativa ((1–sensib.) / especif.)")
-        _r3c.metric("Positivos pred.", f"{tm['tp'] + tm['fp']:,}",
-                    help=f"VP {tm['tp']:,} + FP {tm['fp']:,}")
+    # ── 9 cards em grade 3×3, largura total da página ─────────────────────────
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    _r1a, _r1b, _r1c = st.columns(3)
+    _r1a.metric("Sensibilidade",  f"{tm['sensitivity']:.1%}",
+                help="Taxa de verdadeiros positivos (recall / TPR)")
+    _r1b.metric("Especificidade", f"{tm['specificity']:.1%}",
+                help="Taxa de verdadeiros negativos (TNR)")
+    _r1c.metric("F1-Score",       f"{_f1:.1%}",
+                help="Média harmônica de Sensibilidade e VPP")
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    _r2a, _r2b, _r2c = st.columns(3)
+    _r2a.metric("VPP (Precisão)", f"{tm['ppv']:.1%}",
+                help="Valor Preditivo Positivo — P(doente | teste+)")
+    _r2b.metric("VPN",            f"{tm['npv']:.1%}",
+                help="Valor Preditivo Negativo — P(sadio | teste−)")
+    _r2c.metric("Acurácia",       f"{_acc:.1%}",
+                help="Proporção total de classificações corretas")
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    _r3a, _r3b, _r3c = st.columns(3)
+    _r3a.metric("LR+",
+                f"{_lr_pos:.2f}" if _lr_pos != float("inf") else "∞",
+                help="Razão de verossimilhança positiva — sensib. / (1 − especif.)")
+    _r3b.metric("LR−",
+                f"{_lr_neg:.2f}" if _lr_neg != float("inf") else "∞",
+                help="Razão de verossimilhança negativa — (1 − sensib.) / especif.")
+    _r3c.metric("Positivos preditos",
+                f"{tm['tp'] + tm['fp']:,}",
+                help=f"VP {tm['tp']:,} + FP {tm['fp']:,} para threshold {threshold:.2f}")
 
 if ss.get("result_tab") == "equidade":
     import plotly.graph_objects as _go_eq
