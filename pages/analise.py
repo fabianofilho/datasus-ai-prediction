@@ -2091,6 +2091,8 @@ if ss.get("result_tab") == "metricas_clinicas":
         _mr4.metric("VPN", f"{tm['npv']:.1%}")
 
 if ss.get("result_tab") == "equidade":
+    import plotly.graph_objects as _go_eq
+    from sklearn.metrics import roc_curve as _roc_curve_eq
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Análise de Equidade por Subgrupo**")
     _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
@@ -2101,33 +2103,67 @@ if ss.get("result_tab") == "equidade":
         _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
         sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
         if not sub_df.empty:
-            st.dataframe(sub_df, use_container_width=True, hide_index=True)
-            fig_eq = px.bar(
-                sub_df, x="Subgrupo", y="ROC-AUC",
-                color="ROC-AUC", color_continuous_scale="RdYlGn",
-                range_color=[0.5, 1.0], title=f"ROC-AUC por {group_col}",
-                text="ROC-AUC",
+            # ── Paleta de cores por subgrupo ─────────────────────────────
+            _EQ_COLORS = [
+                "#1a56db", "#e11d48", "#059669", "#7c3aed",
+                "#d97706", "#0891b2", "#be185d", "#65a30d",
+                "#dc2626", "#0284c7", "#16a34a", "#9333ea",
+            ]
+            # ── Curvas ROC sobrepostas ───────────────────────────────────
+            fig_eq = _go_eq.Figure()
+            # Linha de referência (classificador aleatório)
+            fig_eq.add_trace(_go_eq.Scatter(
+                x=[0, 1], y=[0, 1], mode="lines",
+                line=dict(color="#d1d5db", width=1.5, dash="dot"),
+                name="Aleatório (AUC 0.500)",
+                showlegend=True,
+            ))
+            _groups_arr = _groups.values
+            for _ci, (_, _row) in enumerate(sub_df.iterrows()):
+                _sg_val = _row["Subgrupo"]
+                _mask = _groups_arr == _sg_val
+                _y_sub = y_arr[_mask]
+                _p_sub = oof[_mask]
+                if len(_y_sub) < 10 or _y_sub.sum() < 2:
+                    continue
+                try:
+                    _fpr, _tpr, _ = _roc_curve_eq(_y_sub, _p_sub)
+                    _auc_val = float(_row["ROC-AUC"])
+                    _n = int(_mask.sum())
+                    _color = _EQ_COLORS[_ci % len(_EQ_COLORS)]
+                    fig_eq.add_trace(_go_eq.Scatter(
+                        x=_fpr, y=_tpr, mode="lines",
+                        name=f"{_sg_val}  ·  AUC {_auc_val:.3f}  (n={_n:,})",
+                        line=dict(color=_color, width=2.5),
+                    ))
+                except Exception:
+                    pass
+            fig_eq.update_layout(
+                title=f"Curvas ROC por {group_col}",
+                xaxis=dict(title="Taxa de Falsos Positivos", range=[0, 1],
+                           gridcolor="rgba(0,0,0,0.07)"),
+                yaxis=dict(title="Taxa de Verdadeiros Positivos", range=[0, 1.01],
+                           gridcolor="rgba(0,0,0,0.07)"),
+                height=460,
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                legend=dict(
+                    orientation="v", yanchor="bottom", y=0.02,
+                    xanchor="right", x=0.98,
+                    bgcolor="rgba(255,255,255,0.85)",
+                    bordercolor="#e5e7eb", borderwidth=1,
+                    font=dict(size=12),
+                ),
+                margin=dict(t=50, b=40, l=60, r=20),
+                hovermode="x unified",
             )
-            fig_eq.update_traces(textposition="outside")
-            fig_eq.update_layout(height=360, showlegend=False)
             st.plotly_chart(fig_eq, use_container_width=True)
+            # ── Tabela de métricas por subgrupo ──────────────────────────
+            with st.expander("Métricas detalhadas por subgrupo"):
+                st.dataframe(sub_df, use_container_width=True, hide_index=True)
         else:
             st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
     else:
         st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
-
-st.markdown("#### Exportar predições")
-export_df = pd.DataFrame({
-    "score": oof,
-    "predicao": (oof >= 0.5).astype(int),
-    "real": y_arr,
-})
-st.download_button(
-    label="Baixar predições OOF (CSV)",
-    data=export_df.to_csv(index=False).encode("utf-8"),
-    file_name=f"predicoes_{ss['outcome_key']}.csv",
-    mime="text/csv",
-)
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibração e benchmark, ou vá direto para inferência individual.</p>',
