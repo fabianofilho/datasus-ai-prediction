@@ -366,8 +366,8 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
-    optionals = {8, 9}
+    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark", "Deploy"]
+    optionals = {8, 9, 10}
     parts = []
     for i, lbl in enumerate(labels):
         n = i + 1
@@ -1742,9 +1742,14 @@ st.download_button(
 )
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibração e benchmark.</p>',
+st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibração e benchmark, ou vá direto para inferência individual.</p>',
             unsafe_allow_html=True)
-if st.button("→ Calibração e Benchmark", type="primary"):
-    st.switch_page("pages/calibracao.py")
+_btn_col1, _btn_col2 = st.columns([1, 1], gap="small")
+with _btn_col1:
+    if st.button("→ Calibração e Benchmark", type="primary", use_container_width=True):
+        st.switch_page("pages/calibracao.py")
+with _btn_col2:
+    if st.button("→ Deploy — Inferência Individual", type="secondary", use_container_width=True):
+        st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)

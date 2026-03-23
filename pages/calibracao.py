@@ -231,8 +231,8 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark"]
-    optionals = {8, 9}
+    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark", "Deploy"]
+    optionals = {8, 9, 10}
     parts = []
     for i, lbl in enumerate(labels, 1):
         optional = i in optionals
@@ -616,5 +616,11 @@ else:
         prog_cmp.progress(1.0, text="Comparação concluída.")
         ss["comparison_results"] = comp_list
         st.rerun()
+
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+st.markdown('<p class="ds-section-caption">Prossiga para inferência individual no Deploy.</p>',
+            unsafe_allow_html=True)
+if st.button("→ Deploy — Inferência Individual", type="primary"):
+    st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
