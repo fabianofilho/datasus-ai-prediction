@@ -120,6 +120,10 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
 
     col_names = X.columns.tolist()
     feat_names = _feat_names_after_transform(prep, col_names, X_transformed.shape[1])
+    # Belt-and-suspenders: guarantee column count always matches
+    n_cols = X_transformed.shape[1]
+    if len(feat_names) != n_cols:
+        feat_names = [f"feat_{i}" for i in range(n_cols)]
     X_t = pd.DataFrame(X_transformed, columns=feat_names)
 
     try:
@@ -135,8 +139,10 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
             return None
 
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
+    n_shap = len(mean_abs_shap)
+    feat_names_shap = feat_names[:n_shap] if len(feat_names) >= n_shap else feat_names + [f"feat_{i}" for i in range(len(feat_names), n_shap)]
     idx = np.argsort(mean_abs_shap)[-max_display:]
-    df = pd.DataFrame({"feature": np.array(feat_names[:len(mean_abs_shap)])[idx], "shap": mean_abs_shap[idx]})
+    df = pd.DataFrame({"feature": np.array(feat_names_shap)[idx], "shap": mean_abs_shap[idx]})
     fig = go.Figure(go.Bar(x=df["shap"], y=df["feature"], orientation="h", marker_color="#d62728"))
     fig.update_layout(
         title=f"SHAP — Importância média absoluta (top {max_display})",
@@ -247,6 +253,10 @@ def shap_values_dict(model, X: pd.DataFrame, max_rows: int = 500) -> dict:
         X_transformed = X_transformed.toarray()
     col_names = X_sub.columns.tolist()
     feat_names = _feat_names_after_transform(prep, col_names, X_transformed.shape[1])
+    # Belt-and-suspenders: guarantee column count always matches
+    n_cols = X_transformed.shape[1]
+    if len(feat_names) != n_cols:
+        feat_names = [f"feat_{i}" for i in range(n_cols)]
     X_t = pd.DataFrame(X_transformed, columns=feat_names)
 
     try:
@@ -321,6 +331,10 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
         X_t_raw = X_t_raw.toarray()
     col_names = X.columns.tolist()
     feat_names = _feat_names_after_transform(prep, col_names, X_t_raw.shape[1])
+    # Belt-and-suspenders: guarantee column count always matches
+    n_cols = X_t_raw.shape[1]
+    if len(feat_names) != n_cols:
+        feat_names = [f"feat_{i}" for i in range(n_cols)]
     X_t = pd.DataFrame(X_t_raw, columns=feat_names)
 
     try:
