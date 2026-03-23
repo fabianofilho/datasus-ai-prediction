@@ -415,6 +415,14 @@ def step_title(n: int, title: str, caption: str = "") -> None:
 
 def render_sidebar() -> None:
     with st.sidebar:
+        st.markdown(
+            '<div style="font-size:.68rem;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;'
+            'border-radius:6px;padding:8px 10px;margin-bottom:1rem;line-height:1.4;">'
+            '<strong style="color:#374151">Nota:</strong> Esta análise é independente e baseada em dados '
+            'públicos da plataforma DATASUS. Não representa posicionamento oficial do Ministério da Saúde.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         st.markdown('<p class="sb-title">Pipeline</p>', unsafe_allow_html=True)
 
         # Step 1: Desfecho
