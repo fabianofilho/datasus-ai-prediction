@@ -783,10 +783,11 @@ if not ss.get("feature_config"):
             with _col_b:
                 _type_lbl = _info.get("type", "") if _info else ""
                 if _type_lbl:
+                    _type_color = _type_colors.get(_type_lbl, "#6b7280")
                     st.markdown(
                         f"<div style='text-align:right;margin-top:2px'>"
-                        f"<span style='font-size:.68rem;font-weight:600;color:{_type_colors.get(_type_lbl,\"#6b7280\")};'"
-                        f">{_type_lbl}</span></div>",
+                        f"<span style='font-size:.68rem;font-weight:600;color:{_type_color}'>"
+                        f"{_type_lbl}</span></div>",
                         unsafe_allow_html=True,
                     )
             st.markdown("<hr style='border:none;border-top:1px solid #f3f4f6;margin:6px 0'>",
