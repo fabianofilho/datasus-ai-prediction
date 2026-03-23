@@ -1057,26 +1057,26 @@ if not ss.get("treatment_config"):
         )
         _num_default_key = _num_map[_num_opt]
         if _num_cols:
-            st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-            for _col in _num_cols:
-                _nuniq = X_sel[_col].nunique()
-                _cv1, _cv2 = st.columns([3, 2])
-                with _cv1:
-                    st.markdown(
-                        f"<div style='padding:4px 0;font-size:.8rem'><b>{_col}</b> "
-                        f"<span style='color:#9ca3af;font-size:.7rem'>({_nuniq})</span></div>",
-                        unsafe_allow_html=True,
-                    )
-                with _cv2:
-                    _sv = st.selectbox(
-                        _col, _all_num_opts,
-                        format_func=lambda x: _num_lbl_map[x],
-                        index=_all_num_opts.index(_num_default_key),
-                        key=f"treat_n_{_col}",
-                        label_visibility="collapsed",
-                    )
-                    if _sv != _num_default_key:
-                        _overrides[_col] = _sv
+            with st.expander(f"Ajustar por variável ({len(_num_cols)})", expanded=False):
+                for _col in _num_cols:
+                    _nuniq = X_sel[_col].nunique()
+                    _cv1, _cv2 = st.columns([3, 2])
+                    with _cv1:
+                        st.markdown(
+                            f"<div style='padding:4px 0;font-size:.8rem'><b>{_col}</b> "
+                            f"<span style='color:#9ca3af;font-size:.7rem'>({_nuniq})</span></div>",
+                            unsafe_allow_html=True,
+                        )
+                    with _cv2:
+                        _sv = st.selectbox(
+                            _col, _all_num_opts,
+                            format_func=lambda x: _num_lbl_map[x],
+                            index=_all_num_opts.index(_num_default_key),
+                            key=f"treat_n_{_col}",
+                            label_visibility="collapsed",
+                        )
+                        if _sv != _num_default_key:
+                            _overrides[_col] = _sv
         else:
             st.caption("Nenhuma variável numérica.")
 
@@ -1095,26 +1095,26 @@ if not ss.get("treatment_config"):
         )
         _cat_default_key = _cat_map[_cat_opt]
         if _cat_cols:
-            st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-            for _col in _cat_cols:
-                _nuniq = X_sel[_col].nunique()
-                _cv1, _cv2 = st.columns([3, 2])
-                with _cv1:
-                    st.markdown(
-                        f"<div style='padding:4px 0;font-size:.8rem'><b>{_col}</b> "
-                        f"<span style='color:#9ca3af;font-size:.7rem'>({_nuniq})</span></div>",
-                        unsafe_allow_html=True,
-                    )
-                with _cv2:
-                    _sv = st.selectbox(
-                        _col, _all_cat_opts,
-                        format_func=lambda x: _cat_lbl_map[x],
-                        index=_all_cat_opts.index(_cat_default_key),
-                        key=f"treat_c_{_col}",
-                        label_visibility="collapsed",
-                    )
-                    if _sv != _cat_default_key:
-                        _overrides[_col] = _sv
+            with st.expander(f"Ajustar por variável ({len(_cat_cols)})", expanded=False):
+                for _col in _cat_cols:
+                    _nuniq = X_sel[_col].nunique()
+                    _cv1, _cv2 = st.columns([3, 2])
+                    with _cv1:
+                        st.markdown(
+                            f"<div style='padding:4px 0;font-size:.8rem'><b>{_col}</b> "
+                            f"<span style='color:#9ca3af;font-size:.7rem'>({_nuniq})</span></div>",
+                            unsafe_allow_html=True,
+                        )
+                    with _cv2:
+                        _sv = st.selectbox(
+                            _col, _all_cat_opts,
+                            format_func=lambda x: _cat_lbl_map[x],
+                            index=_all_cat_opts.index(_cat_default_key),
+                            key=f"treat_c_{_col}",
+                            label_visibility="collapsed",
+                        )
+                        if _sv != _cat_default_key:
+                            _overrides[_col] = _sv
         else:
             st.caption("Nenhuma variável categórica.")
 
