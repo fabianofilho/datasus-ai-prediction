@@ -702,7 +702,68 @@ if ss["cohort"] is None:
     # ETAPA 3 — COORTE
     # ═════════════════════════════════════════════════════════════════════════
     step_title(3, "Construir Coorte",
-               "Filtra casos elegíveis, cria features e define o target para o modelo.")
+               "Revise os dados baixados e confirme para construir a coorte de modelagem.")
+
+    # ── Preview dos dados brutos ──────────────────────────────────────────────
+    _sources = list(ss["raw_data"].keys())
+    _tabs = st.tabs(_sources) if len(_sources) > 1 else [st.container()]
+
+    for _tab, _src in zip(_tabs, _sources):
+        with _tab:
+            _df = ss["raw_data"][_src]
+            _n, _k = _df.shape
+
+            # Linha de resumo
+            _c1, _c2, _c3 = st.columns(3)
+            _c1.metric("Registros", f"{_n:,}")
+            _c2.metric("Colunas", str(_k))
+            _miss_total = int(_df.isna().sum().sum())
+            _miss_pct = _miss_total / max(_n * _k, 1)
+            _c3.metric("Completude geral", f"{1 - _miss_pct:.1%}")
+
+            # Completude por coluna
+            with st.expander("Completude por coluna", expanded=True):
+                _miss_s = _df.isna().mean().sort_values(ascending=False)
+                _miss_df = pd.DataFrame({
+                    "Coluna": _miss_s.index,
+                    "Missing (%)": (_miss_s.values * 100).round(1),
+                    "Preenchido (%)": ((1 - _miss_s.values) * 100).round(1),
+                }).reset_index(drop=True)
+                # destaca colunas com alto missing
+                _high = _miss_df["Missing (%)"] > 50
+                st.dataframe(
+                    _miss_df.style.apply(
+                        lambda row: ["background:#fff7ed;color:#92400e" if row["Missing (%)"] > 50
+                                     else "background:#f0fdf4;color:#166534" if row["Missing (%)"] == 0
+                                     else "" for _ in row],
+                        axis=1,
+                    ),
+                    use_container_width=True,
+                    height=min(200 + _k * 8, 400),
+                    hide_index=True,
+                )
+                if _high.any():
+                    st.caption(
+                        f"⚠ {int(_high.sum())} coluna(s) com mais de 50% de missing — "
+                        "serão imputadas pela mediana no pipeline."
+                    )
+
+            # Sumário estatístico (só numéricas)
+            with st.expander("Sumário estatístico"):
+                _num = _df.select_dtypes(include="number")
+                if not _num.empty:
+                    st.dataframe(
+                        _num.describe().T.round(2),
+                        use_container_width=True,
+                    )
+                else:
+                    st.caption("Nenhuma coluna numérica encontrada.")
+
+            # Amostra
+            with st.expander("Amostra dos dados (10 linhas)"):
+                st.dataframe(_df.head(10), use_container_width=True, hide_index=True)
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
     if st.button("Construir Coorte", type="primary"):
         with st.spinner("Construindo coorte…"):
             try:
