@@ -1853,27 +1853,39 @@ if "shap_individual" in ss.get("active_sections", set()):
         st.info("SHAP individual indisponível para este algoritmo.")
 
 if "metricas_clinicas" in ss.get("active_sections", set()):
+    import plotly.graph_objects as _go
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Métricas Clínicas por Ponto de Corte**")
     st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
-    threshold = st.slider(
-        "Threshold", 0.01, 0.99, 0.50, 0.01,
-        help="Ponto de corte para classificar como positivo (alto risco).",
-    )
-    tm = ev.threshold_metrics(y_arr, oof, threshold)
-    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-    mc1.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
-    mc2.metric("Especificidade", f"{tm['specificity']:.1%}")
-    mc3.metric("VPP", f"{tm['ppv']:.1%}")
-    mc4.metric("VPN", f"{tm['npv']:.1%}")
-    mc5.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
-    with st.expander("Matriz de confusão"):
-        cm_df = pd.DataFrame(
-            [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
-            index=["Real Negativo", "Real Positivo"],
-            columns=["Pred Negativo", "Pred Positivo"],
+    _mc_left, _mc_right = st.columns([3, 2])
+    with _mc_left:
+        threshold = st.slider(
+            "Threshold", 0.01, 0.99, 0.50, 0.01,
+            help="Ponto de corte para classificar como positivo (alto risco).",
         )
-        st.dataframe(cm_df, use_container_width=False)
+        tm = ev.threshold_metrics(y_arr, oof, threshold)
+        _cm_fig = _go.Figure(_go.Heatmap(
+            z=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
+            x=["Pred Negativo", "Pred Positivo"],
+            y=["Real Negativo", "Real Positivo"],
+            text=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
+            texttemplate="%{text}",
+            colorscale=[[0, "#f0fdf4"], [1, "#166534"]],
+            showscale=False,
+        ))
+        _cm_fig.update_layout(
+            title="Matriz de confusão",
+            height=240, margin=dict(t=40, b=10, l=10, r=10),
+            yaxis=dict(autorange="reversed"),
+        )
+        st.plotly_chart(_cm_fig, use_container_width=True)
+    with _mc_right:
+        st.markdown("")
+        st.metric("Sensibilidade", f"{tm['sensitivity']:.1%}")
+        st.metric("Especificidade", f"{tm['specificity']:.1%}")
+        st.metric("VPP", f"{tm['ppv']:.1%}")
+        st.metric("VPN", f"{tm['npv']:.1%}")
+        st.metric("NNT", f"{tm['nnt']:.1f}" if tm["nnt"] < 999 else ">999")
 
 if "equidade" in ss.get("active_sections", set()):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
