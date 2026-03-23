@@ -1088,78 +1088,95 @@ if not ss.get("treatment_config"):
             ),
         )
 
-    _num_default_key = _num_map[_num_opt]
-    _cat_default_key = _cat_map[_cat_opt]
+    # ── Ajustes por variável ──────────────────────────────────────────────────
+    _num_treat_opts = ["none", "standard", "minmax", "drop"]
+    _cat_treat_opts = ["ohe", "ordinal", "target", "drop"]
+    _num_lbl = {"none": "Nenhuma", "standard": "Z-score", "minmax": "Min-Max", "drop": "Remover"}
+    _cat_lbl = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}
 
-    # Sync individual overrides to new default when radio changes
-    if ss.get("_prev_num_default") != _num_default_key:
-        for _c in _num_cols:
-            ss[f"treat_n_{_c}"] = _num_default_key
-    ss["_prev_num_default"] = _num_default_key
+    # track effective type per column (after user override)
+    _eff_type: dict = {}      # col -> "num" | "cat"
+    _treat_override: dict = {}  # col -> treatment key
 
-    if ss.get("_prev_cat_default") != _cat_default_key:
-        for _c in _cat_cols:
-            ss[f"treat_c_{_c}"] = _cat_default_key
-    ss["_prev_cat_default"] = _cat_default_key
+    with st.expander(f"Ajustes por variável — {len(_sel_feats)} features", expanded=False):
+        # Header
+        _hc1, _hc2, _hc3 = st.columns([3, 2, 2])
+        for _hcol, _htxt in zip([_hc1, _hc2, _hc3],
+                                 ["Variável", "Tipo", "Tratamento"]):
+            _hcol.markdown(
+                f"<div style='font-size:.68rem;font-weight:700;color:#9ca3af;"
+                f"text-transform:uppercase;letter-spacing:.08em;padding-bottom:4px'>"
+                f"{_htxt}</div>",
+                unsafe_allow_html=True,
+            )
+        st.markdown("<hr style='border:none;border-top:1px solid #f3f4f6;margin:0 0 4px'>",
+                    unsafe_allow_html=True)
 
-    # ── Row 2: expanders alinhados ─────────────────────────────────────────────
-    _e1, _e2 = st.columns(2)
-    with _e1:
-        if _num_cols:
-            with st.expander(f"Ajustar por variável ({len(_num_cols)})", expanded=False):
-                for _col in _num_cols:
-                    _nuniq = X_sel[_col].nunique()
-                    _cv1, _cv2 = st.columns([3, 2])
-                    with _cv1:
-                        st.markdown(
-                            f"<div style='padding:4px 0;font-size:.8rem'><b>{_col}</b> "
-                            f"<span style='color:#9ca3af;font-size:.7rem'>({_nuniq})</span></div>",
-                            unsafe_allow_html=True,
-                        )
-                    with _cv2:
-                        _sv = st.selectbox(
-                            _col, _all_num_opts,
-                            format_func=lambda x: _num_lbl_map[x],
-                            index=_all_num_opts.index(_num_default_key),
-                            key=f"treat_n_{_col}",
-                            label_visibility="collapsed",
-                        )
-                        if _sv != _num_default_key:
-                            _overrides[_col] = _sv
-        else:
-            st.caption("Nenhuma variável numérica.")
-    with _e2:
-        if _cat_cols:
-            with st.expander(f"Ajustar por variável ({len(_cat_cols)})", expanded=False):
-                for _col in _cat_cols:
-                    _nuniq = X_sel[_col].nunique()
-                    _cv1, _cv2 = st.columns([3, 2])
-                    with _cv1:
-                        st.markdown(
-                            f"<div style='padding:4px 0;font-size:.8rem'><b>{_col}</b> "
-                            f"<span style='color:#9ca3af;font-size:.7rem'>({_nuniq})</span></div>",
-                            unsafe_allow_html=True,
-                        )
-                    with _cv2:
-                        _sv = st.selectbox(
-                            _col, _all_cat_opts,
-                            format_func=lambda x: _cat_lbl_map[x],
-                            index=_all_cat_opts.index(_cat_default_key),
-                            key=f"treat_c_{_col}",
-                            label_visibility="collapsed",
-                        )
-                        if _sv != _cat_default_key:
-                            _overrides[_col] = _sv
-        else:
-            st.caption("Nenhuma variável categórica.")
+        for _col in _sel_feats:
+            _detected = "cat" if _col in _cat_cols else "num"
+            _nuniq = X_sel[_col].nunique()
+            _is_low = _col in _low_card
+
+            _vc1, _vc2, _vc3 = st.columns([3, 2, 2])
+
+            with _vc1:
+                _badge = (" <span style='font-size:.65rem;color:#d97706;"
+                          "font-weight:600'>baixa card.</span>") if _is_low else ""
+                st.markdown(
+                    f"<div style='padding:5px 0;font-size:.82rem'>"
+                    f"<b>{_col}</b>"
+                    f"<span style='color:#9ca3af;font-size:.72rem'> ({_nuniq} únicos)</span>"
+                    f"{_badge}</div>",
+                    unsafe_allow_html=True,
+                )
+
+            with _vc2:
+                _type_sel = st.selectbox(
+                    f"type_{_col}",
+                    ["Numérica", "Categórica"],
+                    index=0 if _detected == "num" else 1,
+                    key=f"tp_{_col}",
+                    label_visibility="collapsed",
+                )
+                _eff = "num" if _type_sel == "Numérica" else "cat"
+                _eff_type[_col] = _eff
+
+            with _vc3:
+                if _eff == "num":
+                    _opts = _num_treat_opts
+                    _lbl_map = _num_lbl
+                    _def_idx = _opts.index(_num_default_key)
+                else:
+                    _opts = _cat_treat_opts
+                    _lbl_map = _cat_lbl
+                    _def_idx = _opts.index(_cat_default_key)
+
+                _treat_sel = st.selectbox(
+                    f"treat_{_col}",
+                    _opts,
+                    format_func=lambda x, m=_lbl_map: m[x],
+                    index=_def_idx,
+                    key=f"tr_{_col}",
+                    label_visibility="collapsed",
+                )
+                _expected = _num_default_key if _eff == "num" else _cat_default_key
+                if _treat_sel != _expected:
+                    _treat_override[_col] = _treat_sel
+
+            st.markdown("<hr style='border:none;border-top:1px solid #f9fafb;margin:0'>",
+                        unsafe_allow_html=True)
+
+    # Compute effective column lists after type overrides
+    _eff_num_cols = [c for c in _sel_feats if _eff_type.get(c, "num" if c in _num_cols else "cat") == "num"]
+    _eff_cat_cols = [c for c in _sel_feats if _eff_type.get(c, "num" if c in _num_cols else "cat") == "cat"]
 
     if st.button("Confirmar Tratamento", type="primary"):
         ss["treatment_config"] = {
-            "num_cols": _num_cols,
-            "cat_cols": _cat_cols,
+            "num_cols": _eff_num_cols,
+            "cat_cols": _eff_cat_cols,
             "num_default": _num_default_key,
             "cat_default": _cat_default_key,
-            "overrides": _overrides,
+            "overrides": _treat_override,
         }
         ss["model_config"] = None
         ss["model_results"] = None

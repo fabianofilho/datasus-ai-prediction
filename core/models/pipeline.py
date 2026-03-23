@@ -169,15 +169,20 @@ def _build_preprocessor(
     """Build ColumnTransformer from treatment config."""
     from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, MinMaxScaler
 
-    num_cols = X.select_dtypes(include="number").columns.tolist()
-    cat_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
-
     if treatment is None:
+        num_cols = X.select_dtypes(include="number").columns.tolist()
+        cat_cols = X.select_dtypes(include=["object", "category"]).columns.tolist()
         num_default, cat_default, overrides = "none", "ohe", {}
     else:
+        # Use explicit cols from config (respects type overrides made by user)
+        num_cols = treatment.get("num_cols") or X.select_dtypes(include="number").columns.tolist()
+        cat_cols = treatment.get("cat_cols") or X.select_dtypes(include=["object", "category"]).columns.tolist()
         num_default = treatment.get("num_default", "none")
         cat_default = treatment.get("cat_default", "ohe")
         overrides   = treatment.get("overrides", {})
+    # Restrict to columns actually present in X
+    num_cols = [c for c in num_cols if c in X.columns]
+    cat_cols = [c for c in cat_cols if c in X.columns]
 
     # Effective treatment per column
     num_eff = {c: overrides.get(c, num_default) for c in num_cols}
