@@ -103,8 +103,9 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   max-width:      1100px !important;
 }
 
-/* ── Sidebar toggle: vive dentro da topbar ───────────────────── */
-[data-testid="collapsedControl"] {
+/* ── Sidebar toggle: vive dentro da topbar (aberto e fechado) ── */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"] {
   position: fixed !important;
   top: 0 !important; left: 0 !important;
   height: var(--topbar-h) !important;
@@ -119,7 +120,8 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   cursor: pointer !important;
   color: var(--fg) !important;
 }
-[data-testid="collapsedControl"] svg {
+[data-testid="collapsedControl"] svg,
+[data-testid="stSidebarCollapseButton"] svg {
   color: var(--fg) !important;
   fill: var(--fg) !important;
   width: 18px !important; height: 18px !important;

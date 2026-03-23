@@ -81,7 +81,8 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   padding-left: 40px !important; padding-right: 40px !important;
   max-width: 1100px !important;
 }
-[data-testid="collapsedControl"] {
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"] {
   position: fixed !important;
   top: 0 !important; left: 0 !important;
   height: var(--topbar-h) !important; width: 52px !important;
@@ -91,7 +92,8 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   display: flex !important; align-items: center !important;
   justify-content: center !important; cursor: pointer !important;
 }
-[data-testid="collapsedControl"] svg {
+[data-testid="collapsedControl"] svg,
+[data-testid="stSidebarCollapseButton"] svg {
   color: #111827 !important; fill: #111827 !important;
   width: 18px !important; height: 18px !important;
 }
