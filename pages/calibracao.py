@@ -182,6 +182,17 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 }
 [data-testid="stInfo"], [data-testid="stWarning"],
 [data-testid="stSuccess"] { border-radius: var(--radius) !important; }
+.ds-info-box {
+  background: #f9fafb; border: 1px solid #e5e7eb;
+  border-radius: var(--radius); padding: 12px 16px;
+  margin: 4px 0 12px; font-size: 0.85rem; color: #374151; line-height: 1.5;
+}
+.ds-warn-box {
+  background: #fafaf9; border: 1px solid #e5e7eb;
+  border-left: 3px solid #d97706; border-radius: var(--radius);
+  padding: 12px 16px; margin: 4px 0 12px;
+  font-size: 0.85rem; color: #374151; line-height: 1.5;
+}
 [data-testid="stExpander"] {
   background: var(--bg) !important; border: 1px solid var(--border) !important;
   border-radius: var(--radius) !important; box-shadow: none !important;
@@ -544,9 +555,10 @@ if ss["comparison_results"]:
         ss["show_benchmark"] = True
         st.rerun()
 else:
-    st.info(
-        "Selecione estados adicionais para comparar o desempenho do modelo "
-        "treinado em populações diferentes."
+    st.markdown(
+        '<div class="ds-info-box">Selecione estados adicionais para comparar o '
+        'desempenho do modelo treinado em populações diferentes.</div>',
+        unsafe_allow_html=True,
     )
     cmp_col1, cmp_col2 = st.columns(2)
     with cmp_col1:

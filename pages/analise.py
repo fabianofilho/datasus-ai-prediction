@@ -263,9 +263,32 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   color: var(--fg) !important; font-size: 0.82rem !important; font-weight: 500 !important;
 }
 
-/* ── Banners ────────────────────────────────────────────────── */
+/* ── Banners nativos do Streamlit ───────────────────────────── */
 [data-testid="stInfo"], [data-testid="stWarning"],
 [data-testid="stSuccess"] { border-radius: var(--radius) !important; }
+
+/* ── Caixas de informação/aviso — identidade cinza ──────────── */
+.ds-info-box {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 4px 0 12px;
+  font-size: 0.85rem;
+  color: #374151;
+  line-height: 1.5;
+}
+.ds-warn-box {
+  background: #fafaf9;
+  border: 1px solid #e5e7eb;
+  border-left: 3px solid #d97706;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 4px 0 12px;
+  font-size: 0.85rem;
+  color: #374151;
+  line-height: 1.5;
+}
 
 /* ── Expander ───────────────────────────────────────────────── */
 [data-testid="stExpander"] {
@@ -411,6 +434,22 @@ def done_bar(text: str, change_key: str, reset_keys: list[str]) -> None:
             for k in reset_keys:
                 ss[k] = _defaults[k]
             st.rerun()
+
+
+def info_box(text: str) -> None:
+    """Caixa de informação cinza — padrão da identidade visual."""
+    st.markdown(
+        f'<div class="ds-info-box">{text}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def warn_box(text: str) -> None:
+    """Caixa de aviso cinza com borda âmbar — padrão da identidade visual."""
+    st.markdown(
+        f'<div class="ds-warn-box">{text}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def step_title(n: int, title: str, caption: str = "") -> None:
@@ -992,9 +1031,9 @@ if not ss.get("feature_config"):
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
     all_features = X.columns.tolist()
-    st.info(
-        f"**{total_n:,}** registros · prevalência **{bal['prevalence']:.1%}** · "
-        f"**{len(all_features)}** features disponíveis"
+    info_box(
+        f"<b>{total_n:,}</b> registros · prevalência <b>{bal['prevalence']:.1%}</b> · "
+        f"<b>{len(all_features)}</b> features disponíveis"
     )
 
     selected_features = st.multiselect(
@@ -1296,9 +1335,9 @@ if not ss.get("model_config"):
                "Configure os algoritmos, validação e hiperparâmetros.")
     bal = builder.class_balance(cohort)
     total_n = bal["total"]
-    st.info(
-        f"**{total_n:,}** registros · prevalência **{bal['prevalence']:.1%}** · "
-        f"**{len(X.columns)}** features disponíveis"
+    info_box(
+        f"<b>{total_n:,}</b> registros · prevalência <b>{bal['prevalence']:.1%}</b> · "
+        f"<b>{len(X.columns)}</b> features disponíveis"
     )
 
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
@@ -1547,9 +1586,9 @@ if not ss["model_results"]:
         _val_tag_label = f"Temporal · corte {temporal_cutoff}"
     else:
         _val_tag_label = f"Holdout {holdout_size:.0%}"
-    st.info(
-        f"**{_algos_label}** · {_val_tag_label} · **{len(selected_features)}** features · "
-        f"**{total_n:,}** registros"
+    info_box(
+        f"<b>{_algos_label}</b> · {_val_tag_label} · <b>{len(selected_features)}</b> features · "
+        f"<b>{total_n:,}</b> registros"
         + (f" · {cfg.get('balancing_label', '')}" if balancing != "none" else "")
         + (f" · Optuna {n_trials} trials" if hpo_mode == "Optuna (automático)" else "")
         + (f" · Random Search {n_iter} iter" if hpo_mode == "Random Search" else "")
@@ -1897,10 +1936,10 @@ st.caption(
 )
 
 if m.get("specificity", 1.0) < 0.02 or m.get("recall", 1.0) < 0.02:
-    st.warning(
+    warn_box(
         "Uma ou mais métricas estão próximas de zero — típico em dados "
         "desbalanceados com threshold padrão 0,5. Explore o ponto de corte "
-        "ideal em **Métricas Clínicas** para calibrar sensibilidade vs. "
+        "ideal em <b>Métricas Clínicas</b> para calibrar sensibilidade vs. "
         "especificidade conforme o objetivo clínico."
     )
 
