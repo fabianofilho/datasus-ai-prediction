@@ -25,23 +25,19 @@ from sklearn.metrics import (
 ALGORITHMS: dict[str, str] = {
     "LightGBM": "lgbm",
     "XGBoost": "xgb",
+    "CatBoost": "catboost",
     "Logistic Regression": "logreg",
     "Random Forest": "rf",
 }
 
-# Optional: CatBoost (not installed on Streamlit Cloud by default)
-try:
-    import catboost as _cb  # noqa: F401
-    ALGORITHMS["CatBoost"] = "catboost"
-except ImportError:
-    pass
-
-# Optional: TabPFN (requires torch ~1GB, not suitable for Streamlit Cloud free tier)
+# TabPFN: always listed, but only usable if torch+tabpfn installed
+TABPFN_AVAILABLE: bool = False
 try:
     import tabpfn as _tabpfn  # noqa: F401
     ALGORITHMS["TabPFN"] = "tabpfn"
+    TABPFN_AVAILABLE = True
 except ImportError:
-    pass
+    ALGORITHMS["TabPFN"] = "tabpfn"  # keep in list, build_pipeline will raise gracefully
 
 # ── Param grids for Random Search (wide) ──────────────────────────────────────
 _RANDOM_GRIDS: dict[str, dict] = {

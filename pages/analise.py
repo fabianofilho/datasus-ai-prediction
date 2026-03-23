@@ -1177,9 +1177,15 @@ if not ss.get("model_config"):
         st.stop()
     algos = [ALGORITHMS[l] for l in algo_labels]
 
-    # Aviso TabPFN sobre limite de amostras
+    # Aviso TabPFN sobre disponibilidade e limite de amostras
     if "tabpfn" in algos:
-        from core.models.pipeline import TABPFN_MAX_TRAIN_SAMPLES, TABPFN_WARN_TRAIN_SAMPLES
+        from core.models.pipeline import TABPFN_MAX_TRAIN_SAMPLES, TABPFN_WARN_TRAIN_SAMPLES, TABPFN_AVAILABLE
+        if not TABPFN_AVAILABLE:
+            st.error(
+                "**TabPFN não está instalado** neste ambiente. "
+                "Instale com `pip install tabpfn` (requer torch ~1 GB) ou remova TabPFN da seleção."
+            )
+
         _n_total = builder.class_balance(cohort)["total"]
         if _n_total > TABPFN_MAX_TRAIN_SAMPLES:
             st.error(
