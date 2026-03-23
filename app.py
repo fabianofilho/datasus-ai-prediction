@@ -205,6 +205,14 @@ OUTCOME_GROUPS = {
 if "outcome_key" not in st.session_state:
     st.session_state.outcome_key = None
 
+# Reset de sessão via query param (?reset=1)
+_qp = st.query_params
+if _qp.get("reset"):
+    for k in list(st.session_state.keys()):
+        del st.session_state[k]
+    st.query_params.clear()
+    st.rerun()
+
 # ── CSS + Material Symbols ────────────────────────────────────────────────────
 st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
@@ -436,3 +444,16 @@ except Exception as e:
     import traceback
     st.error(f"**Erro na aplicação:** {e}")
     st.code(traceback.format_exc())
+    if st.button("↺ Reiniciar sessão", type="primary"):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
+        st.rerun()
+
+# ── Rodapé com reset de emergência ────────────────────────────────────────────
+st.markdown('<hr style="border:none;border-top:1px solid #f3f4f6;margin:2.5rem 0 1rem">', unsafe_allow_html=True)
+_r1, _r2 = st.columns([10, 1])
+with _r2:
+    if st.button("↺ Reset", help="Limpa toda a sessão e reinicia o pipeline", type="secondary"):
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
+        st.rerun()
