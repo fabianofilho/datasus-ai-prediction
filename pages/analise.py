@@ -355,8 +355,6 @@ if not ss.get("outcome_key"):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def current_step() -> int:
     if ss.get("comparison_results"):
-        return 9
-    if ss.get("calib_results"):
         return 8
     if ss["model_results"]:
         return 7
@@ -367,9 +365,9 @@ def current_step() -> int:
     if ss.get("feature_config"):
         return 4
     if ss["cohort"] is not None:
-        return 3  # coorte pronta → seleção de features
+        return 3
     if ss["raw_data"] or ss["outcome_key"]:
-        return 2  # dados baixados ou desfecho selecionado → ainda no passo Dados/Coorte
+        return 2
     return 1
 
 
@@ -400,7 +398,7 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark", "Deploy"]
+    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Benchmark", "Deploy", "Relatório"]
     optionals = {8, 9, 10}
     parts = []
     for i, lbl in enumerate(labels):
@@ -1944,9 +1942,9 @@ if len(_all) <= 1:
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Toggle pills ─────────────────────────────────────────────────────────────
-_sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade"]
+_sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade", "calibracao"]
 _sec_labels = ["Curvas ROC/PR", "Distribuição", "SHAP Global",
-               "SHAP Individual", "Métricas Clínicas", "Equidade"]
+               "SHAP Individual", "Métricas Clínicas", "Equidade", "Calibração"]
 if "result_tab" not in ss:
     ss["result_tab"] = "curvas"
 _pill_cols = st.columns(len(_sec_keys))
@@ -2247,12 +2245,84 @@ if ss.get("result_tab") == "equidade":
     else:
         st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
 
+# ── Aba Calibração ─────────────────────────────────────────────────────────
+if ss.get("result_tab") == "calibracao":
+    import numpy as _np_cal
+    from sklearn.metrics import brier_score_loss as _brier_cal
+    _, _, _, _calibrate_model, _, _, _ = _pipeline()
+
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("**Calibração do Modelo**")
+    st.caption(
+        "Avalia se as probabilidades preditas correspondem às frequências reais. "
+        "Aplique calibração pós-treinamento aqui ou continue sem calibrar."
+    )
+    _brier_raw = _brier_cal(_np_cal.array(y_arr), _np_cal.array(oof))
+
+    if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
+        cr = ss["calib_results"]
+        col_cal1, col_cal2 = st.columns(2)
+        with col_cal1:
+            st.plotly_chart(
+                ev.calibration_comparison_chart(
+                    cr["y_eval"], cr["raw_probs"], cr["cal_probs"],
+                    method_label=f'Calibrado ({cr["method"]})',
+                ),
+                use_container_width=True,
+            )
+        with col_cal2:
+            st.metric("Brier antes", f"{cr['brier_before']:.4f}")
+            st.metric("Brier depois", f"{cr['brier_after']:.4f}",
+                      delta=f"{-cr['brier_delta']:+.4f}", delta_color="inverse")
+            if cr["brier_delta"] > 0:
+                st.success("Calibração melhorou as probabilidades.")
+            elif cr["brier_delta"] < 0:
+                st.warning("Calibração piorou levemente. Considere o método alternativo.")
+            else:
+                st.info("Sem variação significativa.")
+        if st.button("Recalibrar com outro método", type="secondary", key="btn_recalib_tab"):
+            ss["calib_results"] = None
+            st.rerun()
+    else:
+        col_cc1, col_cc2 = st.columns(2)
+        with col_cc1:
+            st.plotly_chart(ev.calibration_chart(_np_cal.array(y_arr), _np_cal.array(oof)),
+                            use_container_width=True)
+        with col_cc2:
+            st.metric("Brier Score (bruto)", f"{_brier_raw:.4f}",
+                      help="Erro quadrático médio — menor é melhor. Perfeito = 0.")
+            st.caption(
+                "Curva próxima da diagonal = boa calibração. "
+                "Aplique calibração abaixo se necessário."
+            )
+        _calib_col1, _calib_col2 = st.columns([3, 1])
+        with _calib_col1:
+            _calib_tab_method = st.selectbox(
+                "Método",
+                ["sigmoid", "isotonic"],
+                format_func=lambda x: "Platt Scaling (Sigmoid)" if x == "sigmoid" else "Isotonic Regression",
+                key="calib_tab_method",
+            )
+        with _calib_col2:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            if st.button("Calibrar", type="primary", key="btn_calib_tab"):
+                with st.spinner("Executando calibração…"):
+                    try:
+                        _cr = _calibrate_model(results["model"], X_res, y, method=_calib_tab_method)
+                        ss["calib_results"] = _cr
+                        st.rerun()
+                    except Exception as _ce:
+                        st.error(f"Erro na calibração: {_ce}")
+        if st.button("Pular calibração", type="secondary", key="btn_skip_calib_tab"):
+            ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
+            st.rerun()
+
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibração e benchmark, ou vá direto para inferência individual.</p>',
             unsafe_allow_html=True)
 _btn_col1, _btn_spacer, _btn_col2 = st.columns([2, 3, 2])
 with _btn_col1:
-    if st.button("→ Calibração e Benchmark", type="primary", use_container_width=True):
+    if st.button("→ Benchmark entre Estados", type="primary", use_container_width=True):
         st.switch_page("pages/calibracao.py")
 with _btn_col2:
     if st.button("→ Deploy — Inferência Individual", type="secondary", use_container_width=True):

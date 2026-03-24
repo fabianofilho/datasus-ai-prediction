@@ -248,7 +248,7 @@ def render_topbar() -> None:
 
 
 def render_step_bar(step: int) -> None:
-    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Calibração", "Benchmark", "Deploy"]
+    labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo", "Treinamento", "Resultados", "Benchmark", "Deploy", "Relatório"]
     optionals = {8, 9, 10}
     parts = []
     for i, lbl in enumerate(labels, 1):
@@ -413,7 +413,7 @@ if st.button("← Voltar ao Modelo", type="secondary"):
     st.switch_page("pages/analise.py")
 
 # ── Stepbar ────────────────────────────────────────────────────────────────────
-_step = 9 if (ss.get("comparison_results") or ss.get("show_benchmark")) else 8
+_step = 8  # Benchmark é agora o passo 8
 render_step_bar(_step)
 
 # ── Lazy modules ───────────────────────────────────────────────────────────────
@@ -437,94 +437,13 @@ _active_model = results["model"]
 if ss.get("calib_results") and not ss["calib_results"].get("skipped"):
     _active_model = ss["calib_results"]["cal_model"]
 
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 8 — CALIBRAÇÃO — oculta quando benchmark ativo ou executado
-# ═════════════════════════════════════════════════════════════════════════════
-_show_calib = not ss.get("comparison_results") and not ss.get("show_benchmark")
-
-if _show_calib:
-    step_title(8, "Calibração do Modelo",  # step 8 de 9
-               "Ajusta as probabilidades para que reflitam frequências reais. Opcional — pule se não necessário.")
-
-if _show_calib and ss["calib_results"]:
-    cr = ss["calib_results"]
-    if cr.get("skipped"):
-        st.info("Calibração pulada. O modelo original será usado no benchmark.")
-    else:
-        delta = cr["brier_delta"]
-        delta_sign = "-" if delta >= 0 else "+"
-        done_bar(
-            f'Método <strong>{cr["method"].capitalize()}</strong> &nbsp;·&nbsp; '
-            f'Brier antes <strong>{cr["brier_before"]:.4f}</strong> → '
-            f'depois <strong>{cr["brier_after"]:.4f}</strong> &nbsp;·&nbsp; '
-            f'melhora <strong>{delta_sign}{abs(delta):.4f}</strong>',
-            "chg_calib",
-            ["calib_results", "comparison_results"],
-        )
-        col_cal1, col_cal2 = st.columns(2)
-        with col_cal1:
-            st.plotly_chart(
-                ev.calibration_comparison_chart(
-                    cr["y_eval"], cr["raw_probs"], cr["cal_probs"],
-                    method_label=f'Calibrado ({cr["method"]})',
-                ),
-                use_container_width=True,
-            )
-        with col_cal2:
-            st.metric("Brier antes", f"{cr['brier_before']:.4f}")
-            st.metric("Brier depois", f"{cr['brier_after']:.4f}",
-                      delta=f"{-delta:+.4f}", delta_color="inverse")
-            if delta > 0:
-                st.success("Calibração melhorou as probabilidades.")
-            elif delta < 0:
-                st.warning("Calibração piorou levemente. Considere o método alternativo.")
-            else:
-                st.info("Sem variação significativa.")
-elif _show_calib:
-    c_col1, c_col2 = st.columns([2, 1])
-    with c_col1:
-        calib_method = st.radio(
-            "Método de calibração",
-            ["sigmoid", "isotonic"],
-            format_func=lambda x: "Platt Scaling (sigmoid)" if x == "sigmoid" else "Isotonic Regression",
-            horizontal=True,
-            help=(
-                "Platt Scaling: mais estável com pouco dado, assume forma sigmoide. "
-                "Isotonic: mais flexível, requer pelo menos ~1.000 amostras."
-            ),
-        )
-    with c_col2:
-        st.caption(
-            "A calibração usa 25% dos dados como holdout interno para ajustar "
-            "as probabilidades sem vazar informação do treino."
-        )
-    col_cb1, col_cb_spacer, col_cb2 = st.columns([2, 3, 2])
-    with col_cb1:
-        if st.button("Executar Calibração", type="primary", use_container_width=True):
-            with st.spinner("Executando calibração…"):
-                try:
-                    cr = calibrate_model(
-                        results["model"], X_res, y, method=calib_method,
-                    )
-                    ss["calib_results"] = cr
-                    ss["show_benchmark"] = False
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro na calibração: {e}")
-    with col_cb2:
-        if st.button("Pular calibração", type="secondary", use_container_width=True):
-            ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
-            ss["show_benchmark"] = False
-            st.rerun()
-
-if _show_calib:
-    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 9 — BENCHMARK ENTRE ESTADOS (opcional) — só aparece quando ativado
-# ═════════════════════════════════════════════════════════════════════════════
+# ── Calibração: feita inline na aba Resultados (passo 7). Auto-skip se não feita. ──
 if not ss.get("calib_results"):
-    st.stop()
+    ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ETAPA 8 — BENCHMARK ENTRE ESTADOS (opcional) — só aparece quando ativado
+# ═════════════════════════════════════════════════════════════════════════════
 
 # Se benchmark não ativado nem tem resultados, mostrar só o botão de acesso
 if not ss.get("show_benchmark") and not ss.get("comparison_results"):
@@ -539,7 +458,7 @@ if st.button("← Voltar à Calibração", type="secondary"):
     ss["show_benchmark"] = False
     st.rerun()
 
-step_title(9, "Benchmark entre Estados",  # step 9 de 9
+step_title(8, "Benchmark entre Estados",  # step 8
            "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
 
 if ss["comparison_results"]:
@@ -656,11 +575,14 @@ else:
         st.rerun()
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-st.markdown('<p class="ds-section-caption">Prossiga para inferência individual no Deploy.</p>',
+st.markdown('<p class="ds-section-caption">Prossiga para inferência individual ou exporte o relatório completo do pipeline.</p>',
             unsafe_allow_html=True)
-_dep_l, _dep_r = st.columns([4, 2])
-with _dep_r:
-    if st.button("→ Deploy — Inferência Individual", type="primary", use_container_width=True):
+_dep_l, _dep_m, _dep_r = st.columns([3, 2, 2])
+with _dep_m:
+    if st.button("→ Deploy", type="secondary", use_container_width=True):
         st.switch_page("pages/deploy.py")
+with _dep_r:
+    if st.button("→ Relatório Final", type="primary", use_container_width=True):
+        st.switch_page("pages/relatorio.py")
 
 st.markdown('</div>', unsafe_allow_html=True)

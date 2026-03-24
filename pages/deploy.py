@@ -205,17 +205,17 @@ def render_topbar() -> None:
 
 def render_step_bar() -> None:
     labels = ["Desfecho", "Dados", "Features", "Tratamento", "Modelo",
-              "Treinamento", "Resultados", "Calibração", "Benchmark", "Deploy"]
+              "Treinamento", "Resultados", "Benchmark", "Deploy", "Relatório"]
     optionals = {8, 9, 10}
     parts = []
     for i, lbl in enumerate(labels, 1):
         optional = i in optionals
-        if i < 10:
+        if i < 9:
             cls = "ds-step ds-step-done"
             dot = "✓"
-        elif i == 10:
+        elif i == 9:
             cls = "ds-step ds-step-active"
-            dot = "10"
+            dot = "9"
         else:
             cls = "ds-step ds-step-optional"
             dot = str(i)
@@ -543,3 +543,10 @@ if submitted:
     except Exception as e:
         st.error(f"Erro na predição: {e}")
         st.exception(e)
+
+# ── Navegação para Relatório ────────────────────────────────────────────────
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+_rel_l, _rel_r = st.columns([4, 2])
+with _rel_r:
+    if st.button("→ Relatório Final", type="secondary", use_container_width=True):
+        st.switch_page("pages/relatorio.py")
