@@ -2133,13 +2133,29 @@ if "metricas_clinicas" in ss.get("active_sections", set()):
     _mc_left, _mc_right = st.columns([1, 1])
 
     with _mc_left:
+        _cm_z     = [[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]]
+        _cm_x     = ["Pred Negativo", "Pred Positivo"]
+        _cm_y     = ["Real Negativo", "Real Positivo"]
+        _cm_max   = max(tm["tn"], tm["fp"], tm["fn"], tm["tp"]) or 1
+
+        # Anotação por célula com cor adaptativa (branco em células escuras, preto em claras)
+        _cm_annots = []
+        for _ri, _row in enumerate(_cm_z):
+            for _ci, _val in enumerate(_row):
+                _norm = _val / _cm_max
+                _txt_color = "white" if _norm > 0.45 else "#111827"
+                _cm_annots.append(dict(
+                    x=_cm_x[_ci], y=_cm_y[_ri],
+                    text=f"<b>{_val:,}</b>",
+                    showarrow=False,
+                    font=dict(size=16, color=_txt_color),
+                    xref="x", yref="y",
+                ))
+
         _cm_fig = _go.Figure(_go.Heatmap(
-            z=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
-            x=["Pred Negativo", "Pred Positivo"],
-            y=["Real Negativo", "Real Positivo"],
-            text=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
-            texttemplate="%{text}",
-            textfont=dict(size=16, color="white"),
+            z=_cm_z,
+            x=_cm_x,
+            y=_cm_y,
             colorscale=[[0, "#f0fdf4"], [0.5, "#4ade80"], [1, "#166534"]],
             showscale=False,
         ))
@@ -2150,6 +2166,7 @@ if "metricas_clinicas" in ss.get("active_sections", set()):
             xaxis=dict(side="bottom"),
             yaxis=dict(autorange="reversed", scaleanchor="x", scaleratio=1),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            annotations=_cm_annots,
         )
         st.plotly_chart(_cm_fig, use_container_width=True)
         st.markdown(
