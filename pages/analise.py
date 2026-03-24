@@ -156,10 +156,11 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   letter-spacing: .06em; text-transform: uppercase;
 }
 .ds-topbar-right {
-  font-size: 0.78rem; color: var(--muted);
+  font-size: 0.78rem; color: #111827; font-weight: 500;
   text-decoration: none !important;
+  display: flex; align-items: center; gap: 5px;
 }
-.ds-topbar-right:hover { color: var(--fg) !important; }
+.ds-topbar-right:hover { opacity: 0.7; }
 
 /* ── Step bar ───────────────────────────────────────────────── */
 .ds-stepbar {
@@ -393,7 +394,11 @@ def render_topbar() -> None:
             f'</span>'
         )
     else:
-        _right = '<a class="ds-topbar-right" href="/" target="_self">Modelagem preditiva em saúde pública</a>'
+        _right = (
+            '<a class="ds-topbar-right" href="/" target="_self">'
+            '<span class="ms">analytics</span>Resultados do Modelo'
+            '</a>'
+        )
     st.markdown(
         '<div class="ds-topbar">'
         '<a class="ds-topbar-logo" href="/" target="_self">'

@@ -109,10 +109,11 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   padding: 2px 7px; border-radius: 4px; letter-spacing: .06em;
 }
 .ds-topbar-right {
-  font-size: 0.78rem; color: var(--muted);
+  font-size: 0.78rem; color: #111827; font-weight: 500;
   text-decoration: none !important;
+  display: flex; align-items: center; gap: 5px;
 }
-.ds-topbar-right:hover { color: #111827 !important; }
+.ds-topbar-right:hover { opacity: 0.7; }
 .ds-stepbar {
   display: flex; align-items: center; gap: 2px; flex-wrap: nowrap;
   overflow-x: auto; scrollbar-width: none;
@@ -197,7 +198,9 @@ def render_topbar() -> None:
         'DataSUS AI'
         '<span class="ds-topbar-badge">PREDICTION</span>'
         '</a>'
-        '<a class="ds-topbar-right" href="/" target="_self">Inferência Individual</a>'
+        '<a class="ds-topbar-right" href="/" target="_self">'
+        '<span class="ms">rocket_launch</span>Deploy — Inferência Individual'
+        '</a>'
         '</div>',
         unsafe_allow_html=True,
     )
