@@ -2120,16 +2120,19 @@ if "metricas_clinicas" in ss.get("active_sections", set()):
     st.markdown("**Métricas Clínicas por Ponto de Corte**")
     st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
 
-    # ── Duas colunas: esquerda = slider + matriz | direita = cards ────────────
-    _mc_left, _mc_right = st.columns([1, 1])
-
-    with _mc_left:
+    # ── Slider de threshold (largura total, centralizado acima das colunas) ──
+    _sl_l, _sl_c, _sl_r = st.columns([1, 4, 1])
+    with _sl_c:
         threshold = st.slider(
             "Threshold", 0.01, 0.99, 0.50, 0.01,
             help="Ponto de corte para classificar como positivo (alto risco).",
         )
-        tm = ev.threshold_metrics(y_arr, oof, threshold)
+    tm = ev.threshold_metrics(y_arr, oof, threshold)
 
+    # ── Duas colunas: esquerda = matriz | direita = cards ─────────────────────
+    _mc_left, _mc_right = st.columns([1, 1])
+
+    with _mc_left:
         _cm_fig = _go.Figure(_go.Heatmap(
             z=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
             x=["Pred Negativo", "Pred Positivo"],
@@ -2158,6 +2161,8 @@ if "metricas_clinicas" in ss.get("active_sections", set()):
         )
 
     with _mc_right:
+        # ── Espaço para alinhar topo dos cards com o topo da matriz ──────────
+        st.markdown("<div style='margin-top:42px'></div>", unsafe_allow_html=True)
         # ── Métricas derivadas ────────────────────────────────────────────────
         _total  = tm["tp"] + tm["tn"] + tm["fp"] + tm["fn"]
         _acc    = (tm["tp"] + tm["tn"]) / _total if _total > 0 else 0.0
