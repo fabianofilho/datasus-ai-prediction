@@ -591,12 +591,18 @@ else:
             try:
                 # ── Coorte original: reutiliza métricas e OOF probs já calculadas ──
                 if raw_override is not None:
+                    _oof = results.get("oof_probs")
+                    # holdout/temporal: results["y_eval"] guarda apenas o subset de teste
+                    # CV: oof_probs cobre todo o conjunto de treino (mesmo len que cohort y)
+                    _y_true = results.get("y_eval")
+                    if _y_true is None and _oof is not None and len(y) == len(_oof):
+                        _y_true = y.values
                     return {
                         "label": label,
                         "n": _train_n or len(X_res),
                         "metrics": results["mean_metrics"],
-                        "oof_probs": results.get("oof_probs"),
-                        "y_true": y.values,
+                        "oof_probs": _oof,
+                        "y_true": _y_true,
                         "feature_importances": results.get("feature_importances", {}),
                     }
 
