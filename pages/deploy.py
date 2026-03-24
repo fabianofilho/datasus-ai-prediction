@@ -340,8 +340,8 @@ if not ss.get("model_results") or not ss.get("outcome_key") or ss.get("cohort") 
     st.stop()
 
 # ── Voltar (acima do step bar) ─────────────────────────────────────────────────
-if st.button("← Voltar à Calibração", type="secondary"):
-    st.switch_page("pages/calibracao.py")
+if st.button("← Voltar aos Resultados", type="secondary"):
+    st.switch_page("pages/analise.py")
 
 # ── Step bar ───────────────────────────────────────────────────────────────────
 render_step_bar()
@@ -546,7 +546,10 @@ if submitted:
 
 # ── Navegação para Relatório ────────────────────────────────────────────────
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-_rel_l, _rel_r = st.columns([4, 2])
-with _rel_r:
-    if st.button("→ Relatório Final", type="secondary", use_container_width=True):
+_nav_l, _nav_r = st.columns(2)
+with _nav_l:
+    if st.button("← Benchmark", type="secondary", use_container_width=True):
+        st.switch_page("pages/calibracao.py")
+with _nav_r:
+    if st.button("→ Relatório Final", type="primary", use_container_width=True):
         st.switch_page("pages/relatorio.py")

@@ -2331,9 +2331,9 @@ if ss.get("result_tab") == "calibracao":
             st.rerun()
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibração e benchmark, ou vá direto para inferência individual.</p>',
+st.markdown('<p class="ds-section-caption">Continue para benchmark entre estados ou vá direto para inferência individual.</p>',
             unsafe_allow_html=True)
-_btn_col1, _btn_spacer, _btn_col2 = st.columns([2, 3, 2])
+_btn_col1, _btn_col2 = st.columns(2)
 with _btn_col1:
     if st.button("→ Benchmark entre Estados", type="primary", use_container_width=True):
         ss["show_benchmark"] = True
