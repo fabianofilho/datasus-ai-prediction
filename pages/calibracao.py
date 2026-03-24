@@ -509,98 +509,82 @@ else:
     elif st.button("Rodar comparação", type="primary"):
         comp_list = []
 
+        # ── Config do pipeline original (reutilizada em cada estado) ──────────
+        from core.models.pipeline import train_cv as _train_cv
+        _algo       = results.get("algorithm", ss.get("model_config", {}).get("algo", "rf"))
+        _params     = results.get("best_params", {}) or {}
+        _n_folds    = ss.get("model_config", {}).get("n_folds", 5)
+        _balancing  = ss.get("model_config", {}).get("balancing", "none")
+        _treatment  = ss.get("treatment_config")       # mesmo tratamento do treino original
+        _train_cols = results["X_columns"]
+        _train_n    = results.get("sample_n")
+
         def _run_state_group(label: str, states: list[str], years: list[int], raw_override=None):
+            """Replica o pipeline completo (fit + CV) no estado/grupo indicado.
+
+            Cada grupo roda train_cv com a mesma configuração do modelo original
+            (algoritmo, hiperparâmetros, tratamento, n_folds, balanceamento),
+            garantindo comparação homogênea entre estados — sem depender de
+            transferência do modelo treinado em SP.
+            """
             try:
+                # ── Coorte original: reutiliza métricas já calculadas (sem re-treinar)
                 if raw_override is not None:
-                    raw = raw_override
-                else:
-                    raw = {}
-                    for src in outcome.data_sources:
-                        dfs = []
-                        for st_ in states:
-                            for yr in years:
-                                dfs.append(fetch(src, st_, yr))
-                        raw[src] = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+                    _shap_orig = ev.shap_values_dict(results["model"], X_res)
+                    return {
+                        "label": label,
+                        "n": _train_n or len(X_res),
+                        "metrics": results["mean_metrics"],
+                        "shap_dict": _shap_orig,
+                    }
+
+                # ── Estados de comparação: baixa dados e re-treina do zero ────
+                raw = {}
+                for src in outcome.data_sources:
+                    dfs = []
+                    for st_ in states:
+                        for yr in years:
+                            dfs.append(fetch(src, st_, yr))
+                    raw[src] = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
                 builder_cmp = CohortBuilder(outcome)
-                cohort_cmp = builder_cmp.build(raw)
+                cohort_cmp  = builder_cmp.build(raw)
                 X_cmp, y_cmp = builder_cmp.get_Xy(cohort_cmp)
 
-                train_cols = results["X_columns"]
-                for col in train_cols:
+                # Alinha features ao mesmo conjunto do treino original
+                for col in _train_cols:
                     if col not in X_cmp.columns:
                         X_cmp[col] = float("nan")
-                X_cmp = X_cmp[train_cols]
+                X_cmp = X_cmp[_train_cols]
 
-                # Limita ao mesmo N do treino original para comparação justa
-                _train_n = results.get("sample_n")
+                # Limita ao mesmo N para comparação justa
                 if _train_n and len(X_cmp) > _train_n:
                     _idx = X_cmp.sample(n=_train_n, random_state=42).index
-                    X_cmp = X_cmp.loc[_idx]
-                    y_cmp = y_cmp.loc[_idx]
+                    X_cmp  = X_cmp.loc[_idx]
+                    y_cmp  = y_cmp.loc[_idx]
 
-                import numpy as _np_bm
-                _base_pipeline = results["model"]
+                if len(y_cmp) < 20 or y_cmp.nunique() < 2:
+                    st.warning(f"{label}: dados insuficientes ou sem variação no desfecho — ignorado.")
+                    return None
 
-                # ── Predição robusta para benchmark ───────────────────────────
-                # Evita o erro "Shape of passed values is (N, 47), indices imply
-                # (N, 14)" que ocorre no sklearn >= 1.2 quando feature_names_in_
-                # do estimador final guarda os nomes originais (14) em vez dos
-                # nomes pós-transformação (47 com OHE).
-                #
-                # Estratégia: percorre named_steps diretamente (sem fatiar o
-                # Pipeline) e converte para numpy puro entre cada etapa —
-                # isso evita qualquer wrapper do set_output API do sklearn.
-                # Por fim, remove temporariamente feature_names_in_ do clf
-                # para que predict_proba não valide nomes de colunas.
-
-                # Desempacota CalibratedClassifierCV, se necessário
-                from sklearn.calibration import CalibratedClassifierCV as _CCV
-                _inner_pipe = _base_pipeline.estimator if isinstance(_base_pipeline, _CCV) else _base_pipeline
-
-                _all_steps   = list(_inner_pipe.named_steps.items())
-                _clf_final   = _all_steps[-1][1]          # estimador final
-                _preproc     = _all_steps[:-1]             # etapas de pré-processamento
-
-                # Aplica cada etapa de pré-processamento convertendo para numpy
-                _X_curr = X_cmp
-                for _sname, _sobj in _preproc:
-                    if not hasattr(_sobj, "transform"):    # ex.: SMOTE não tem transform
-                        continue
-                    _X_raw = _sobj.transform(_X_curr)
-                    if hasattr(_X_raw, "toarray"):
-                        _X_raw = _X_raw.toarray()
-                    if hasattr(_X_raw, "values"):
-                        _X_raw = _X_raw.values
-                    _X_curr = _np_bm.asarray(_X_raw, dtype=float)
-
-                # _X_curr é numpy puro com o número correto de features (ex.: 47)
-                # Remove feature_names_in_ do clf se existir (independente do tamanho)
-                _fni_saved = getattr(_clf_final, "feature_names_in_", None)
-                if _fni_saved is not None:
-                    del _clf_final.feature_names_in_
-                try:
-                    probs_cmp = _clf_final.predict_proba(_X_curr)[:, 1]
-                finally:
-                    # Restaura sempre, garantindo que o modelo cacheado não mude
-                    if _fni_saved is not None:
-                        _clf_final.feature_names_in_ = _fni_saved
-
-                preds_cmp = (probs_cmp >= 0.5).astype(int)
-
-                from sklearn.metrics import (
-                    roc_auc_score, average_precision_score,
-                    f1_score, recall_score, brier_score_loss,
+                # ── Treina pipeline com mesma config — banana com banana ──────
+                _cmp_r = _train_cv(
+                    X_cmp, y_cmp,
+                    algorithm=_algo,
+                    params=_params,
+                    n_folds=_n_folds,
+                    balancing=_balancing,
+                    treatment=_treatment,
                 )
-                metrics_cmp = {
-                    "roc_auc": roc_auc_score(y_cmp, probs_cmp),
-                    "pr_auc": average_precision_score(y_cmp, probs_cmp),
-                    "f1": f1_score(y_cmp, preds_cmp, zero_division=0),
-                    "recall": recall_score(y_cmp, preds_cmp, zero_division=0),
-                    "brier": brier_score_loss(y_cmp, probs_cmp),
+
+                shap_d = ev.shap_values_dict(_cmp_r["model"], X_cmp)
+                return {
+                    "label": label,
+                    "n": len(y_cmp),
+                    "metrics": _cmp_r["mean_metrics"],
+                    "shap_dict": shap_d,
                 }
-                shap_d = ev.shap_values_dict(_base_pipeline, X_cmp)
-                return {"label": label, "n": len(y_cmp), "metrics": metrics_cmp, "shap_dict": shap_d}
+
             except Exception as exc:
                 st.error(f"Erro em {label}: {exc}")
                 return None
