@@ -110,11 +110,12 @@ def _build_model(algorithm: str, params: dict, class_weight: str | None = None):
     if algorithm == "xgb":
         from xgboost import XGBClassifier
         return XGBClassifier(
-            n_estimators=params.get("n_estimators", 300),
+            n_estimators=params.get("n_estimators", 200),
             learning_rate=params.get("learning_rate", 0.05),
             max_depth=params.get("max_depth", 6),
             eval_metric="logloss",
             verbosity=0,
+            n_jobs=-1,
             random_state=42,
         )
     if algorithm == "logreg":
@@ -369,9 +370,9 @@ def _suggest_params(trial, algorithm: str) -> dict:
         }
     if algorithm == "xgb":
         return {
-            "n_estimators": trial.suggest_int("n_estimators", 100, 800, step=50),
-            "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.2, log=True),
-            "max_depth": trial.suggest_int("max_depth", 3, 12),
+            "n_estimators": trial.suggest_int("n_estimators", 100, 400, step=50),
+            "learning_rate": trial.suggest_float("learning_rate", 0.02, 0.2, log=True),
+            "max_depth": trial.suggest_int("max_depth", 3, 8),
         }
     if algorithm == "rf":
         return {

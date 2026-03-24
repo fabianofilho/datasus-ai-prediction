@@ -1659,7 +1659,7 @@ if not ss["model_results"]:
             y_train = y
 
             # ── Learning curve — uma curva por algoritmo, cores distintas ─────
-            _fracs = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0]
+            _fracs = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
             _lc_data: dict = {lbl: {"sizes": [], "val": [], "train": []} for lbl in algo_labels}
 
             try:
@@ -1713,7 +1713,9 @@ if not ss["model_results"]:
                             )
                         else:
                             _Xs, _ys = _X_lc, _y_lc
-                        _qp = build_pipeline(_Xs, _lc_algo, {}, balancing="none", treatment=treatment)
+                        # Use fast params for LC (shape matters, not optimality)
+                        _lc_fast = {"n_estimators": 80, "max_depth": 4}
+                        _qp = build_pipeline(_Xs, _lc_algo, _lc_fast, balancing="none", treatment=treatment)
                         _qp.fit(_Xs, _ys)
                         _tr_auc = float(_roc_auc(_ys, _qp.predict_proba(_Xs)[:, 1])) if _ys.sum() > 0 else 0.5
                         _vl_auc = float(_roc_auc(_y_hold, _qp.predict_proba(_X_hold)[:, 1])) if _y_hold.sum() > 0 else 0.5
