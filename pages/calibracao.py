@@ -411,13 +411,12 @@ if not ss["model_results"] or not ss["outcome_key"] or ss["cohort"] is None:
         st.switch_page("pages/analise.py")
     st.stop()
 
-# ── Botão de retorno (acima do step bar, igual ao Relatório) ───────────────────
-if st.button("Resultados", icon=":material/arrow_back:", type="secondary"):
-    st.switch_page("pages/analise.py")
-
 # ── Stepbar ────────────────────────────────────────────────────────────────────
 _step = 8  # Benchmark é agora o passo 8
 render_step_bar(_step)
+st.markdown("---")
+if st.button("← Voltar aos Resultados", key="back_to_results", type="secondary"):
+    st.switch_page("pages/analise.py")
 
 # ── Lazy modules ───────────────────────────────────────────────────────────────
 pd = _pd()
@@ -457,15 +456,8 @@ if not ss.get("show_benchmark") and not ss.get("comparison_results"):
             st.rerun()
     st.stop()
 
-_bm_title_col, _bm_gap_col, _bm_btn_col = st.columns([3, 1, 1])
-with _bm_title_col:
-    step_title(8, "Benchmark entre Estados",
-               "Replica o pipeline em diferentes estados e compara curva ROC e importância das features.")
-with _bm_btn_col:
-    st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
-    if st.button("Relatório Final", key="btn_relatorio_top", icon=":material/summarize:", type="primary", use_container_width=True):
-        st.switch_page("pages/relatorio.py")
-    st.markdown("</div>", unsafe_allow_html=True)
+step_title(8, "Benchmark entre Estados",
+           "Replica o pipeline em diferentes estados e compara curva ROC e importância das features.")
 
 if ss["comparison_results"]:
     import plotly.graph_objects as go
@@ -680,5 +672,15 @@ else:
         ss["comparison_results"] = comp_list
         st.rerun()
 
+
+st.markdown("---")
+st.caption("Prossiga para inferência individual ou exporte o relatório completo do pipeline.")
+_fc1, _fc2 = st.columns(2)
+with _fc1:
+    if st.button("→ Deploy", key="footer_back", use_container_width=True):
+        st.switch_page("pages/deploy.py")
+with _fc2:
+    if st.button("→ Relatório Final", key="footer_relatorio", type="primary", use_container_width=True):
+        st.switch_page("pages/relatorio.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
