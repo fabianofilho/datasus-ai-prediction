@@ -1927,8 +1927,8 @@ with _r7_title_col:
     step_title(7, "Resultados do Modelo",
                "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
 with _r7_btn_col:
-    st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
-    if st.button("→ Relatório Final", key="btn_rel_top", type="secondary", use_container_width=True):
+    st.markdown("<div style='padding-top:4px;display:flex;justify-content:flex-end'>", unsafe_allow_html=True)
+    if st.button("→ Relatório Final", key="btn_rel_top", type="primary", use_container_width=True):
         st.switch_page("pages/relatorio.py")
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2329,13 +2329,13 @@ if "calibracao" in ss.get("active_sections", set()):
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown('<p class="ds-section-caption">Continue para benchmark entre estados ou vá direto para inferência individual.</p>',
             unsafe_allow_html=True)
-_btn_col1, _btn_col2 = st.columns(2)
-with _btn_col1:
-    if st.button("→ Benchmark entre Estados", type="secondary", use_container_width=True):
+_btn_col1, _btn_col2, _btn_col3 = st.columns([3, 1, 1])
+with _btn_col2:
+    if st.button("→ Benchmark", type="secondary", use_container_width=True):
         ss["show_benchmark"] = True
         st.switch_page("pages/calibracao.py")
-with _btn_col2:
-    if st.button("→ Deploy — Inferência Individual", type="primary", use_container_width=True):
+with _btn_col3:
+    if st.button("→ Deploy", type="primary", use_container_width=True):
         st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
