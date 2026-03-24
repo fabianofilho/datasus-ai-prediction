@@ -1650,7 +1650,20 @@ if not ss["model_results"]:
     }.get(hpo_mode, "")
     btn_label = f"{_hpo_prefix}Treinar {_algos_label} · {_val_tag_label}"
 
-    if st.button(btn_label, type="primary"):
+    _train_btn_ph = st.empty()
+    _train_clicked = _train_btn_ph.button(btn_label, type="primary", key="train_main_btn")
+
+    if _train_clicked:
+        # Replace button with strategy summary while training runs
+        _train_btn_ph.markdown(
+            f'<div class="ds-info-box" style="font-size:0.82rem;padding:8px 14px;">'
+            f'⏳ &nbsp;<b>Treinando:</b> &nbsp;{_algos_label} · {_val_tag_label}'
+            + (f' · Optuna {n_trials} trials' if hpo_mode == "Optuna (automático)" else "")
+            + (f' · Random Search {n_iter} iter' if hpo_mode == "Random Search" else "")
+            + (' · Grid Search' if hpo_mode == "Grid Search" else "")
+            + f'</div>',
+            unsafe_allow_html=True,
+        )
         try:
             from sklearn.model_selection import train_test_split
             from sklearn.metrics import roc_auc_score as _roc_auc
