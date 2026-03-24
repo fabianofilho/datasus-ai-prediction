@@ -219,6 +219,24 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   transition: all .12s !important; cursor: pointer !important;
   white-space: nowrap !important;
 }
+
+/* ── Pills de seção (distribuição uniforme) ─────────────────── */
+.ds-pill-row [data-testid="stHorizontalBlock"] {
+  gap: 8px !important;
+}
+.ds-pill-row .stButton {
+  justify-content: center !important;
+  width: 100% !important;
+}
+.ds-pill-row .stButton > button {
+  width: 100% !important;
+  text-align: center !important;
+  justify-content: center !important;
+  padding: 6px 8px !important;
+  height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+}
 .stButton > button[kind="primary"] {
   background: var(--fg) !important; border: 1px solid var(--fg) !important;
   color: #fff !important; font-weight: 600 !important; box-shadow: none !important;
@@ -1967,6 +1985,7 @@ _sec_labels = ["Curvas ROC/PR", "Distribuição", "SHAP Global",
                "SHAP Individual", "Métricas Clínicas", "Equidade"]
 if "active_sections" not in ss:
     ss["active_sections"] = set()
+st.markdown('<div class="ds-pill-row">', unsafe_allow_html=True)
 _pill_cols = st.columns(len(_sec_keys))
 for _pi, (_pk, _pl) in enumerate(zip(_sec_keys, _sec_labels)):
     with _pill_cols[_pi]:
@@ -1981,6 +2000,7 @@ for _pi, (_pk, _pl) in enumerate(zip(_sec_keys, _sec_labels)):
                 _secs.add(_pk)
             ss["active_sections"] = _secs
             st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 if not ss.get("active_sections"):
     st.info("Selecione uma ou mais seções acima para visualizar os resultados detalhados.")
