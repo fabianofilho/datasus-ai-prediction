@@ -491,10 +491,11 @@ else:
     cmp_col1, cmp_col2 = st.columns(2)
     with cmp_col1:
         already_used = ss["sel_states"]
+        _cmp_options = [s for s in STATES if s not in already_used]
         cmp_states = st.multiselect(
             "Estados para comparação",
-            [s for s in STATES if s not in already_used],
-            default=[],
+            _cmp_options,
+            default=["ES"] if "ES" in _cmp_options else [],
             help="Baixa os dados, constrói a coorte e aplica o modelo treinado.",
         )
         include_original = st.checkbox(
