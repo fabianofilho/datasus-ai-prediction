@@ -1360,6 +1360,46 @@ if not ss.get("treatment_config"):
     _eff_num_cols = [c for c in _sel_feats if _eff_type.get(c, "num" if c in _num_cols else "cat") == "num"]
     _eff_cat_cols = [c for c in _sel_feats if _eff_type.get(c, "num" if c in _num_cols else "cat") == "cat"]
 
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    # ── Passo 3: Imputação de valores faltantes ───────────────────────────────
+    st.markdown("**Passo 3 — Imputação de valores faltantes**")
+    st.caption(
+        "No DATASUS, valores como **9** e **99** frequentemente codificam *Ignorado* ou "
+        "*Não informado*. Selecione os valores que devem ser substituídos por nulo antes "
+        "do treinamento — a imputação estatística (mediana / moda) será aplicada em seguida."
+    )
+    _sentinel_preset = [1, 2, 8, 9, 10, 98, 99, 999, 9999]
+    _null_sentinels: list = st.multiselect(
+        "Valores a tratar como nulo (None)",
+        options=_sentinel_preset,
+        default=[9, 99],
+        key="null_sentinels_multi",
+        help=(
+            "Valores selecionados serão substituídos por **NaN** em **todas** as colunas "
+            "antes de qualquer escala ou codificação. "
+            "A imputação estatística (mediana para numéricas, moda para categóricas) "
+            "preenche os NaN resultantes automaticamente."
+        ),
+    )
+    _custom_null_str = st.text_input(
+        "Adicionar valor não listado (opcional)",
+        placeholder="ex: 9999",
+        key="null_sentinel_custom",
+    )
+    if _custom_null_str.strip():
+        try:
+            _custom_null_val = int(_custom_null_str.strip())
+            if _custom_null_val not in _null_sentinels:
+                _null_sentinels = list(_null_sentinels) + [_custom_null_val]
+        except ValueError:
+            st.warning("Digite um número inteiro válido.")
+
+    if _null_sentinels:
+        st.caption(f"Valores que serão substituídos por None: **{sorted(_null_sentinels)}**")
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
     # Guard: verificar se há ao menos uma variável não removida
     _all_removed = all(
         _treat_override.get(c, _num_default_key if _eff_type.get(c, "num" if c in _num_cols else "cat") == "num" else _cat_default_key) == "drop"
@@ -1378,6 +1418,7 @@ if not ss.get("treatment_config"):
             "num_default": _num_default_key,
             "cat_default": _cat_default_key,
             "overrides": _treat_override,
+            "null_sentinels": sorted(set(_null_sentinels)),
         }
         ss["model_config"] = None
         ss["model_results"] = None

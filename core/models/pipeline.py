@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import StratifiedKFold
@@ -165,6 +166,33 @@ def _class_weight_for_balancing(balancing: str) -> str | None:
     return "balanced" if balancing == "class_weight" else None
 
 
+class SentinelReplacer(BaseEstimator, TransformerMixin):
+    """Replace DATASUS sentinel values (e.g. 9, 99 = 'Ignorado') with NaN.
+
+    Applied as the first pipeline step so downstream imputers fill them
+    with the median / mode of the real data distribution.
+    """
+
+    def __init__(self, sentinels: list | None = None):
+        self.sentinels = sentinels or []
+
+    def fit(self, X, y=None):  # noqa: N803
+        return self
+
+    def transform(self, X):  # noqa: N803
+        if not self.sentinels:
+            return X
+        if isinstance(X, pd.DataFrame):
+            X = X.copy()
+            for v in self.sentinels:
+                X = X.replace(v, np.nan)
+        else:
+            X = X.astype(float)
+            for v in self.sentinels:
+                X[X == v] = np.nan
+        return X
+
+
 def _build_preprocessor(
     X: pd.DataFrame,
     treatment: dict | None,
@@ -280,9 +308,13 @@ def build_pipeline(
             "Reduza o tamanho da amostra no Passo 2 ou escolha outro algoritmo."
         )
 
+    sentinels = list((treatment or {}).get("null_sentinels", []))
     preprocessor = _build_preprocessor(X, treatment, algorithm)
     cw = _class_weight_for_balancing(balancing)
-    steps: list = [("prep", preprocessor)]
+    steps: list = []
+    if sentinels:
+        steps.append(("sentinel", SentinelReplacer(sentinels)))
+    steps.append(("prep", preprocessor))
 
     # Add StandardScaler for logreg when numerics aren't already scaled
     _num_scaled = treatment is not None and treatment.get("num_default") in ("standard", "minmax")
