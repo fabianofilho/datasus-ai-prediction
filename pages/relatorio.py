@@ -301,6 +301,21 @@ def _build_html_report(outcome, results, m, calib, comp, fc, mc, ss_data: dict) 
     ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
     feat_list = "".join(f"<li><code>{f}</code></li>" for f in features)
 
+    feat_imp_section = ""
+    fi_data = results.get("feature_importances", {})
+    if fi_data:
+        top_fi = sorted(fi_data.items(), key=lambda x: x[1], reverse=True)[:15]
+        fi_rows = "".join(
+            f"<tr><td>{i+1}</td><td><code>{name}</code></td><td>{val:.4f}</td></tr>"
+            for i, (name, val) in enumerate(top_fi)
+        )
+        feat_imp_section = f"""
+        <h2>5. Importância de Features (Top 15)</h2>
+        <table>
+          <thead><tr><th>#</th><th>Feature</th><th>Importância</th></tr></thead>
+          <tbody>{fi_rows}</tbody>
+        </table>"""
+
     calib_section = ""
     if calib and not calib.get("skipped"):
         calib_section = f"""
@@ -382,6 +397,7 @@ def _build_html_report(outcome, results, m, calib, comp, fc, mc, ss_data: dict) 
   <div class="card"><div class="lbl">F1-Score</div><div class="val">{m['f1']:.4f}</div></div>
 </div>
 
+{feat_imp_section}
 {calib_section}
 {benchmark_section}
 
@@ -487,9 +503,16 @@ if _oof is not None and _y_eval is not None:
                         use_container_width=True)
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-# ── 5. Calibração ──────────────────────────────────────────────────────────────
+# ── 5. Importância de Features ─────────────────────────────────────────────────
+_fi_rep = results.get("feature_importances", {})
+if _fi_rep:
+    st.markdown("### 5. Importância de Features")
+    st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+# ── 6. Calibração ──────────────────────────────────────────────────────────────
 if calib and not calib.get("skipped"):
-    st.markdown("### 5. Calibração")
+    st.markdown("### 6. Calibração")
     _cal1, _cal2 = st.columns(2)
     with _cal1:
         st.plotly_chart(
@@ -506,9 +529,9 @@ if calib and not calib.get("skipped"):
         st.markdown(f"**Método:** {calib['method'].capitalize()}")
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-# ── 6. Benchmark ───────────────────────────────────────────────────────────────
+# ── 7. Benchmark ───────────────────────────────────────────────────────────────
 if comp:
-    st.markdown("### 6. Benchmark entre Estados")
+    st.markdown("### 7. Benchmark entre Estados")
     st.dataframe(ev.metrics_comparison_table(comp), use_container_width=True, hide_index=True)
     _sdicts = [r["shap_dict"] for r in comp if r.get("shap_dict")]
     _slabels = [r["label"] for r in comp if r.get("shap_dict")]

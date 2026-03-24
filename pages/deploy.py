@@ -535,7 +535,18 @@ if submitted:
             )
             st.plotly_chart(shap_fig, use_container_width=True)
         else:
-            st.info("SHAP indisponível para este algoritmo.")
+            # Fallback: feature importance global do modelo treinado
+            _fi = ss.get("model_results", {}).get("feature_importances", {})
+            if _fi:
+                st.caption(
+                    "SHAP indisponível para este algoritmo — "
+                    "exibindo importância global de features do modelo treinado."
+                )
+                st.plotly_chart(
+                    ev.importance_chart(_fi, top_n=15), use_container_width=True
+                )
+            else:
+                st.info("SHAP e importância de features indisponíveis para este algoritmo.")
 
         # Tabela de valores inseridos
         with st.expander("Valores inseridos para esta predição"):
