@@ -546,7 +546,7 @@ if submitted:
 
 # ── Navegação para Relatório ────────────────────────────────────────────────
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-_nav_l, _nav_r = st.columns(2)
+_nav_l, _nav_gap, _nav_r = st.columns([1, 3, 1])
 with _nav_l:
     if st.button("← Benchmark", type="secondary", use_container_width=True):
         st.switch_page("pages/calibracao.py")
