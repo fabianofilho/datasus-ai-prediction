@@ -532,7 +532,16 @@ else:
                     X_cmp = X_cmp.loc[_idx]
                     y_cmp = y_cmp.loc[_idx]
 
-                probs_cmp = _active_model.predict_proba(X_cmp)[:, 1]
+                # Usa o pipeline base (sem wrapper de calibração) para evitar
+                # erros de shape causados pela conversão DataFrame→numpy interna
+                # do CalibratedClassifierCV. Métricas de benchmark (ROC-AUC, F1)
+                # são baseadas em ranking e não dependem de calibração.
+                _base_pipeline = results["model"]
+                try:
+                    probs_cmp = _base_pipeline.predict_proba(X_cmp)[:, 1]
+                except Exception:
+                    # fallback: converte para numpy preservando a ordem das colunas
+                    probs_cmp = _base_pipeline.predict_proba(X_cmp.values)[:, 1]
                 preds_cmp = (probs_cmp >= 0.5).astype(int)
 
                 from sklearn.metrics import (
@@ -546,7 +555,7 @@ else:
                     "recall": recall_score(y_cmp, preds_cmp, zero_division=0),
                     "brier": brier_score_loss(y_cmp, probs_cmp),
                 }
-                shap_d = ev.shap_values_dict(_active_model, X_cmp)
+                shap_d = ev.shap_values_dict(_base_pipeline, X_cmp)
                 return {"label": label, "n": len(y_cmp), "metrics": metrics_cmp, "shap_dict": shap_d}
             except Exception as exc:
                 st.error(f"Erro em {label}: {exc}")

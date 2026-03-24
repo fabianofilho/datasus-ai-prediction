@@ -2336,6 +2336,7 @@ st.markdown('<p class="ds-section-caption">Modelo treinado. Continue para calibr
 _btn_col1, _btn_spacer, _btn_col2 = st.columns([2, 3, 2])
 with _btn_col1:
     if st.button("→ Benchmark entre Estados", type="primary", use_container_width=True):
+        ss["show_benchmark"] = True
         st.switch_page("pages/calibracao.py")
 with _btn_col2:
     if st.button("→ Deploy — Inferência Individual", type="secondary", use_container_width=True):
