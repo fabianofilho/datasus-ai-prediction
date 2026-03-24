@@ -213,29 +213,21 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 /* ── Botões ─────────────────────────────────────────────────── */
 .stButton { display: flex !important; justify-content: flex-start !important; }
 .stButton > button {
-  width: auto !important; min-width: 0 !important;
+  min-width: 0 !important;
   padding: 5px 16px !important; border-radius: var(--radius) !important;
   font-size: 0.82rem !important; font-weight: 500 !important;
   transition: all .12s !important; cursor: pointer !important;
   white-space: nowrap !important;
 }
 
-/* ── Pills de seção (distribuição uniforme) ─────────────────── */
-.ds-pill-row [data-testid="stHorizontalBlock"] {
-  gap: 8px !important;
-}
+/* ── Pills de seção: altura fixa + texto centralizado ───────── */
 .ds-pill-row .stButton {
-  justify-content: center !important;
-  width: 100% !important;
+  width: 100% !important; justify-content: stretch !important;
 }
 .ds-pill-row .stButton > button {
-  width: 100% !important;
-  text-align: center !important;
-  justify-content: center !important;
-  padding: 6px 8px !important;
-  height: 38px !important;
-  display: flex !important;
-  align-items: center !important;
+  width: 100% !important; height: 38px !important;
+  text-align: center !important; justify-content: center !important;
+  padding: 6px 4px !important; display: flex !important; align-items: center !important;
 }
 .stButton > button[kind="primary"] {
   background: var(--fg) !important; border: 1px solid var(--fg) !important;
@@ -2000,22 +1992,21 @@ _sec_labels = ["Curvas ROC/PR", "Distribuição", "Métricas Clínicas",
                "SHAP Global", "SHAP Individual", "Equidade", "Multicalibração"]
 if "active_sections" not in ss:
     ss["active_sections"] = set()
-st.markdown('<div class="ds-pill-row">', unsafe_allow_html=True)
-_pill_cols = st.columns(len(_sec_keys))
-for _pi, (_pk, _pl) in enumerate(zip(_sec_keys, _sec_labels)):
-    with _pill_cols[_pi]:
-        _active = _pk in ss.get("active_sections", set())
-        if st.button(_pl, key=f"pill_{_pk}",
-                     type="primary" if _active else "secondary",
-                     use_container_width=True):
-            _secs = set(ss.get("active_sections", set()))
-            if _pk in _secs:
-                _secs.discard(_pk)
-            else:
-                _secs.add(_pk)
-            ss["active_sections"] = _secs
-            st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
+with st.container():
+    _pill_cols = st.columns([1] * len(_sec_keys), gap="small")
+    for _pi, (_pk, _pl) in enumerate(zip(_sec_keys, _sec_labels)):
+        with _pill_cols[_pi]:
+            _active = _pk in ss.get("active_sections", set())
+            if st.button(_pl, key=f"pill_{_pk}",
+                         type="primary" if _active else "secondary",
+                         use_container_width=True):
+                _secs = set(ss.get("active_sections", set()))
+                if _pk in _secs:
+                    _secs.discard(_pk)
+                else:
+                    _secs.add(_pk)
+                ss["active_sections"] = _secs
+                st.rerun()
 
 if not ss.get("active_sections"):
     st.info("Selecione uma ou mais seções acima para visualizar os resultados detalhados.")
