@@ -1035,6 +1035,52 @@ if not ss.get("feature_config"):
         st.warning("Selecione pelo menos uma feature.")
         st.stop()
 
+    # ── Distribuição do desfecho ───────────────────────────────────────────
+    with st.expander(f"Distribuição do desfecho — coluna `{outcome.target_col}`", expanded=False):
+        _pos = bal["positive"]
+        _neg = bal["negative"]
+        _tot = bal["total"]
+        _prev = bal["prevalence"]
+        st.caption(
+            f"Coluna alvo: **{outcome.target_col}** · {_tot:,} registros · "
+            f"prevalência {_prev:.1%}"
+        )
+        _dc1, _dc2 = st.columns(2)
+        with _dc1:
+            st.metric(
+                label=f"Classe 1 — {outcome.name} (positivo)",
+                value=f"{_pos:,}",
+                delta=f"{_prev:.1%} do total",
+                delta_color="off",
+            )
+        with _dc2:
+            st.metric(
+                label="Classe 0 — Sem desfecho (negativo)",
+                value=f"{_neg:,}",
+                delta=f"{1 - _prev:.1%} do total",
+                delta_color="off",
+            )
+        # Mini bar visual
+        _bar_pos = max(1, round(_prev * 60))
+        _bar_neg = 60 - _bar_pos
+        st.markdown(
+            f"<div style='margin:8px 0 4px'>"
+            f"<div style='display:flex;height:10px;border-radius:5px;overflow:hidden'>"
+            f"<div style='width:{_bar_pos/60*100:.1f}%;background:#111827'></div>"
+            f"<div style='width:{_bar_neg/60*100:.1f}%;background:#e5e7eb'></div>"
+            f"</div>"
+            f"<div style='display:flex;justify-content:space-between;font-size:.75rem;color:#6b7280;margin-top:3px'>"
+            f"<span>Positivo ({_prev:.1%})</span>"
+            f"<span>Negativo ({1-_prev:.1%})</span>"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
+        if _prev < 0.05:
+            st.warning(
+                "Prevalência abaixo de 5% — dataset fortemente desbalanceado. "
+                "Considere usar balanceamento (SMOTE ou class weight) na etapa de configuração do modelo."
+            )
+
     # ── Dicionário de dados ────────────────────────────────────────────────
     with st.expander(f"Dicionário de dados — {len(selected_features)} features selecionadas", expanded=False):
         _type_colors = {
