@@ -450,11 +450,11 @@ if not ss.get("show_benchmark") and not ss.get("comparison_results"):
             st.rerun()
     st.stop()
 
-step_title(8, "Benchmark entre Estados",  # step 8
-           "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
-
 if st.button("← Voltar aos Resultados", type="secondary"):
     st.switch_page("pages/analise.py")
+
+step_title(8, "Benchmark entre Estados",  # step 8
+           "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
 
 if ss["comparison_results"]:
     comp = ss["comparison_results"]
