@@ -1922,8 +1922,15 @@ if not ss["model_results"]:
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 7 — RESULTADOS
 # ═════════════════════════════════════════════════════════════════════════════
-step_title(7, "Resultados do Modelo",
-           "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
+_r7_title_col, _r7_btn_col = st.columns([3, 1])
+with _r7_title_col:
+    step_title(7, "Resultados do Modelo",
+               "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
+with _r7_btn_col:
+    st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
+    if st.button("→ Relatório Final", key="btn_rel_top", type="secondary", use_container_width=True):
+        st.switch_page("pages/relatorio.py")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 ev = _ev()
 results = ss["model_results"]
@@ -2335,11 +2342,11 @@ st.markdown('<p class="ds-section-caption">Continue para benchmark entre estados
             unsafe_allow_html=True)
 _btn_col1, _btn_col2 = st.columns(2)
 with _btn_col1:
-    if st.button("→ Benchmark entre Estados", type="primary", use_container_width=True):
+    if st.button("→ Benchmark entre Estados", type="secondary", use_container_width=True):
         ss["show_benchmark"] = True
         st.switch_page("pages/calibracao.py")
 with _btn_col2:
-    if st.button("→ Deploy — Inferência Individual", type="secondary", use_container_width=True):
+    if st.button("→ Deploy — Inferência Individual", type="primary", use_container_width=True):
         st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
