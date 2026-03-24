@@ -339,6 +339,10 @@ if not ss.get("model_results") or not ss.get("outcome_key") or ss.get("cohort") 
         st.switch_page("pages/analise.py")
     st.stop()
 
+# ── Botão de retorno (acima do step bar, igual ao Relatório) ───────────────────
+if st.button("Resultados", icon=":material/arrow_back:", type="secondary"):
+    st.switch_page("pages/analise.py")
+
 # ── Step bar ───────────────────────────────────────────────────────────────────
 render_step_bar()
 
@@ -560,11 +564,3 @@ if submitted:
         st.error(f"Erro na predição: {e}")
         st.exception(e)
 
-# ── Navegação inferior ──────────────────────────────────────────────────────
-_nav_l, _nav_gap, _nav_r = st.columns([1, 3, 1])
-with _nav_l:
-    if st.button("Resultados", icon=":material/analytics:", type="secondary", use_container_width=True):
-        st.switch_page("pages/analise.py")
-with _nav_r:
-    if st.button("Benchmark", icon=":material/leaderboard:", type="secondary", use_container_width=True):
-        st.switch_page("pages/calibracao.py")

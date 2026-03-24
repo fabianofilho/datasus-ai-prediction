@@ -408,6 +408,10 @@ if not ss["model_results"] or not ss["outcome_key"] or ss["cohort"] is None:
         st.switch_page("pages/analise.py")
     st.stop()
 
+# ── Botão de retorno (acima do step bar, igual ao Relatório) ───────────────────
+if st.button("Resultados", icon=":material/arrow_back:", type="secondary"):
+    st.switch_page("pages/analise.py")
+
 # ── Stepbar ────────────────────────────────────────────────────────────────────
 _step = 8  # Benchmark é agora o passo 8
 render_step_bar(_step)
@@ -592,15 +596,5 @@ else:
         ss["comparison_results"] = comp_list
         st.rerun()
 
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-st.markdown('<p class="ds-section-caption">Prossiga para inferência individual ou exporte o relatório completo do pipeline.</p>',
-            unsafe_allow_html=True)
-_dep_l, _dep_gap, _dep_r = st.columns([1, 3, 1])
-with _dep_l:
-    if st.button("Resultados", icon=":material/arrow_back:", type="secondary", use_container_width=True):
-        st.switch_page("pages/analise.py")
-with _dep_r:
-    if st.button("Deploy", icon=":material/rocket_launch:", type="primary", use_container_width=True):
-        st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
