@@ -563,8 +563,8 @@ if submitted:
 # ── Navegação inferior ──────────────────────────────────────────────────────
 _nav_l, _nav_gap, _nav_r = st.columns([1, 3, 1])
 with _nav_l:
-    if st.button("Benchmark", icon=":material/arrow_back:", type="secondary", use_container_width=True):
-        st.switch_page("pages/calibracao.py")
-with _nav_r:
     if st.button("Resultados", icon=":material/analytics:", type="secondary", use_container_width=True):
         st.switch_page("pages/analise.py")
+with _nav_r:
+    if st.button("Benchmark", icon=":material/leaderboard:", type="secondary", use_container_width=True):
+        st.switch_page("pages/calibracao.py")
