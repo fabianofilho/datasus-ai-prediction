@@ -421,8 +421,8 @@ if not ss.get("model_results") or not ss.get("outcome_key"):
         st.switch_page("pages/analise.py")
     st.stop()
 
-if st.button("← Voltar ao Deploy", type="secondary"):
-    st.switch_page("pages/deploy.py")
+if st.button("← Resultados", type="secondary"):
+    st.switch_page("pages/analise.py")
 
 render_step_bar()
 
