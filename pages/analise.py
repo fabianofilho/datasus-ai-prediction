@@ -122,7 +122,8 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 [data-testid="stSidebar"] > div:first-child {
   padding: 0 1rem 1rem !important;
   height: 100% !important;
-  overflow-y: auto !important;
+  overflow-y: hidden !important;
+  overflow-x: hidden !important;
 }
 .ds-sidebar-note {
   position: sticky; top: 0; z-index: 100;
