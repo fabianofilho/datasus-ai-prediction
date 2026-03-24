@@ -376,7 +376,6 @@ st.caption(
     f"Preencha os valores de um paciente e clique em **Predizer** para obter "
     f"a probabilidade de **{outcome.name}** com explicação SHAP individual."
 )
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Helper: cria format_func para selectbox categórico ────────────────────────
 def _make_fmt(vals_dict: dict):
@@ -545,7 +544,6 @@ if submitted:
         st.exception(e)
 
 # ── Navegação para Relatório ────────────────────────────────────────────────
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 _nav_l, _nav_gap, _nav_r = st.columns([1, 3, 1])
 with _nav_l:
     if st.button("← Benchmark", type="secondary", use_container_width=True):
