@@ -1995,9 +1995,9 @@ if len(_all) <= 1:
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Toggle pills (multi-select) ──────────────────────────────────────────────
-_sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade"]
+_sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade", "multicalibracao"]
 _sec_labels = ["Curvas ROC/PR", "Distribuição", "SHAP Global",
-               "SHAP Individual", "Métricas Clínicas", "Equidade"]
+               "SHAP Individual", "Métricas Clínicas", "Equidade", "Multicalibração"]
 if "active_sections" not in ss:
     ss["active_sections"] = set()
 st.markdown('<div class="ds-pill-row">', unsafe_allow_html=True)
@@ -2360,6 +2360,170 @@ if "calibracao" in ss.get("active_sections", set()):
         if st.button("Pular calibração", type="secondary", key="btn_skip_calib_tab"):
             ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
             st.rerun()
+
+# ── Multicalibração ─────────────────────────────────────────────────────────
+if "multicalibracao" in ss.get("active_sections", set()):
+    import numpy as _np_mc
+    from sklearn.calibration import calibration_curve as _cal_curve_mc
+    import plotly.graph_objects as _go_mc
+
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("**Multicalibração — Ajuste de Calibração Global e por Subgrupo**")
+    st.caption(
+        "Aplica Platt Scaling ou Isotonic Regression sobre as probabilidades OOF. "
+        "Avalia a calibração globalmente e por subgrupo para detectar vieses de fairness."
+    )
+
+    _oof_mc = _np_mc.array(oof)
+    _y_mc   = _np_mc.array(y_arr)
+
+    # ── Controles ────────────────────────────────────────────────────────────
+    _mc_c1, _mc_c2, _mc_c3 = st.columns([2, 2, 1])
+    with _mc_c1:
+        _mc_method = st.selectbox(
+            "Método de calibração",
+            ["sigmoid", "isotonic"],
+            format_func=lambda x: "Platt Scaling (Sigmoid)" if x == "sigmoid" else "Isotonic Regression",
+            key="mc_method",
+        )
+    with _mc_c2:
+        _mc_sg_candidates = sorted([
+            c for c in X_res.columns
+            if 2 <= X_res[c].nunique() <= 15
+        ])
+        _mc_sg_col = st.selectbox(
+            "Subgrupo para análise de fairness",
+            _mc_sg_candidates if _mc_sg_candidates else ["(nenhum)"],
+            key="mc_sg_col",
+        )
+    with _mc_c3:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        _mc_apply = st.button("Aplicar", type="primary", key="btn_mc_apply")
+
+    if _mc_apply:
+        ss.pop("mc_results", None)
+
+    # ── Calcular calibração ───────────────────────────────────────────────────
+    if "mc_results" not in ss or _mc_apply:
+        with st.spinner("Calibrando…"):
+            try:
+                if _mc_method == "sigmoid":
+                    from sklearn.linear_model import LogisticRegression as _LR_mc
+                    _cmod = _LR_mc()
+                    _cmod.fit(_oof_mc.reshape(-1, 1), _y_mc)
+                    _cal_p = _cmod.predict_proba(_oof_mc.reshape(-1, 1))[:, 1]
+                else:
+                    from sklearn.isotonic import IsotonicRegression as _IR_mc
+                    _cmod = _IR_mc(out_of_bounds="clip")
+                    _cmod.fit(_oof_mc, _y_mc)
+                    _cal_p = _np_mc.clip(_cmod.predict(_oof_mc), 0, 1)
+                ss["mc_results"] = {
+                    "cal_probs": _cal_p.tolist(),
+                    "method": _mc_method,
+                    "sg_col": _mc_sg_col,
+                }
+            except Exception as _mc_err:
+                st.error(f"Erro na calibração: {_mc_err}")
+
+    if ss.get("mc_results"):
+        _mc_cp  = _np_mc.array(ss["mc_results"]["cal_probs"])
+
+        def _ece_mc(y_t, p, n_bins=10):
+            edges = _np_mc.linspace(0, 1, n_bins + 1)
+            ece = 0.0
+            for lo, hi in zip(edges[:-1], edges[1:]):
+                mask = (p >= lo) & (p < hi)
+                if mask.sum() == 0:
+                    continue
+                ece += mask.sum() / len(y_t) * abs(float(y_t[mask].mean()) - float(p[mask].mean()))
+            return ece
+
+        # ── Curva global ─────────────────────────────────────────────────────
+        try:
+            _fr_raw, _mn_raw = _cal_curve_mc(_y_mc, _oof_mc, n_bins=10)
+            _fr_cal, _mn_cal = _cal_curve_mc(_y_mc, _mc_cp,  n_bins=10)
+        except Exception:
+            _fr_raw = _mn_raw = _fr_cal = _mn_cal = _np_mc.array([])
+
+        _fig_mc_glob = _go_mc.Figure()
+        _fig_mc_glob.add_trace(_go_mc.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="Calibração perfeita",
+                                               line=dict(color="#22c55e", dash="dash", width=1.5)))
+        if len(_mn_raw):
+            _fig_mc_glob.add_trace(_go_mc.Scatter(x=_mn_raw, y=_fr_raw, mode="lines+markers", name="Bruto",
+                                                   line=dict(color="#9ca3af", dash="dot", width=2), marker=dict(size=6)))
+        if len(_mn_cal):
+            _fig_mc_glob.add_trace(_go_mc.Scatter(x=_mn_cal, y=_fr_cal, mode="lines+markers",
+                                                   name=f"Calibrado ({ss['mc_results']['method']})",
+                                                   line=dict(color="#3b82f6", width=2.5), marker=dict(size=7)))
+        _fig_mc_glob.update_layout(
+            title="Curva de Calibração — OOF Global",
+            xaxis=dict(title="Probabilidade média predita", range=[0, 1]),
+            yaxis=dict(title="Fração de positivos (real)", range=[0, 1]),
+            height=340, legend=dict(orientation="h", y=-0.22),
+        )
+
+        _col_g1, _col_g2 = st.columns([3, 1])
+        with _col_g1:
+            st.plotly_chart(_fig_mc_glob, use_container_width=True)
+        with _col_g2:
+            _ece_b = _ece_mc(_y_mc, _oof_mc)
+            _ece_a = _ece_mc(_y_mc, _mc_cp)
+            st.metric("ECE bruto",      f"{_ece_b:.4f}")
+            st.metric("ECE calibrado",  f"{_ece_a:.4f}",
+                      delta=f"{_ece_a - _ece_b:+.4f}", delta_color="inverse")
+            from sklearn.metrics import brier_score_loss as _bsl_mc
+            st.metric("Brier bruto",    f"{_bsl_mc(_y_mc, _oof_mc):.4f}")
+            st.metric("Brier calibrado",f"{_bsl_mc(_y_mc, _mc_cp):.4f}",
+                      delta=f"{_bsl_mc(_y_mc, _mc_cp) - _bsl_mc(_y_mc, _oof_mc):+.4f}", delta_color="inverse")
+
+        # ── Calibração por subgrupo ───────────────────────────────────────────
+        _sg = _mc_sg_col
+        if _sg and _sg != "(nenhum)" and _sg in X_res.columns:
+            st.markdown(f"**Calibração por subgrupo: `{_sg}`**")
+            _sg_vals = X_res[_sg].value_counts().head(8).index.tolist()
+
+            _fig_sg = _go_mc.Figure()
+            _fig_sg.add_trace(_go_mc.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="Perfeito",
+                                              line=dict(color="#22c55e", dash="dash", width=1.5)))
+            _sg_palette = ["#3b82f6", "#ef4444", "#f97316", "#a855f7", "#14b8a6", "#eab308", "#ec4899", "#64748b"]
+            _ece_tbl = []
+            for _ci_sg, _gv in enumerate(_sg_vals):
+                _gm = (X_res[_sg] == _gv).values
+                if _gm.sum() < 20:
+                    continue
+                _yg = _y_mc[_gm]; _rg = _oof_mc[_gm]; _cg = _mc_cp[_gm]
+                try:
+                    _fg, _mg = _cal_curve_mc(_yg, _cg, n_bins=min(10, max(3, int(_gm.sum() // 5))))
+                    _fig_sg.add_trace(_go_mc.Scatter(
+                        x=_mg, y=_fg, mode="lines+markers",
+                        name=f"{_gv} (n={int(_gm.sum()):,})",
+                        line=dict(color=_sg_palette[_ci_sg % len(_sg_palette)], width=2),
+                        marker=dict(size=6),
+                    ))
+                    _ece_tbl.append({
+                        "Subgrupo": str(_gv), "n": int(_gm.sum()),
+                        "ECE bruto": round(_ece_mc(_yg, _rg), 4),
+                        "ECE calibrado": round(_ece_mc(_yg, _cg), 4),
+                        "Brier bruto": round(float(_bsl_mc(_yg, _rg)), 4),
+                        "Brier calibrado": round(float(_bsl_mc(_yg, _cg)), 4),
+                    })
+                except Exception:
+                    pass
+
+            _fig_sg.update_layout(
+                title=f"Calibração após ajuste — por {_sg}",
+                xaxis=dict(title="Confiança média", range=[0, 1]),
+                yaxis=dict(title="Fração de positivos (real)", range=[0, 1]),
+                height=380,
+                legend=dict(orientation="h", y=-0.25),
+            )
+            st.plotly_chart(_fig_sg, use_container_width=True)
+
+            if _ece_tbl:
+                import pandas as _pd_mc
+                _df_ece = _pd_mc.DataFrame(_ece_tbl).set_index("Subgrupo")
+                st.caption("ECE = Expected Calibration Error (menor = melhor calibração)")
+                st.dataframe(_df_ece, use_container_width=True)
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown('<p class="ds-section-caption">Continue para benchmark entre estados ou vá direto para inferência individual.</p>',
