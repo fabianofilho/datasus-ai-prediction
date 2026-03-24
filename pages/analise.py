@@ -580,7 +580,7 @@ def render_sidebar() -> None:
         # Step 5: Tratamento
         if ss.get("treatment_config"):
             tc_ = ss["treatment_config"]
-            _num_lbl = {"none": "Sem escala", "standard": "Z-score", "minmax": "Min-Max"}.get(
+            _num_lbl = {"none": "Sem escala", "standard": "Z-score", "minmax": "Min-Max", "robust": "Robust", "bin": "Binning"}.get(
                 tc_.get("num_default", "none"), "—")
             _cat_lbl = {"none": "Sem trat.", "ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}.get(
                 tc_.get("cat_default", "none"), "—")
@@ -1208,15 +1208,20 @@ if not ss.get("treatment_config"):
     # ── Passo 2: Configurar tratamento ────────────────────────────────────────
     st.markdown("**Passo 2 — Configurar tratamento**")
 
-    _all_num_opts = ["none", "standard", "minmax", "drop"]
+    _all_num_opts = ["none", "standard", "minmax", "robust", "bin", "drop"]
     _all_cat_opts = ["ohe", "ordinal", "target", "drop"]
-    _num_lbl_map = {"none": "Nenhuma", "standard": "Z-score", "minmax": "Min-Max", "drop": "Remover"}
+    _num_lbl_map = {
+        "none": "Nenhuma", "standard": "Z-score", "minmax": "Min-Max",
+        "robust": "Robust", "bin": "Binning", "drop": "Remover",
+    }
     _cat_lbl_map = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}
 
     _num_map = {
         "Nenhuma (recomendado para árvores)": "none",
-        "Padronização (z-score)": "standard",
-        "Normalização (min-max)": "minmax",
+        "Padronização Z-score": "standard",
+        "Normalização Min-Max": "minmax",
+        "Escala Robusta (Robust Scaling)": "robust",
+        "Discretização (Binning)": "bin",
     }
     _cat_map = {
         "Sem tratamento (recomendado para árvores)": "none",
@@ -1236,6 +1241,16 @@ if not ss.get("treatment_config"):
             "Escala padrão",
             list(_num_map.keys()),
             label_visibility="collapsed",
+            help=(
+                "**Nenhuma**: mantém valores originais — ideal para árvores (LightGBM, XGBoost, RF).  \n"
+                "**Z-score**: subtrai a média e divide pelo desvio padrão → média 0, desvio 1. "
+                "Ideal para regressão logística. Sensível a outliers.  \n"
+                "**Min-Max**: escala para o intervalo [0, 1]. Sensível a outliers extremos.  \n"
+                "**Robust Scaling**: usa mediana e IQR em vez de média e desvio padrão. "
+                "Menos sensível a outliers — boa alternativa ao Z-score quando há valores extremos.  \n"
+                "**Discretização (Binning)**: transforma a variável contínua em categorias ordinais "
+                "por quantis (5 faixas de tamanho igual). Pode ajudar modelos simples ou interpretação."
+            ),
         )
     with _r2:
         st.markdown("**Variáveis Categóricas**")
@@ -1244,9 +1259,13 @@ if not ss.get("treatment_config"):
             list(_cat_map.keys()),
             label_visibility="collapsed",
             help=(
-                "**One-Hot**: cria coluna binária por categoria. "
-                "**Ordinal**: converte em inteiro (variáveis com ordem natural). "
-                "**Target**: média do target por categoria (alta cardinalidade). "
+                "**Sem tratamento**: converte para código ordinal sem escala — recomendado para árvores.  \n"
+                "**One-Hot Encoding**: cria uma coluna binária (0/1) para cada categoria. "
+                "Aumenta dimensionalidade. Ideal para regressão logística com poucas categorias.  \n"
+                "**Ordinal Encoding**: converte categorias em inteiros com ordem natural "
+                "(ex: escolaridade, faixa etária). Mantém o número de colunas.  \n"
+                "**Target Encoding**: substitui cada categoria pela média do desfecho naquela categoria. "
+                "Útil para alta cardinalidade (muitas categorias únicas).  \n"
                 "**Remover**: exclui a variável do modelo."
             ),
         )
@@ -1256,9 +1275,12 @@ if not ss.get("treatment_config"):
     _cat_default_key = _cat_map[_cat_opt]
 
     # ── Ajustes por variável ──────────────────────────────────────────────────
-    _num_treat_opts = ["none", "standard", "minmax", "drop"]
+    _num_treat_opts = ["none", "standard", "minmax", "robust", "bin", "drop"]
     _cat_treat_opts = ["none", "ohe", "ordinal", "target", "drop"]
-    _num_lbl = {"none": "Nenhuma", "standard": "Z-score", "minmax": "Min-Max", "drop": "Remover"}
+    _num_lbl = {
+        "none": "Nenhuma", "standard": "Z-score", "minmax": "Min-Max",
+        "robust": "Robust", "bin": "Binning", "drop": "Remover",
+    }
     _cat_lbl = {"none": "Sem trat.", "ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}
 
     # track effective type per column (after user override)

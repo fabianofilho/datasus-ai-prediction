@@ -212,6 +212,12 @@ def _build_preprocessor(
             inner.append(("scale", StandardScaler()))
         elif t == "minmax":
             inner.append(("scale", MinMaxScaler()))
+        elif t == "robust":
+            from sklearn.preprocessing import RobustScaler
+            inner.append(("scale", RobustScaler()))
+        elif t == "bin":
+            from sklearn.preprocessing import KBinsDiscretizer
+            inner.append(("bin", KBinsDiscretizer(n_bins=5, encode="ordinal", strategy="quantile")))
         transformers.append((f"num_{t}", Pipeline(inner), cols))
 
     # ── Categorical ───────────────────────────────────────────────────────────
