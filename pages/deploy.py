@@ -339,10 +339,6 @@ if not ss.get("model_results") or not ss.get("outcome_key") or ss.get("cohort") 
         st.switch_page("pages/analise.py")
     st.stop()
 
-# ── Voltar (acima do step bar) ─────────────────────────────────────────────────
-if st.button("← Voltar aos Resultados", type="secondary"):
-    st.switch_page("pages/analise.py")
-
 # ── Step bar ───────────────────────────────────────────────────────────────────
 render_step_bar()
 
@@ -371,11 +367,18 @@ num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").colum
 cat_cols = treatment.get("cat_cols", X_res.select_dtypes(exclude="number").columns.tolist())
 
 # ── Título ─────────────────────────────────────────────────────────────────────
-st.markdown("**Passo 10 — Deploy — Inferência Individual**")
-st.caption(
-    f"Preencha os valores de um paciente e clique em **Predizer** para obter "
-    f"a probabilidade de **{outcome.name}** com explicação SHAP individual."
-)
+_dp_title_col, _dp_btn_col = st.columns([3, 1])
+with _dp_title_col:
+    st.markdown("**Passo 10 — Deploy — Inferência Individual**")
+    st.caption(
+        f"Preencha os valores de um paciente e clique em **Predizer** para obter "
+        f"a probabilidade de **{outcome.name}** com explicação SHAP individual."
+    )
+with _dp_btn_col:
+    st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
+    if st.button("→ Resultados", key="btn_back_results_dp", type="secondary", use_container_width=True):
+        st.switch_page("pages/analise.py")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Helper: cria format_func para selectbox categórico ────────────────────────
 def _make_fmt(vals_dict: dict):

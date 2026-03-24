@@ -450,11 +450,15 @@ if not ss.get("show_benchmark") and not ss.get("comparison_results"):
             st.rerun()
     st.stop()
 
-if st.button("← Voltar aos Resultados", type="secondary"):
-    st.switch_page("pages/analise.py")
-
-step_title(8, "Benchmark entre Estados",  # step 8
-           "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
+_bm_title_col, _bm_btn_col = st.columns([3, 1])
+with _bm_title_col:
+    step_title(8, "Benchmark entre Estados",
+               "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
+with _bm_btn_col:
+    st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
+    if st.button("→ Resultados", key="btn_back_results", type="secondary", use_container_width=True):
+        st.switch_page("pages/analise.py")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 if ss["comparison_results"]:
     comp = ss["comparison_results"]
