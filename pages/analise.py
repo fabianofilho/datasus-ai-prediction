@@ -1558,6 +1558,7 @@ if not ss.get("model_config"):
         balancing = st.radio(
             "Balanceamento",
             ["Nenhum", "Class Weight", "SMOTE (oversample)", "SMOTE + Undersampling"],
+            index=1,
             label_visibility="collapsed",
             help=(
                 "**Nenhum**: sem ajuste. "
