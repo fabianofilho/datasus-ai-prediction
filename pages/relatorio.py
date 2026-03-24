@@ -494,13 +494,74 @@ _mc5.metric("F1-Score",       f"{m['f1']:.4f}")
 _oof = results.get("oof_probs")
 _y_eval = results.get("y_eval")
 if _oof is not None and _y_eval is not None:
+    import plotly.graph_objects as _go_rep
+    _y_np  = _np_rep.array(_y_eval)
+    _oof_np = _np_rep.array(_oof)
+
+    # ── Curvas de desempenho ───────────────────────────────────────────────
+    st.markdown("**Curvas de desempenho**")
     _col_roc, _col_pr = st.columns(2)
     with _col_roc:
-        st.plotly_chart(ev.roc_chart(_np_rep.array(_y_eval), _np_rep.array(_oof)),
-                        use_container_width=True)
+        st.plotly_chart(ev.roc_chart(_y_np, _oof_np), use_container_width=True)
     with _col_pr:
-        st.plotly_chart(ev.calibration_chart(_np_rep.array(_y_eval), _np_rep.array(_oof)),
-                        use_container_width=True)
+        st.plotly_chart(ev.pr_chart(_y_np, _oof_np), use_container_width=True)
+
+    # ── Distribuição dos scores preditos ──────────────────────────────────
+    st.markdown("**Distribuição dos scores preditos**")
+    _fig_dist = _go_rep.Figure()
+    _fig_dist.add_trace(_go_rep.Histogram(
+        x=_oof_np[_y_np == 0], name="Negativo (y=0)", nbinsx=40,
+        marker_color="#3b82f6", opacity=0.7,
+    ))
+    _fig_dist.add_trace(_go_rep.Histogram(
+        x=_oof_np[_y_np == 1], name="Positivo (y=1)", nbinsx=40,
+        marker_color="#ef4444", opacity=0.7,
+    ))
+    _fig_dist.update_layout(
+        barmode="overlay", xaxis_title="Score predito", yaxis_title="Frequência",
+        height=300, margin=dict(t=20, b=40, l=40, r=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    )
+    st.plotly_chart(_fig_dist, use_container_width=True)
+
+    # ── Métricas Clínicas por Ponto de Corte ──────────────────────────────
+    st.markdown("**Métricas Clínicas por Ponto de Corte**")
+    st.plotly_chart(ev.threshold_curve_chart(_y_np, _oof_np), use_container_width=True)
+
+    # ── Matriz de confusão (threshold 0.50) ───────────────────────────────
+    st.markdown("**Matriz de confusão** (threshold 0.50)")
+    _tm50 = ev.threshold_metrics(_y_np, _oof_np, 0.5)
+    _cm_z50   = [[_tm50["tn"], _tm50["fp"]], [_tm50["fn"], _tm50["tp"]]]
+    _cm_x50   = ["Pred Negativo", "Pred Positivo"]
+    _cm_y50   = ["Real Negativo", "Real Positivo"]
+    _cm_max50 = max(_tm50["tn"], _tm50["fp"], _tm50["fn"], _tm50["tp"]) or 1
+    _cm_ann50 = []
+    for _ri50, _row50 in enumerate(_cm_z50):
+        for _ci50, _val50 in enumerate(_row50):
+            _norm50 = _val50 / _cm_max50
+            _cm_ann50.append(dict(
+                x=_cm_x50[_ci50], y=_cm_y50[_ri50],
+                text=f"<b>{_val50:,}</b>", showarrow=False,
+                font=dict(size=16, color="white" if _norm50 > 0.45 else "#111827"),
+                xref="x", yref="y",
+            ))
+    _cm_fig50 = _go_rep.Figure(_go_rep.Heatmap(
+        z=_cm_z50, x=_cm_x50, y=_cm_y50,
+        colorscale=[[0, "#f0fdf4"], [0.5, "#4ade80"], [1, "#166534"]],
+        showscale=False,
+    ))
+    _cm_fig50.update_layout(
+        height=300, margin=dict(t=20, b=40, l=110, r=20),
+        xaxis=dict(side="bottom"),
+        yaxis=dict(autorange="reversed", scaleanchor="x", scaleratio=1),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        annotations=_cm_ann50,
+    )
+    _cm_col50, _ = st.columns([1, 1])
+    with _cm_col50:
+        st.plotly_chart(_cm_fig50, use_container_width=True)
+
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── 5. Importância de Features ─────────────────────────────────────────────────
