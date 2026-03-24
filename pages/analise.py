@@ -118,22 +118,37 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   height: calc(100vh - var(--topbar-h)) !important;
   background: var(--bg) !important;
   border-right: 1px solid var(--border) !important;
+  overflow: hidden !important;
 }
+/* Remove padding padrão do Streamlit no topo da sidebar */
 [data-testid="stSidebar"] > div:first-child {
-  padding: 0 1rem 1rem !important;
+  padding: 0 0.75rem 0.5rem !important;
   height: 100% !important;
   overflow-y: hidden !important;
   overflow-x: hidden !important;
 }
+[data-testid="stSidebar"] > div:first-child > div:first-child,
+[data-testid="stSidebarUserContent"] {
+  padding-top: 0.25rem !important;
+  margin-top: 0 !important;
+}
+/* Botões Editar mais compactos na sidebar */
+[data-testid="stSidebar"] [data-testid="stButton"] > button {
+  padding: 0.15rem 0.6rem !important;
+  font-size: 0.72rem !important;
+  min-height: 1.7rem !important;
+  height: 1.7rem !important;
+  margin-bottom: 2px !important;
+  margin-top: 1px !important;
+}
 .ds-sidebar-note {
-  position: sticky; top: 0; z-index: 100;
   background: var(--bg);
-  padding: 1.25rem 0 .5rem;
-  font-size:.68rem; color:#6b7280; line-height:1.4;
+  padding: 0.4rem 0 0.3rem;
+  font-size:.65rem; color:#6b7280; line-height:1.35;
 }
 .ds-sidebar-note-box {
   background:#f9fafb; border:1px solid #e5e7eb;
-  border-radius:6px; padding:8px 10px;
+  border-radius:6px; padding:6px 8px;
 }
 
 /* ── Topbar ─────────────────────────────────────────────────── */
