@@ -227,7 +227,7 @@ def _build_preprocessor(
                         handle_unknown="use_encoded_value", unknown_value=-1)),
                 ])
                 transformers.append((f"cat_{t}", enc, cols))
-        elif t == "ordinal":
+        elif t in ("ordinal", "none"):   # "none" = ordinal simples (recomendado para árvores)
             enc = Pipeline([
                 ("impute", SimpleImputer(strategy="most_frequent")),
                 ("encode", OrdinalEncoder(

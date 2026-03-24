@@ -346,8 +346,8 @@ def render_sidebar() -> None:
             tc_ = ss["treatment_config"]
             _num_lbl = {"none": "Sem escala", "standard": "Z-score", "minmax": "Min-Max"}.get(
                 tc_.get("num_default", "none"), "—")
-            _cat_lbl = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}.get(
-                tc_.get("cat_default", "ohe"), "—")
+            _cat_lbl = {"none": "Sem trat.", "ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}.get(
+                tc_.get("cat_default", "none"), "—")
             st.markdown(
                 f'<div class="sb-step">'
                 f'<div class="sb-step-label">5 · Tratamento</div>'

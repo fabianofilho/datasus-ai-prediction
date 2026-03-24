@@ -566,8 +566,8 @@ def render_sidebar() -> None:
             tc_ = ss["treatment_config"]
             _num_lbl = {"none": "Sem escala", "standard": "Z-score", "minmax": "Min-Max"}.get(
                 tc_.get("num_default", "none"), "—")
-            _cat_lbl = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}.get(
-                tc_.get("cat_default", "ohe"), "—")
+            _cat_lbl = {"none": "Sem trat.", "ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}.get(
+                tc_.get("cat_default", "none"), "—")
             _n_ov = len(tc_.get("overrides", {}))
             st.markdown(
                 f'<div class="sb-step">'
@@ -1157,6 +1157,7 @@ if not ss.get("treatment_config"):
         "Normalização (min-max)": "minmax",
     }
     _cat_map = {
+        "Sem tratamento (recomendado para árvores)": "none",
         "One-Hot Encoding": "ohe",
         "Ordinal Encoding": "ordinal",
         "Target Encoding": "target",
@@ -1194,9 +1195,9 @@ if not ss.get("treatment_config"):
 
     # ── Ajustes por variável ──────────────────────────────────────────────────
     _num_treat_opts = ["none", "standard", "minmax", "drop"]
-    _cat_treat_opts = ["ohe", "ordinal", "target", "drop"]
+    _cat_treat_opts = ["none", "ohe", "ordinal", "target", "drop"]
     _num_lbl = {"none": "Nenhuma", "standard": "Z-score", "minmax": "Min-Max", "drop": "Remover"}
-    _cat_lbl = {"ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}
+    _cat_lbl = {"none": "Sem trat.", "ohe": "One-Hot", "ordinal": "Ordinal", "target": "Target", "drop": "Remover"}
 
     # track effective type per column (after user override)
     _eff_type: dict = {}      # col -> "num" | "cat"
