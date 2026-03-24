@@ -408,10 +408,6 @@ if not ss["model_results"] or not ss["outcome_key"] or ss["cohort"] is None:
         st.switch_page("pages/analise.py")
     st.stop()
 
-# ── Voltar ao modelo (acima do step bar) ───────────────────────────────────────
-if st.button("← Voltar ao Modelo", type="secondary"):
-    st.switch_page("pages/analise.py")
-
 # ── Stepbar ────────────────────────────────────────────────────────────────────
 _step = 8  # Benchmark é agora o passo 8
 render_step_bar(_step)
@@ -454,11 +450,11 @@ if not ss.get("show_benchmark") and not ss.get("comparison_results"):
             st.rerun()
     st.stop()
 
-if st.button("← Voltar aos Resultados", type="secondary"):
-    st.switch_page("pages/analise.py")
-
 step_title(8, "Benchmark entre Estados",  # step 8
            "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
+
+if st.button("← Voltar aos Resultados", type="secondary"):
+    st.switch_page("pages/analise.py")
 
 if ss["comparison_results"]:
     comp = ss["comparison_results"]
@@ -531,16 +527,23 @@ else:
                     X_cmp = X_cmp.loc[_idx]
                     y_cmp = y_cmp.loc[_idx]
 
-                # Usa o pipeline base (sem wrapper de calibração) para evitar
-                # erros de shape causados pela conversão DataFrame→numpy interna
-                # do CalibratedClassifierCV. Métricas de benchmark (ROC-AUC, F1)
-                # são baseadas em ranking e não dependem de calibração.
+                # Separa pré-processamento do estimador final para evitar erros
+                # de shape (pandas DataFrame→numpy) no Pipeline.predict_proba.
+                # Aplica o ColumnTransformer diretamente (recebe DataFrame com
+                # nomes de colunas) e passa numpy para o estimador final.
+                import numpy as _np_bm
                 _base_pipeline = results["model"]
-                try:
-                    probs_cmp = _base_pipeline.predict_proba(X_cmp)[:, 1]
-                except Exception:
-                    # fallback: converte para numpy preservando a ordem das colunas
-                    probs_cmp = _base_pipeline.predict_proba(X_cmp.values)[:, 1]
+                _prep_steps = _base_pipeline[:-1]   # tudo exceto o modelo final
+                _clf_final   = _base_pipeline[-1]   # só o estimador final
+
+                X_t = _prep_steps.transform(X_cmp)  # DataFrame → numpy (OHE expandido)
+                if hasattr(X_t, "toarray"):
+                    X_t = X_t.toarray()
+                if hasattr(X_t, "values"):          # se ainda for DataFrame
+                    X_t = X_t.values
+                X_t = _np_bm.asarray(X_t, dtype=float)
+
+                probs_cmp = _clf_final.predict_proba(X_t)[:, 1]
                 preds_cmp = (probs_cmp >= 0.5).astype(int)
 
                 from sklearn.metrics import (

@@ -339,10 +339,6 @@ if not ss.get("model_results") or not ss.get("outcome_key") or ss.get("cohort") 
         st.switch_page("pages/analise.py")
     st.stop()
 
-# ── Voltar (acima do step bar) ─────────────────────────────────────────────────
-if st.button("← Voltar aos Resultados", type="secondary"):
-    st.switch_page("pages/analise.py")
-
 # ── Step bar ───────────────────────────────────────────────────────────────────
 render_step_bar()
 
@@ -371,7 +367,9 @@ num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").colum
 cat_cols = treatment.get("cat_cols", X_res.select_dtypes(exclude="number").columns.tolist())
 
 # ── Título ─────────────────────────────────────────────────────────────────────
-st.markdown("**Passo 10 — Deploy — Inferência Individual**")
+if st.button("← Voltar aos Resultados", type="secondary"):
+    st.switch_page("pages/analise.py")
+st.markdown("**Passo 9 — Deploy — Inferência Individual**")
 st.caption(
     f"Preencha os valores de um paciente e clique em **Predizer** para obter "
     f"a probabilidade de **{outcome.name}** com explicação SHAP individual."
