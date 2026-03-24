@@ -2576,23 +2576,30 @@ if "multicalibracao" in ss.get("active_sections", set()):
             height=340, legend=dict(orientation="h", y=-0.22),
         )
 
-        _col_g1, _col_g2 = st.columns([3, 1])
-        with _col_g1:
-            st.plotly_chart(_fig_mc_glob, use_container_width=True)
-        with _col_g2:
-            _ece_b = _ece_mc(_y_mc, _oof_mc)
-            _ece_a = _ece_mc(_y_mc, _mc_cp)
-            st.metric("ECE bruto",      f"{_ece_b:.4f}")
-            st.metric("ECE calibrado",  f"{_ece_a:.4f}",
+        st.plotly_chart(_fig_mc_glob, use_container_width=True)
+
+        from sklearn.metrics import brier_score_loss as _bsl_mc
+        _ece_b = _ece_mc(_y_mc, _oof_mc)
+        _ece_a = _ece_mc(_y_mc, _mc_cp)
+        _brier_b = float(_bsl_mc(_y_mc, _oof_mc))
+        _brier_a = float(_bsl_mc(_y_mc, _mc_cp))
+
+        _m1, _m2 = st.columns(2)
+        with _m1:
+            st.metric("ECE bruto", f"{_ece_b:.4f}")
+        with _m2:
+            st.metric("ECE calibrado", f"{_ece_a:.4f}",
                       delta=f"{_ece_a - _ece_b:+.4f}", delta_color="inverse")
-            from sklearn.metrics import brier_score_loss as _bsl_mc
-            st.metric("Brier bruto",    f"{_bsl_mc(_y_mc, _oof_mc):.4f}")
-            st.metric("Brier calibrado",f"{_bsl_mc(_y_mc, _mc_cp):.4f}",
-                      delta=f"{_bsl_mc(_y_mc, _mc_cp) - _bsl_mc(_y_mc, _oof_mc):+.4f}", delta_color="inverse")
+        _m3, _m4 = st.columns(2)
+        with _m3:
+            st.metric("Brier bruto", f"{_brier_b:.4f}")
+        with _m4:
+            st.metric("Brier calibrado", f"{_brier_a:.4f}",
+                      delta=f"{_brier_a - _brier_b:+.4f}", delta_color="inverse")
 
         # ── Calibração por subgrupo ───────────────────────────────────────────
         _sg = _mc_sg_col
-        if _sg and _sg != "(nenhum)" and _sg in X_res.columns:
+        if _mc_apply and _sg and _sg != "(nenhum)" and _sg in X_res.columns:
             st.markdown(f"**Calibração por subgrupo: `{_sg}`**")
             _sg_vals = X_res[_sg].value_counts().head(8).index.tolist()
 

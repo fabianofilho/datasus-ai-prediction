@@ -494,23 +494,26 @@ _mc3.metric("Especificidade", f"{m.get('specificity',0):.4f}")
 _mc4.metric("PR-AUC",         f"{m['pr_auc']:.4f}")
 _mc5.metric("F1-Score",       f"{m['f1']:.4f}")
 
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
 _oof = results.get("oof_probs")
 _y_eval = results.get("y_eval")
 if _oof is not None and _y_eval is not None:
     import plotly.graph_objects as _go_rep
-    _y_np  = _np_rep.array(_y_eval)
+    _y_np   = _np_rep.array(_y_eval)
     _oof_np = _np_rep.array(_oof)
 
-    # ── Curvas de desempenho ───────────────────────────────────────────────
-    st.markdown("**Curvas de desempenho**")
+    # ── 5. Curvas de desempenho ────────────────────────────────────────────
+    st.markdown("### 5. Curvas de Desempenho")
     _col_roc, _col_pr = st.columns(2)
     with _col_roc:
         st.plotly_chart(ev.roc_chart(_y_np, _oof_np), use_container_width=True)
     with _col_pr:
         st.plotly_chart(ev.pr_chart(_y_np, _oof_np), use_container_width=True)
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-    # ── Distribuição dos scores preditos ──────────────────────────────────
-    st.markdown("**Distribuição dos scores preditos**")
+    # ── 6. Distribuição dos scores preditos ───────────────────────────────
+    st.markdown("### 6. Distribuição dos Scores Preditos")
     _fig_dist = _go_rep.Figure()
     _fig_dist.add_trace(_go_rep.Histogram(
         x=_oof_np[_y_np == 0], name="Negativo (y=0)", nbinsx=40,
@@ -522,19 +525,23 @@ if _oof is not None and _y_eval is not None:
     ))
     _fig_dist.update_layout(
         barmode="overlay", xaxis_title="Score predito", yaxis_title="Frequência",
-        height=300, margin=dict(t=20, b=40, l=40, r=20),
+        height=320, margin=dict(t=20, b=40, l=40, r=20),
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(_fig_dist, use_container_width=True)
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-    # ── Métricas Clínicas por Ponto de Corte ──────────────────────────────
-    st.markdown("**Métricas Clínicas por Ponto de Corte**")
+    # ── 7. Métricas Clínicas por Ponto de Corte ───────────────────────────
+    st.markdown("### 7. Métricas Clínicas por Ponto de Corte")
+    st.caption("Sensibilidade, especificidade, F1 e precisão em função do threshold de decisão.")
     st.plotly_chart(ev.threshold_curve_chart(_y_np, _oof_np), use_container_width=True)
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-    # ── Matriz de confusão (threshold 0.50) ───────────────────────────────
-    st.markdown("**Matriz de confusão** (threshold 0.50)")
-    _tm50 = ev.threshold_metrics(_y_np, _oof_np, 0.5)
+    # ── 8. Matriz de confusão ─────────────────────────────────────────────
+    st.markdown("### 8. Matriz de Confusão")
+    st.caption("Threshold padrão 0,50. Ajuste o ponto de corte em Métricas Clínicas acima.")
+    _tm50     = ev.threshold_metrics(_y_np, _oof_np, 0.5)
     _cm_z50   = [[_tm50["tn"], _tm50["fp"]], [_tm50["fn"], _tm50["tp"]]]
     _cm_x50   = ["Pred Negativo", "Pred Positivo"]
     _cm_y50   = ["Real Negativo", "Real Positivo"]
@@ -567,16 +574,16 @@ if _oof is not None and _y_eval is not None:
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-# ── 5. Importância de Features ─────────────────────────────────────────────────
+# ── 9. Importância de Features ─────────────────────────────────────────────────
 _fi_rep = results.get("feature_importances", {})
 if _fi_rep:
-    st.markdown("### 5. Importância de Features")
+    st.markdown("### 9. Importância de Features")
     st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-# ── 6. Calibração ──────────────────────────────────────────────────────────────
+# ── 10. Calibração ─────────────────────────────────────────────────────────────
 if calib and not calib.get("skipped"):
-    st.markdown("### 6. Calibração")
+    st.markdown("### 10. Calibração")
     _cal1, _cal2 = st.columns(2)
     with _cal1:
         st.plotly_chart(
@@ -593,9 +600,9 @@ if calib and not calib.get("skipped"):
         st.markdown(f"**Método:** {calib['method'].capitalize()}")
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-# ── 7. Benchmark ───────────────────────────────────────────────────────────────
+# ── 11. Benchmark ──────────────────────────────────────────────────────────────
 if comp:
-    st.markdown("### 7. Benchmark entre Estados")
+    st.markdown("### 11. Benchmark entre Estados")
     st.dataframe(ev.metrics_comparison_table(comp), use_container_width=True, hide_index=True)
     _sdicts = [r["shap_dict"] for r in comp if r.get("shap_dict")]
     _slabels = [r["label"] for r in comp if r.get("shap_dict")]
