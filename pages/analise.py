@@ -2329,12 +2329,12 @@ if "calibracao" in ss.get("active_sections", set()):
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown('<p class="ds-section-caption">Continue para benchmark entre estados ou vá direto para inferência individual.</p>',
             unsafe_allow_html=True)
-_btn_col1, _btn_col2, _btn_col3 = st.columns([3, 1, 1])
-with _btn_col2:
+_btn_col1, _btn_gap, _btn_col2 = st.columns([1, 3, 1])
+with _btn_col1:
     if st.button("→ Benchmark", type="secondary", use_container_width=True):
         ss["show_benchmark"] = True
         st.switch_page("pages/calibracao.py")
-with _btn_col3:
+with _btn_col2:
     if st.button("→ Deploy", type="primary", use_container_width=True):
         st.switch_page("pages/deploy.py")
 
