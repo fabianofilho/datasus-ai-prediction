@@ -342,11 +342,12 @@ if not ss.get("model_results") or not ss.get("outcome_key") or ss.get("cohort") 
         st.switch_page("pages/analise.py")
     st.stop()
 
+# ── Botão de retorno (acima do step bar) ───────────────────────────────────────
+if st.button("Resultados", icon=":material/arrow_back:", type="secondary"):
+    st.switch_page("pages/analise.py")
+
 # ── Step bar ───────────────────────────────────────────────────────────────────
 render_step_bar()
-st.markdown("---")
-if st.button("← Voltar aos Resultados", key="back_to_results_dp", type="secondary"):
-    st.switch_page("pages/analise.py")
 
 # ── Lazy imports ───────────────────────────────────────────────────────────────
 pd = _pd()
@@ -372,12 +373,19 @@ X_res = X_train[feature_cols]
 num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").columns.tolist())
 cat_cols = treatment.get("cat_cols", X_res.select_dtypes(exclude="number").columns.tolist())
 
-# ── Título ─────────────────────────────────────────────────────────────────────
-st.markdown("**Passo 9 — Deploy — Inferência Individual**")
-st.caption(
-    f"Preencha os valores de um paciente e clique em **Predizer** para obter "
-    f"a probabilidade de **{outcome.name}** com explicação SHAP individual."
-)
+# ── Título com Relatório Final à direita ───────────────────────────────────────
+_dp_title_col, _dp_gap_col, _dp_btn_col = st.columns([3, 1, 1])
+with _dp_title_col:
+    st.markdown("**Passo 9 — Deploy — Inferência Individual**")
+    st.caption(
+        f"Preencha os valores de um paciente e clique em **Predizer** para obter "
+        f"a probabilidade de **{outcome.name}** com explicação SHAP individual."
+    )
+with _dp_btn_col:
+    st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
+    if st.button("Relatório Final", key="btn_relatorio_top_dp", icon=":material/summarize:", type="primary", use_container_width=True):
+        st.switch_page("pages/relatorio.py")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Helper: cria format_func para selectbox categórico ────────────────────────
 def _make_fmt(vals_dict: dict):
@@ -588,16 +596,6 @@ else:
         ss["deploy_show_result"] = False
         ss.pop("deploy_result", None)
         st.rerun()
-
-st.markdown("---")
-st.caption("Prossiga para inferência individual ou exporte o relatório completo do pipeline.")
-_fc1, _fc2 = st.columns(2)
-with _fc1:
-    if st.button("← Benchmark", key="footer_back_dp", use_container_width=True):
-        st.switch_page("pages/calibracao.py")
-with _fc2:
-    if st.button("→ Relatório Final", key="footer_relatorio_dp", type="primary", use_container_width=True):
-        st.switch_page("pages/relatorio.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
 

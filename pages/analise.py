@@ -2045,13 +2045,13 @@ if not ss["model_results"]:
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 7 — RESULTADOS
 # ═════════════════════════════════════════════════════════════════════════════
-_th1, _th2 = st.columns([3, 1])
-with _th1:
+_r7_title_col, _r7_gap_col, _r7_btn_col = st.columns([3, 1, 1])
+with _r7_title_col:
     step_title(7, "Resultados do Modelo",
                "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
-with _th2:
-    st.markdown("<div style='text-align:right;padding-top:8px'>", unsafe_allow_html=True)
-    if st.button("→ Relatório Final", key="results_relatorio_btn"):
+with _r7_btn_col:
+    st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
+    if st.button("Relatório Final", key="btn_rel_top", icon=":material/summarize:", type="primary", use_container_width=True):
         st.switch_page("pages/relatorio.py")
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2638,15 +2638,15 @@ if "multicalibracao" in ss.get("active_sections", set()):
                 st.caption("ECE = Expected Calibration Error (menor = melhor calibração)")
                 st.dataframe(_df_ece, use_container_width=True)
 
-st.markdown("---")
-st.caption("Continue para benchmark entre estados ou vá direto para inferência individual.")
-_fc1, _fc2 = st.columns(2)
-with _fc1:
-    if st.button("→ Benchmark entre Estados", key="footer_benchmark", use_container_width=True):
-        ss["show_benchmark"] = True
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+st.markdown('<p class="ds-section-caption">Continue para benchmark entre estados ou vá direto para inferência individual.</p>',
+            unsafe_allow_html=True)
+_btn_col1, _btn_gap, _btn_col2 = st.columns([1, 3, 1])
+with _btn_col1:
+    if st.button("Benchmark", icon=":material/leaderboard:", type="secondary", use_container_width=True):
         st.switch_page("pages/calibracao.py")
-with _fc2:
-    if st.button("→ Deploy — Inferência Individual", key="footer_deploy", type="primary", use_container_width=True):
+with _btn_col2:
+    if st.button("Deploy", icon=":material/rocket_launch:", type="primary", use_container_width=True):
         st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
