@@ -2223,7 +2223,7 @@ if "equidade" in ss.get("active_sections", set()):
     from sklearn.metrics import roc_curve as _roc_curve_eq
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Análise de Equidade por Subgrupo**")
-    _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES"]
+    _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES", "UF_SIGLA"]
     _fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
     if _fairness_cols:
         group_col = st.selectbox("Estratificar por", _fairness_cols,

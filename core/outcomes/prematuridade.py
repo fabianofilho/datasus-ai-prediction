@@ -33,7 +33,7 @@ class Prematuridade(OutcomeConfig):
                 "GRAVIDEZ", "PARTO", "CONSULTAS",
                 "IDADEMAE", "ESCMAE", "RACACORMAE", "ESTCIVMAE",
                 "SEXO", "TPAPRESENT", "STTRABPART", "STCESPARTO",
-                "IDANOMAL", "age_group_mae",
+                "IDANOMAL", "age_group_mae", "UF_SIGLA",
             ],
             target_col="prematuro",
         )
@@ -54,7 +54,8 @@ class Prematuridade(OutcomeConfig):
             df["IDADEMAE"] = pd.to_numeric(df["IDADEMAE"], errors="coerce")
 
         for col in ["PARTO", "GRAVIDEZ", "TPAPRESENT", "SEXO",
-                    "ESCMAE", "RACACORMAE", "ESTCIVMAE", "STTRABPART", "STCESPARTO"]:
+                    "ESCMAE", "RACACORMAE", "ESTCIVMAE", "STTRABPART", "STCESPARTO",
+                    "UF_SIGLA"]:
             if col in df.columns:
                 df[col] = pd.Categorical(df[col].astype(str)).codes.astype(float)
 
