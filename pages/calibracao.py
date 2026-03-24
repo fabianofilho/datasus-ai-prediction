@@ -444,20 +444,11 @@ if not ss.get("calib_results"):
     ss["calib_results"] = {"skipped": True, "cal_model": results["model"]}
 
 # ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 8 — BENCHMARK ENTRE ESTADOS (opcional) — só aparece quando ativado
+# ETAPA 8 — BENCHMARK ENTRE ESTADOS
 # ═════════════════════════════════════════════════════════════════════════════
 
-# Se benchmark não ativado nem tem resultados, mostrar só o botão de acesso
-if not ss.get("show_benchmark") and not ss.get("comparison_results"):
-    _bm_l, _bm_spacer, _bm_r = st.columns([3, 3, 2])
-    with _bm_r:
-        if st.button("→ Benchmark entre Estados", type="secondary", use_container_width=True):
-            ss["show_benchmark"] = True
-            st.rerun()
-    st.stop()
-
 step_title(8, "Benchmark entre Estados",
-           "Replica o pipeline em diferentes estados e compara curva ROC e importância das features.")
+           "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e curva ROC.")
 
 if ss["comparison_results"]:
     import plotly.graph_objects as go
@@ -573,19 +564,17 @@ else:
         _train_n    = results.get("sample_n")
 
         def _run_state_group(label: str, states: list[str], years: list[int], raw_override=None):
-            """Replica o pipeline completo (fit + CV) no estado/grupo indicado.
+            """Aplica o modelo original em uma coorte de outro estado (validação externa).
 
-            Cada grupo roda train_cv com a mesma configuração do modelo original
-            (algoritmo, hiperparâmetros, tratamento, n_folds, balanceamento),
-            garantindo comparação homogênea entre estados — sem depender de
-            transferência do modelo treinado em SP.
+            Usa o modelo já treinado (pipeline completo com pré-processamento) e
+            aplica diretamente na nova coorte — sem re-treinar. Isso mede a
+            generalizabilidade do modelo para outras populações (validação externa).
+            O OneHotEncoder com handle_unknown='ignore' garante compatibilidade de shapes.
             """
             try:
                 # ── Coorte original: reutiliza métricas e OOF probs já calculadas ──
                 if raw_override is not None:
                     _oof = results.get("oof_probs")
-                    # holdout/temporal: results["y_eval"] guarda apenas o subset de teste
-                    # CV: oof_probs cobre todo o conjunto de treino (mesmo len que cohort y)
                     _y_true = results.get("y_eval")
                     if _y_true is None and _oof is not None and len(y) == len(_oof):
                         _y_true = y.values
@@ -598,7 +587,7 @@ else:
                         "feature_importances": results.get("feature_importances", {}),
                     }
 
-                # ── Estados de comparação: baixa dados e re-treina do zero ────
+                # ── Estados de comparação: baixa dados e aplica modelo original ────
                 raw = {}
                 for src in outcome.data_sources:
                     dfs = []
@@ -627,23 +616,30 @@ else:
                     st.warning(f"{label}: dados insuficientes ou sem variação no desfecho — ignorado.")
                     return None
 
-                # ── Treina pipeline com mesma config — banana com banana ──────
-                _cmp_r = _train_cv(
-                    X_cmp, y_cmp,
-                    algorithm=_algo,
-                    params=_params,
-                    n_folds=_n_folds,
-                    balancing=_balancing,
-                    treatment=_treatment,
+                # ── Aplica modelo original (validação externa) ─────────────────
+                import numpy as _np
+                from sklearn.metrics import (
+                    roc_auc_score as _rauc, average_precision_score as _ap,
+                    f1_score as _f1, recall_score as _rec,
+                    brier_score_loss as _brier,
                 )
+                _probs = _active_model.predict_proba(X_cmp)[:, 1]
+                _preds = (_probs >= 0.5).astype(int)
+                _metrics = {
+                    "roc_auc":   float(_rauc(y_cmp, _probs)),
+                    "pr_auc":    float(_ap(y_cmp, _probs)),
+                    "f1":        float(_f1(y_cmp, _preds, zero_division=0)),
+                    "recall":    float(_rec(y_cmp, _preds, zero_division=0)),
+                    "brier":     float(_brier(y_cmp, _probs)),
+                }
 
                 return {
                     "label": label,
                     "n": len(y_cmp),
-                    "metrics": _cmp_r["mean_metrics"],
-                    "oof_probs": _cmp_r["oof_probs"],
+                    "metrics": _metrics,
+                    "oof_probs": _probs,
                     "y_true": y_cmp.values,
-                    "feature_importances": _cmp_r.get("feature_importances", {}),
+                    "feature_importances": results.get("feature_importances", {}),
                 }
 
             except Exception as exc:
