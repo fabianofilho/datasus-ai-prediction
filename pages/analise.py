@@ -1962,9 +1962,9 @@ if len(_all) <= 1:
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── Toggle pills (multi-select) ──────────────────────────────────────────────
-_sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade", "calibracao"]
+_sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade"]
 _sec_labels = ["Curvas ROC/PR", "Distribuição", "SHAP Global",
-               "SHAP Individual", "Métricas Clínicas", "Equidade", "Calibração"]
+               "SHAP Individual", "Métricas Clínicas", "Equidade"]
 if "active_sections" not in ss:
     ss["active_sections"] = set()
 _pill_cols = st.columns(len(_sec_keys))

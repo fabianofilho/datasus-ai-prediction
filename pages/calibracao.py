@@ -450,7 +450,7 @@ if not ss.get("show_benchmark") and not ss.get("comparison_results"):
             st.rerun()
     st.stop()
 
-_bm_title_col, _bm_btn_col = st.columns([3, 1])
+_bm_title_col, _bm_gap_col, _bm_btn_col = st.columns([3, 1, 1])
 with _bm_title_col:
     step_title(8, "Benchmark entre Estados",
                "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
