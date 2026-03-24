@@ -2161,8 +2161,10 @@ if "metricas_clinicas" in ss.get("active_sections", set()):
         )
 
     with _mc_right:
-        # ── Espaço para alinhar topo dos cards com o topo da matriz ──────────
-        st.markdown("<div style='margin-top:42px'></div>", unsafe_allow_html=True)
+        # ── Espaço para alinhar topo dos cards com o topo da área do heatmap ─
+        # O gráfico plotly tem margin t=40 (título) + ~8px padding Streamlit ≈ 48px;
+        # usar 56px aproxima bem o primeiro card do início do heatmap.
+        st.markdown("<div style='margin-top:56px'></div>", unsafe_allow_html=True)
         # ── Métricas derivadas ────────────────────────────────────────────────
         _total  = tm["tp"] + tm["tn"] + tm["fp"] + tm["fn"]
         _acc    = (tm["tp"] + tm["tn"]) / _total if _total > 0 else 0.0

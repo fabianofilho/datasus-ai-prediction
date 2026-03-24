@@ -531,23 +531,26 @@ else:
                     X_cmp = X_cmp.loc[_idx]
                     y_cmp = y_cmp.loc[_idx]
 
-                # Separa pré-processamento do estimador final para evitar erros
-                # de shape (pandas DataFrame→numpy) no Pipeline.predict_proba.
-                # Aplica o ColumnTransformer diretamente (recebe DataFrame com
-                # nomes de colunas) e passa numpy para o estimador final.
                 import numpy as _np_bm
                 _base_pipeline = results["model"]
-                _prep_steps = _base_pipeline[:-1]   # tudo exceto o modelo final
-                _clf_final   = _base_pipeline[-1]   # só o estimador final
 
-                X_t = _prep_steps.transform(X_cmp)  # DataFrame → numpy (OHE expandido)
-                if hasattr(X_t, "toarray"):
-                    X_t = X_t.toarray()
-                if hasattr(X_t, "values"):          # se ainda for DataFrame
-                    X_t = X_t.values
-                X_t = _np_bm.asarray(X_t, dtype=float)
+                # Estratégia 1: transform manual → numpy puro → predict_proba no clf
+                # Evita conflito de feature_names entre Pipeline e estimador final
+                # em versões recentes de sklearn (>=1.4) / LightGBM (>=4) / XGBoost (>=2).
+                try:
+                    _prep = _base_pipeline[:-1]   # Pipeline só com preprocessador
+                    _clf  = _base_pipeline[-1]    # estimador final (sem preprocessamento)
+                    _X_t  = _prep.transform(X_cmp)
+                    if hasattr(_X_t, "toarray"):  # sparse → dense
+                        _X_t = _X_t.toarray()
+                    if hasattr(_X_t, "values"):   # DataFrame → numpy
+                        _X_t = _X_t.values
+                    _X_t = _np_bm.asarray(_X_t, dtype=float)
+                    probs_cmp = _clf.predict_proba(_X_t)[:, 1]
+                except Exception:
+                    # Estratégia 2: pipeline completo diretamente
+                    probs_cmp = _base_pipeline.predict_proba(X_cmp)[:, 1]
 
-                probs_cmp = _clf_final.predict_proba(X_t)[:, 1]
                 preds_cmp = (probs_cmp >= 0.5).astype(int)
 
                 from sklearn.metrics import (
