@@ -1922,12 +1922,12 @@ if not ss["model_results"]:
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 7 — RESULTADOS
 # ═════════════════════════════════════════════════════════════════════════════
-_r7_title_col, _r7_btn_col = st.columns([3, 1])
+_r7_title_col, _r7_gap_col, _r7_btn_col = st.columns([3, 1, 1])
 with _r7_title_col:
     step_title(7, "Resultados do Modelo",
                "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
 with _r7_btn_col:
-    st.markdown("<div style='padding-top:4px;display:flex;justify-content:flex-end'>", unsafe_allow_html=True)
+    st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
     if st.button("→ Relatório Final", key="btn_rel_top", type="primary", use_container_width=True):
         st.switch_page("pages/relatorio.py")
     st.markdown("</div>", unsafe_allow_html=True)
