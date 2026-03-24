@@ -347,6 +347,10 @@ for k, v in _defaults.items():
     if k not in ss:
         ss[k] = v
 
+# ── Guard: reload sem sessão → volta para a home ──────────────────────────────
+if not ss.get("outcome_key"):
+    st.switch_page("app.py")
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def current_step() -> int:
@@ -618,51 +622,6 @@ render_sidebar()
 st.markdown('<div class="ds-page">', unsafe_allow_html=True)
 render_step_bar(current_step())
 
-
-# ═════════════════════════════════════════════════════════════════════════════
-# ETAPA 1 — DESFECHO
-# ═════════════════════════════════════════════════════════════════════════════
-if not ss["outcome_key"]:
-    step_title(1, "Selecionar Desfecho",
-               "Escolha o desfecho clínico que deseja predizer. Organizado por área temática.")
-    for group_name, keys in OUTCOME_GROUPS.items():
-        st.markdown(f'<p class="ds-group-label">{group_name}</p>', unsafe_allow_html=True)
-        # single-source first, multi-source last
-        _sorted_keys = sorted(
-            [k for k in keys if OUTCOMES.get(k)],
-            key=lambda k: len(OUTCOMES[k].data_sources),
-        )
-        N_COLS = 3
-        for row_start in range(0, len(_sorted_keys), N_COLS):
-            row_keys = _sorted_keys[row_start : row_start + N_COLS]
-            cols = st.columns(N_COLS)
-            for col_idx, key in enumerate(row_keys):
-                outcome = OUTCOMES[key]
-                with cols[col_idx]:
-                    is_sel = ss["outcome_key"] == key
-                    cls = "ds-card selected" if is_sel else "ds-card"
-                    st.markdown(
-                        f'<div class="{cls}">'
-                        f'<div class="ds-card-title">{outcome.name}</div>'
-                        f'<div class="ds-card-desc">{outcome.description[:108]}…</div>'
-                        f'<div class="ds-card-meta">{", ".join(outcome.data_sources)}'
-                        f' &nbsp;·&nbsp; ~{outcome.estimated_download_min} min</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if st.button(
-                        "Selecionado" if is_sel else "Selecionar",
-                        key=f"sel_{key}",
-                        type="primary" if is_sel else "secondary",
-                    ):
-                        for k in ["raw_data", "cohort", "feature_config", "treatment_config",
-                                  "model_config", "model_results", "calib_results",
-                                  "comparison_results", "manual_needed"]:
-                            ss[k] = _defaults[k]
-                        ss.pop("result_tab", None)
-                        ss["outcome_key"] = key
-                        st.rerun()
-    st.stop()
 
 outcome = OUTCOMES[ss["outcome_key"]]
 
