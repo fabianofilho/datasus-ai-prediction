@@ -1655,6 +1655,7 @@ if not ss["model_results"]:
             # ── Per-model debug containers (criados antes dos loops) ──────────
             _mstatus: dict = {}
             _mdetail: dict = {}
+            _mprog: dict = {}
 
             # Helpers: status com ícone MS + detalhe muted
             def _ms_st(ph, icon: str, text: str) -> None:
@@ -1678,12 +1679,14 @@ if not ss["model_results"]:
                 _nc1.markdown(f"**{_lbl}**")
                 with _nc2:
                     _mstatus[_lbl] = st.empty()
+                    _mprog[_lbl] = st.empty()
                     _mdetail[_lbl] = st.empty()
                 _ms_st(_mstatus[_lbl], "hourglass_empty", "Aguardando…")
 
             for _lc_algo, _lc_lbl in zip(algos, algo_labels):
                 _ms_st(_mstatus[_lc_lbl], "bar_chart", "Calculando curva de aprendizado…")
-                for _frac in _fracs:
+                _mprog[_lc_lbl].progress(0.0, text=f"Curva de aprendizado — {_lc_lbl}…")
+                for _fi, _frac in enumerate(_fracs):
                     _n = max(30, int(len(_X_lc) * _frac))
                     try:
                         if _frac < 1.0:
@@ -1702,11 +1705,16 @@ if not ss["model_results"]:
                     _lc_data[_lc_lbl]["train"].append(_tr_auc)
                     _lc_data[_lc_lbl]["val"].append(_vl_auc)
                     _lc_chart_ph.plotly_chart(_lc_fig(_lc_data), use_container_width=True)
+                    _mprog[_lc_lbl].progress(
+                        (_fi + 1) / len(_fracs),
+                        text=f"LC {int(_frac*100)}% ({_n:,} amostras) — Val AUC: {_vl_auc:.3f}",
+                    )
                     _ms_dt(_mdetail[_lc_lbl],
                            f"LC {int(_frac*100)}% ({_n:,} amostras) — Val AUC: {_vl_auc:.3f}")
                     _lc_status_ph.caption(
                         f"Curva de aprendizado ({_lc_lbl}) — {int(_frac*100)}% — Val AUC: {_vl_auc:.3f}"
                     )
+                _mprog[_lc_lbl].progress(1.0, text=f"Curva de aprendizado concluída — {_lc_lbl}")
                 _ms_st(_mstatus[_lc_lbl], "check", "Curva de aprendizado concluída")
                 _mdetail[_lc_lbl].empty()
 
@@ -1729,9 +1737,10 @@ if not ss["model_results"]:
                     if hpo_mode == "Optuna (automático)":
                         _ms_st(_mstatus[_algo_lbl], "manage_search",
                                "Optuna — buscando hiperparâmetros…")
-                        _prog = st.progress(0.0, text=f"Optuna — {_algo_lbl}…")
+                        _mprog[_algo_lbl].progress(0.0, text=f"Optuna {_algo_lbl}: 0/{n_trials}…")
                         _ph_detail = _mdetail[_algo_lbl]
-                        def _opt_cb(done, total, best, _p=_prog, _l=_algo_lbl, _ph=_ph_detail,
+                        _pb = _mprog[_algo_lbl]
+                        def _opt_cb(done, total, best, _p=_pb, _l=_algo_lbl, _ph=_ph_detail,
                                     _fms=_ms_dt):
                             _p.progress(done / total,
                                         text=f"Optuna {_l}: {done}/{total} — AUC {best:.4f}")
@@ -1742,15 +1751,16 @@ if not ss["model_results"]:
                             balancing=balancing, treatment=treatment,
                             progress_callback=_opt_cb,
                         )
-                        _prog.progress(1.0, text=f"Optuna {_algo_lbl} concluído")
+                        _mprog[_algo_lbl].progress(1.0, text=f"Optuna {_algo_lbl} concluído")
                         _mdetail[_algo_lbl].empty()
 
                     elif hpo_mode == "Random Search":
                         _ms_st(_mstatus[_algo_lbl], "manage_search",
                                "Random Search — buscando hiperparâmetros…")
-                        _prog = st.progress(0.0, text=f"Random Search — {_algo_lbl}…")
+                        _mprog[_algo_lbl].progress(0.0, text=f"Random Search {_algo_lbl}: 0/{n_iter}…")
                         _ph_detail = _mdetail[_algo_lbl]
-                        def _rs_cb(done, total, best, _p=_prog, _l=_algo_lbl, _ph=_ph_detail,
+                        _pb = _mprog[_algo_lbl]
+                        def _rs_cb(done, total, best, _p=_pb, _l=_algo_lbl, _ph=_ph_detail,
                                    _fms=_ms_dt):
                             _p.progress(done / total,
                                         text=f"Random Search {_l}: {done}/{total} — AUC {best:.4f}")
@@ -1762,7 +1772,7 @@ if not ss["model_results"]:
                                 balancing=balancing, treatment=treatment,
                                 progress_callback=_rs_cb,
                             )
-                        _prog.progress(1.0, text=f"Random Search {_algo_lbl} concluído")
+                        _mprog[_algo_lbl].progress(1.0, text=f"Random Search {_algo_lbl} concluído")
                         _mdetail[_algo_lbl].empty()
 
                     elif hpo_mode == "Grid Search":
@@ -1879,11 +1889,14 @@ if not ss["model_results"]:
                     _r["hpo_mode"] = hpo_mode
                     _r["algo_label"] = _algo_lbl
                     _all_results.append(_r)
+                    _auc_final = _r["mean_metrics"]["roc_auc"]
+                    _mprog[_algo_lbl].progress(1.0, text=f"{_algo_lbl} — AUC {_auc_final:.4f} ✓")
                     _ms_st(_mstatus[_algo_lbl], "task_alt",
-                           f"Concluído — AUC {_r['mean_metrics']['roc_auc']:.4f}")
+                           f"Concluído — AUC {_auc_final:.4f}")
                     _mdetail[_algo_lbl].empty()
 
                 except Exception as _algo_err:
+                    _mprog[_algo_lbl].empty()
                     _ms_st(_mstatus[_algo_lbl], "error", f"Erro — {_algo_err}")
                     st.warning(f"{_algo_lbl}: erro durante treinamento — {_algo_err}")
 
