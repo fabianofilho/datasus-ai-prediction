@@ -376,8 +376,8 @@ with _dp_title_col:
     )
 with _dp_btn_col:
     st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
-    if st.button("→ Resultados", key="btn_back_results_dp", type="secondary", use_container_width=True):
-        st.switch_page("pages/analise.py")
+    if st.button("→ Relatório Final", key="btn_relatorio_top_dp", type="primary", use_container_width=True):
+        st.switch_page("pages/relatorio.py")
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Helper: cria format_func para selectbox categórico ────────────────────────
@@ -549,11 +549,11 @@ if submitted:
         st.error(f"Erro na predição: {e}")
         st.exception(e)
 
-# ── Navegação para Relatório ────────────────────────────────────────────────
+# ── Navegação inferior ──────────────────────────────────────────────────────
 _nav_l, _nav_gap, _nav_r = st.columns([1, 3, 1])
 with _nav_l:
     if st.button("← Benchmark", type="secondary", use_container_width=True):
         st.switch_page("pages/calibracao.py")
 with _nav_r:
-    if st.button("→ Relatório Final", type="primary", use_container_width=True):
-        st.switch_page("pages/relatorio.py")
+    if st.button("→ Resultados", type="secondary", use_container_width=True):
+        st.switch_page("pages/analise.py")
