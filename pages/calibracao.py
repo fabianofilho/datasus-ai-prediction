@@ -541,22 +541,49 @@ else:
                 import numpy as _np_bm
                 _base_pipeline = results["model"]
 
-                # Estratégia 1: transform manual → numpy puro → predict_proba no clf
-                # Evita conflito de feature_names entre Pipeline e estimador final
-                # em versões recentes de sklearn (>=1.4) / LightGBM (>=4) / XGBoost (>=2).
+                # ── Predição robusta para benchmark ───────────────────────────
+                # Evita o erro "Shape of passed values is (N, 47), indices imply
+                # (N, 14)" que ocorre no sklearn >= 1.2 quando feature_names_in_
+                # do estimador final guarda os nomes originais (14) em vez dos
+                # nomes pós-transformação (47 com OHE).
+                #
+                # Estratégia: percorre named_steps diretamente (sem fatiar o
+                # Pipeline) e converte para numpy puro entre cada etapa —
+                # isso evita qualquer wrapper do set_output API do sklearn.
+                # Por fim, remove temporariamente feature_names_in_ do clf
+                # para que predict_proba não valide nomes de colunas.
+
+                # Desempacota CalibratedClassifierCV, se necessário
+                from sklearn.calibration import CalibratedClassifierCV as _CCV
+                _inner_pipe = _base_pipeline.estimator if isinstance(_base_pipeline, _CCV) else _base_pipeline
+
+                _all_steps   = list(_inner_pipe.named_steps.items())
+                _clf_final   = _all_steps[-1][1]          # estimador final
+                _preproc     = _all_steps[:-1]             # etapas de pré-processamento
+
+                # Aplica cada etapa de pré-processamento convertendo para numpy
+                _X_curr = X_cmp
+                for _sname, _sobj in _preproc:
+                    if not hasattr(_sobj, "transform"):    # ex.: SMOTE não tem transform
+                        continue
+                    _X_raw = _sobj.transform(_X_curr)
+                    if hasattr(_X_raw, "toarray"):
+                        _X_raw = _X_raw.toarray()
+                    if hasattr(_X_raw, "values"):
+                        _X_raw = _X_raw.values
+                    _X_curr = _np_bm.asarray(_X_raw, dtype=float)
+
+                # _X_curr é numpy puro com o número correto de features (ex.: 47)
+                # Remove feature_names_in_ do clf se existir (independente do tamanho)
+                _fni_saved = getattr(_clf_final, "feature_names_in_", None)
+                if _fni_saved is not None:
+                    del _clf_final.feature_names_in_
                 try:
-                    _prep = _base_pipeline[:-1]   # Pipeline só com preprocessador
-                    _clf  = _base_pipeline[-1]    # estimador final (sem preprocessamento)
-                    _X_t  = _prep.transform(X_cmp)
-                    if hasattr(_X_t, "toarray"):  # sparse → dense
-                        _X_t = _X_t.toarray()
-                    if hasattr(_X_t, "values"):   # DataFrame → numpy
-                        _X_t = _X_t.values
-                    _X_t = _np_bm.asarray(_X_t, dtype=float)
-                    probs_cmp = _clf.predict_proba(_X_t)[:, 1]
-                except Exception:
-                    # Estratégia 2: pipeline completo diretamente
-                    probs_cmp = _base_pipeline.predict_proba(X_cmp)[:, 1]
+                    probs_cmp = _clf_final.predict_proba(_X_curr)[:, 1]
+                finally:
+                    # Restaura sempre, garantindo que o modelo cacheado não mude
+                    if _fni_saved is not None:
+                        _clf_final.feature_names_in_ = _fni_saved
 
                 preds_cmp = (probs_cmp >= 0.5).astype(int)
 

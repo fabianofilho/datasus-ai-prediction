@@ -1320,13 +1320,21 @@ if not ss.get("model_config"):
     algo_labels = st.multiselect(
         "Algoritmos",
         list(ALGORITHMS.keys()),
-        default=["LightGBM"],
+        default=["Random Forest"],
         help="Selecione um ou mais algoritmos para treinar e comparar.",
     )
     if not algo_labels:
         st.warning("Selecione pelo menos um algoritmo.")
         st.stop()
     algos = [ALGORITHMS[l] for l in algo_labels]
+
+    # Aviso XGBoost: lento sem GPU
+    if "xgb" in algos:
+        st.warning(
+            "**XGBoost** pode ser significativamente mais lento que LightGBM ou Random Forest, "
+            "especialmente com muitos dados ou em HPO com múltiplos trials. "
+            "Considere reduzir o número de trials ou usar LightGBM para treinamentos mais rápidos."
+        )
 
     # Aviso TabPFN sobre disponibilidade e limite de amostras
     if "tabpfn" in algos:

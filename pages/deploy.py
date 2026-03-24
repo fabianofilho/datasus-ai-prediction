@@ -374,7 +374,7 @@ num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").colum
 cat_cols = treatment.get("cat_cols", X_res.select_dtypes(exclude="number").columns.tolist())
 
 # ── Título ─────────────────────────────────────────────────────────────────────
-_dp_title_col, _dp_btn_col = st.columns([3, 1])
+_dp_title_col, _dp_gap_col, _dp_btn_col = st.columns([3, 1, 1])
 with _dp_title_col:
     st.markdown("**Passo 10 — Deploy — Inferência Individual**")
     st.caption(
@@ -400,170 +400,200 @@ def _make_fmt(vals_dict: dict):
     return _fmt
 
 
+# ── Estado: alterna entre formulário e resultado ───────────────────────────────
+if "deploy_show_result" not in ss:
+    ss["deploy_show_result"] = False
+
 # ── Formulário de entrada ──────────────────────────────────────────────────────
-input_vals: dict = {}
-_ncols = 3
+if not ss["deploy_show_result"]:
+    input_vals: dict = {}
+    _ncols = 3
 
-with st.form("deploy_form"):
-    n_num = len([c for c in feature_cols if c in num_cols])
-    n_cat = len([c for c in feature_cols if c in cat_cols])
+    with st.form("deploy_form"):
+        n_num = len([c for c in feature_cols if c in num_cols])
+        n_cat = len([c for c in feature_cols if c in cat_cols])
 
-    if n_num:
-        st.markdown("**Variáveis Numéricas**")
-        _num_feats = [c for c in feature_cols if c in num_cols]
-        for row_start in range(0, len(_num_feats), _ncols):
-            _row = _num_feats[row_start: row_start + _ncols]
-            cols = st.columns(_ncols)
-            for ci, col in enumerate(_row):
-                info = _dd_info(col) or {}
-                label = info.get("label", col)
-                desc  = info.get("desc", "")
-                _min  = float(X_res[col].min()) if col in X_res else 0.0
-                _max  = float(X_res[col].max()) if col in X_res else 100.0
-                _med  = float(X_res[col].median()) if col in X_res else (_min + _max) / 2
-                input_vals[col] = cols[ci].number_input(
-                    label,
-                    min_value=_min,
-                    max_value=_max,
-                    value=_med,
-                    help=desc or f"{col} · min {_min:.1f} · max {_max:.1f}",
-                    key=f"inp_{col}",
-                )
+        if n_num:
+            st.markdown("**Variáveis Numéricas**")
+            _num_feats = [c for c in feature_cols if c in num_cols]
+            for row_start in range(0, len(_num_feats), _ncols):
+                _row = _num_feats[row_start: row_start + _ncols]
+                cols = st.columns(_ncols)
+                for ci, col in enumerate(_row):
+                    info = _dd_info(col) or {}
+                    label = info.get("label", col)
+                    desc  = info.get("desc", "")
+                    _min  = float(X_res[col].min()) if col in X_res else 0.0
+                    _max  = float(X_res[col].max()) if col in X_res else 100.0
+                    _med  = float(X_res[col].median()) if col in X_res else (_min + _max) / 2
+                    input_vals[col] = cols[ci].number_input(
+                        label,
+                        min_value=_min,
+                        max_value=_max,
+                        value=_med,
+                        help=desc or f"{col} · min {_min:.1f} · max {_max:.1f}",
+                        key=f"inp_{col}",
+                    )
 
-    if n_cat:
-        st.markdown("**Variáveis Categóricas**")
-        _cat_feats = [c for c in feature_cols if c in cat_cols]
-        for row_start in range(0, len(_cat_feats), _ncols):
-            _row = _cat_feats[row_start: row_start + _ncols]
-            cols = st.columns(_ncols)
-            for ci, col in enumerate(_row):
-                info = _dd_info(col) or {}
-                label = info.get("label", col)
-                desc  = info.get("desc", "")
-                _opts = (
-                    sorted(X_res[col].dropna().astype(str).unique().tolist())
-                    if col in X_res else []
-                )
-                _vals = info.get("values", {}) if info else {}
-                _fmt  = _make_fmt(_vals) if _vals else str
-                input_vals[col] = cols[ci].selectbox(
-                    label,
-                    options=_opts if _opts else ["—"],
-                    format_func=_fmt,
-                    help=desc or col,
-                    key=f"inp_{col}",
-                )
+        if n_cat:
+            st.markdown("**Variáveis Categóricas**")
+            _cat_feats = [c for c in feature_cols if c in cat_cols]
+            for row_start in range(0, len(_cat_feats), _ncols):
+                _row = _cat_feats[row_start: row_start + _ncols]
+                cols = st.columns(_ncols)
+                for ci, col in enumerate(_row):
+                    info = _dd_info(col) or {}
+                    label = info.get("label", col)
+                    desc  = info.get("desc", "")
+                    _opts = (
+                        sorted(X_res[col].dropna().astype(str).unique().tolist())
+                        if col in X_res else []
+                    )
+                    _vals = info.get("values", {}) if info else {}
+                    _fmt  = _make_fmt(_vals) if _vals else str
+                    input_vals[col] = cols[ci].selectbox(
+                        label,
+                        options=_opts if _opts else ["—"],
+                        format_func=_fmt,
+                        help=desc or col,
+                        key=f"inp_{col}",
+                    )
 
-    submitted = st.form_submit_button("Predizer", type="primary", use_container_width=False)
+        submitted = st.form_submit_button("Predizer", type="primary", use_container_width=False)
 
-# ── Inferência ─────────────────────────────────────────────────────────────────
-if submitted:
-    try:
-        # Monta DataFrame com os valores do usuário
-        row_data = {}
-        for col in feature_cols:
-            val = input_vals.get(col)
-            if col in num_cols:
-                row_data[col] = float(val) if val is not None else float("nan")
+    # ── Inferência: computa e armazena no session state ────────────────────────
+    if submitted:
+        try:
+            row_data = {}
+            for col in feature_cols:
+                val = input_vals.get(col)
+                if col in num_cols:
+                    row_data[col] = float(val) if val is not None else float("nan")
+                else:
+                    row_data[col] = str(val) if val is not None else None
+            input_df = pd.DataFrame([row_data], columns=feature_cols)
+
+            prob = float(model.predict_proba(input_df)[0, 1])
+            prevalence = float(y_train.mean())
+
+            if prob < prevalence * 0.75:
+                risk_label, risk_cls = "Baixo risco", "risk-low"
+            elif prob < prevalence * 1.5:
+                risk_label, risk_cls = "Risco moderado", "risk-med"
             else:
-                row_data[col] = str(val) if val is not None else None
-        input_df = pd.DataFrame([row_data], columns=feature_cols)
+                risk_label, risk_cls = "Alto risco", "risk-high"
 
-        # Predição
-        prob = float(model.predict_proba(input_df)[0, 1])
-        prevalence = float(y_train.mean())
-
-        # Classificação de risco relativa à prevalência da coorte
-        if prob < prevalence * 0.75:
-            risk_label, risk_cls = "Baixo risco", "risk-low"
-        elif prob < prevalence * 1.5:
-            risk_label, risk_cls = "Risco moderado", "risk-med"
-        else:
-            risk_label, risk_cls = "Alto risco", "risk-high"
-
-        st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-        st.markdown("### Resultado da Predição")
-
-        # Gauge + métricas
-        import plotly.graph_objects as _go
-        fig_gauge = _go.Figure(_go.Indicator(
-            mode="gauge+number",
-            value=round(prob * 100, 1),
-            number={"suffix": "%", "font": {"size": 36}},
-            title={"text": f"Probabilidade de {outcome.name}", "font": {"size": 14}},
-            gauge={
-                "axis": {"range": [0, 100], "ticksuffix": "%"},
-                "bar": {"color": "#ef4444" if prob >= prevalence * 1.5
-                                else "#f97316" if prob >= prevalence * 0.75
-                                else "#22c55e"},
-                "steps": [
-                    {"range": [0, prevalence * 75], "color": "#f0fdf4"},
-                    {"range": [prevalence * 75, prevalence * 150], "color": "#fef9c3"},
-                    {"range": [prevalence * 150, 100], "color": "#fee2e2"},
-                ],
-                "threshold": {
-                    "line": {"color": "#6b7280", "width": 2},
-                    "thickness": 0.75,
-                    "value": prevalence * 100,
+            import plotly.graph_objects as _go
+            fig_gauge = _go.Figure(_go.Indicator(
+                mode="gauge+number",
+                value=round(prob * 100, 1),
+                number={"suffix": "%", "font": {"size": 36}},
+                title={"text": f"Probabilidade de {outcome.name}", "font": {"size": 14}},
+                gauge={
+                    "axis": {"range": [0, 100], "ticksuffix": "%"},
+                    "bar": {"color": "#ef4444" if prob >= prevalence * 1.5
+                                    else "#f97316" if prob >= prevalence * 0.75
+                                    else "#22c55e"},
+                    "steps": [
+                        {"range": [0, prevalence * 75], "color": "#f0fdf4"},
+                        {"range": [prevalence * 75, prevalence * 150], "color": "#fef9c3"},
+                        {"range": [prevalence * 150, 100], "color": "#fee2e2"},
+                    ],
+                    "threshold": {
+                        "line": {"color": "#6b7280", "width": 2},
+                        "thickness": 0.75,
+                        "value": prevalence * 100,
+                    },
                 },
-            },
-        ))
-        fig_gauge.update_layout(height=280, margin=dict(t=40, b=0, l=30, r=30),
-                                paper_bgcolor="white")
+            ))
+            fig_gauge.update_layout(height=280, margin=dict(t=40, b=0, l=30, r=30),
+                                    paper_bgcolor="white")
 
-        col_g, col_m = st.columns([2, 1])
-        with col_g:
+            with st.spinner("Calculando SHAP…"):
+                try:
+                    shap_fig = ev.shap_waterfall_chart(model, input_df, case_idx=0)
+                    if shap_fig:
+                        shap_fig.update_layout(
+                            title=f"SHAP — {outcome.name} · Score {prob:.3f}",
+                            height=max(380, len(feature_cols) * 26),
+                        )
+                except Exception:
+                    shap_fig = None
+
+            ss["deploy_result"] = {
+                "prob": prob,
+                "prevalence": prevalence,
+                "risk_label": risk_label,
+                "risk_cls": risk_cls,
+                "fig_gauge": fig_gauge,
+                "shap_fig": shap_fig,
+                "input_df": input_df,
+                "input_vals_display": {
+                    (_dd_info(c) or {}).get("label", c): input_df[c].iloc[0]
+                    for c in feature_cols
+                },
+            }
+            ss["deploy_show_result"] = True
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"Erro na predição: {e}")
+            st.exception(e)
+
+# ── Resultado da predição ──────────────────────────────────────────────────────
+else:
+    _r = ss.get("deploy_result", {})
+    prob        = _r.get("prob", 0.0)
+    prevalence  = _r.get("prevalence", 0.0)
+    risk_label  = _r.get("risk_label", "—")
+    risk_cls    = _r.get("risk_cls", "")
+    fig_gauge   = _r.get("fig_gauge")
+    shap_fig    = _r.get("shap_fig")
+    input_df    = _r.get("input_df")
+
+    st.markdown("### Resultado da Predição")
+
+    col_g, col_m = st.columns([2, 1])
+    with col_g:
+        if fig_gauge:
             st.plotly_chart(fig_gauge, use_container_width=True)
-        with col_m:
-            st.metric("Probabilidade predita", f"{prob:.1%}")
-            st.metric("Prevalência da coorte", f"{prevalence:.1%}")
-            st.metric("Razão risco/prevalência", f"{prob/prevalence:.2f}x")
-            st.markdown(
-                f'<span class="risk-badge {risk_cls}">{risk_label}</span>',
-                unsafe_allow_html=True,
-            )
-
-        # SHAP individual
-        st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-        st.markdown("### Explicação SHAP — Contribuição de cada variável")
-        st.caption(
-            "Vermelho = variável aumenta o risco · Azul = variável reduz o risco · "
-            "Comprimento = magnitude da contribuição"
+    with col_m:
+        st.metric("Probabilidade predita", f"{prob:.1%}")
+        st.metric("Prevalência da coorte", f"{prevalence:.1%}")
+        st.metric("Razão risco/prevalência", f"{prob/prevalence:.2f}x" if prevalence else "—")
+        st.markdown(
+            f'<span class="risk-badge {risk_cls}">{risk_label}</span>',
+            unsafe_allow_html=True,
         )
-        with st.spinner("Calculando SHAP…"):
-            try:
-                shap_fig = ev.shap_waterfall_chart(model, input_df, case_idx=0)
-            except Exception:
-                shap_fig = None
-        if shap_fig:
-            shap_fig.update_layout(
-                title=f"SHAP — {outcome.name} · Score {prob:.3f}",
-                height=max(380, len(feature_cols) * 26),
-            )
-            st.plotly_chart(shap_fig, use_container_width=True)
-        else:
-            # Fallback: feature importance global do modelo treinado
-            _fi = ss.get("model_results", {}).get("feature_importances", {})
-            if _fi:
-                st.caption(
-                    "SHAP indisponível para este algoritmo — "
-                    "exibindo importância global de features do modelo treinado."
-                )
-                st.plotly_chart(
-                    ev.importance_chart(_fi, top_n=15), use_container_width=True
-                )
-            else:
-                st.info("SHAP e importância de features indisponíveis para este algoritmo.")
 
-        # Tabela de valores inseridos
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    st.markdown("### Explicação SHAP — Contribuição de cada variável")
+    st.caption(
+        "Vermelho = variável aumenta o risco · Azul = variável reduz o risco · "
+        "Comprimento = magnitude da contribuição"
+    )
+    if shap_fig:
+        st.plotly_chart(shap_fig, use_container_width=True)
+    else:
+        _fi = ss.get("model_results", {}).get("feature_importances", {})
+        if _fi:
+            st.caption(
+                "SHAP indisponível para este algoritmo — "
+                "exibindo importância global de features do modelo treinado."
+            )
+            st.plotly_chart(ev.importance_chart(_fi, top_n=15), use_container_width=True)
+        else:
+            st.info("SHAP e importância de features indisponíveis para este algoritmo.")
+
+    if input_df is not None:
         with st.expander("Valores inseridos para esta predição"):
-            _display = pd.DataFrame([{
-                (_dd_info(c) or {}).get("label", c): input_df[c].iloc[0]
-                for c in feature_cols
-            }]).T.rename(columns={0: "Valor"})
+            _disp_dict = _r.get("input_vals_display", {})
+            _display = pd.DataFrame([_disp_dict]).T.rename(columns={0: "Valor"})
             st.dataframe(_display, use_container_width=True)
 
-    except Exception as e:
-        st.error(f"Erro na predição: {e}")
-        st.exception(e)
+    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+    if st.button("Nova Inferência", icon=":material/refresh:", type="secondary"):
+        ss["deploy_show_result"] = False
+        ss.pop("deploy_result", None)
+        st.rerun()
 

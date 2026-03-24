@@ -40,7 +40,8 @@ def _feat_names_after_transform(prep, original_cols: list, n_out: int) -> list:
     try:
         names = list(prep.get_feature_names_out())
         if len(names) == n_out:
-            return names
+            # Limpa prefixos gerados pelo ColumnTransformer (ex: 'cat_ohe__' → '')
+            return [n.split("__", 1)[-1] if "__" in n else n for n in names]
     except Exception:
         pass
     if n_out <= len(original_cols):
