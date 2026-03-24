@@ -588,8 +588,8 @@ else:
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown('<p class="ds-section-caption">Prossiga para inferência individual ou exporte o relatório completo do pipeline.</p>',
             unsafe_allow_html=True)
-_dep_l, _dep_m, _dep_r = st.columns([3, 1, 1])
-with _dep_m:
+_dep_l, _dep_gap, _dep_r = st.columns([1, 3, 1])
+with _dep_l:
     if st.button("→ Deploy", type="secondary", use_container_width=True):
         st.switch_page("pages/deploy.py")
 with _dep_r:
