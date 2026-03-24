@@ -106,6 +106,16 @@ def importance_chart(feature_importances: dict, top_n: int = 20) -> go.Figure:
     return fig
 
 
+def _extract_shap_2d(sv) -> np.ndarray:
+    """Normalise SHAP output to 2-D (n_samples × n_features) for class-1."""
+    if isinstance(sv, list):           # old SHAP: [class0, class1]
+        return np.asarray(sv[1])
+    sv = np.asarray(sv)
+    if sv.ndim == 3:                   # new SHAP: (n, feat, n_classes)
+        return sv[:, :, 1]
+    return sv                          # already (n, feat)
+
+
 def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | None:
     """Compute SHAP values and return a summary bar chart (Plotly)."""
     try:
@@ -128,13 +138,14 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
 
     try:
         explainer = shap.TreeExplainer(estimator)
-        shap_values = explainer.shap_values(X_arr)
-        if isinstance(shap_values, list):
-            shap_values = shap_values[1]
+        shap_values = _extract_shap_2d(
+            explainer.shap_values(X_arr, check_additivity=False)
+        )
     except Exception:
         try:
-            explainer = shap.LinearExplainer(estimator, X_arr)
-            shap_values = explainer.shap_values(X_arr)
+            masker = shap.maskers.Independent(X_arr, max_samples=min(100, len(X_arr)))
+            explainer = shap.LinearExplainer(estimator, masker)
+            shap_values = _extract_shap_2d(explainer.shap_values(X_arr))
         except Exception:
             return None
 
@@ -250,28 +261,27 @@ def shap_values_dict(model, X: pd.DataFrame, max_rows: int = 500) -> dict:
     try:
         estimator, prep = _unwrap_model(model)
         X_sub = X.head(max_rows)
-        X_transformed = prep.transform(X_sub)
-        if hasattr(X_transformed, "toarray"):
-            X_transformed = X_transformed.toarray()
-        col_names = X_sub.columns.tolist()
-        n_cols = X_transformed.shape[1]
-        feat_names = _feat_names_after_transform(prep, col_names, n_cols)
-        # Belt-and-suspenders: guarantee column count always matches
+        X_arr = prep.transform(X_sub)
+        if hasattr(X_arr, "toarray"):
+            X_arr = X_arr.toarray()
+        X_arr = np.asarray(X_arr, dtype=float)
+        n_cols = X_arr.shape[1]
+        feat_names = _feat_names_after_transform(prep, X_sub.columns.tolist(), n_cols)
         if len(feat_names) != n_cols:
             feat_names = [f"feat_{i}" for i in range(n_cols)]
-        X_t = pd.DataFrame(X_transformed, columns=feat_names)
     except Exception:
         return {}
 
     try:
         explainer = shap.TreeExplainer(estimator)
-        sv = explainer.shap_values(X_t)
-        if isinstance(sv, list):
-            sv = sv[1]
+        sv = _extract_shap_2d(
+            explainer.shap_values(X_arr, check_additivity=False)
+        )
     except Exception:
         try:
-            explainer = shap.LinearExplainer(estimator, X_t)
-            sv = explainer.shap_values(X_t)
+            masker = shap.maskers.Independent(X_arr, max_samples=min(100, len(X_arr)))
+            explainer = shap.LinearExplainer(estimator, masker)
+            sv = _extract_shap_2d(explainer.shap_values(X_arr))
         except Exception:
             return {}
 
@@ -345,12 +355,14 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
 
     try:
         explainer = shap.TreeExplainer(estimator)
-        sv = explainer.shap_values(X_arr)
-        if isinstance(sv, list):
-            sv = sv[1]
+        sv = _extract_shap_2d(
+            explainer.shap_values(X_arr, check_additivity=False)
+        )
         base = explainer.expected_value
         if isinstance(base, (list, np.ndarray)):
-            base = float(base[-1])
+            base = float(np.asarray(base).ravel()[-1])
+        else:
+            base = float(base)
     except Exception:
         return None
 
