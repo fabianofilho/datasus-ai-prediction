@@ -1953,7 +1953,7 @@ with _r7_title_col:
                "Métricas de desempenho, curvas ROC/PR, explicabilidade SHAP e exportação.")
 with _r7_btn_col:
     st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
-    if st.button("→ Relatório Final", key="btn_rel_top", type="primary", use_container_width=True):
+    if st.button("Relatório Final", key="btn_rel_top", icon=":material/summarize:", type="primary", use_container_width=True):
         st.switch_page("pages/relatorio.py")
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -2545,11 +2545,11 @@ st.markdown('<p class="ds-section-caption">Continue para benchmark entre estados
             unsafe_allow_html=True)
 _btn_col1, _btn_gap, _btn_col2 = st.columns([1, 3, 1])
 with _btn_col1:
-    if st.button("→ Benchmark", type="secondary", use_container_width=True):
+    if st.button("Benchmark", icon=":material/leaderboard:", type="secondary", use_container_width=True):
         ss["show_benchmark"] = True
         st.switch_page("pages/calibracao.py")
 with _btn_col2:
-    if st.button("→ Deploy", type="primary", use_container_width=True):
+    if st.button("Deploy", icon=":material/rocket_launch:", type="primary", use_container_width=True):
         st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)

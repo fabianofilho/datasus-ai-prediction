@@ -376,7 +376,7 @@ with _dp_title_col:
     )
 with _dp_btn_col:
     st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
-    if st.button("→ Relatório Final", key="btn_relatorio_top_dp", type="primary", use_container_width=True):
+    if st.button("Relatório Final", key="btn_relatorio_top_dp", icon=":material/summarize:", type="primary", use_container_width=True):
         st.switch_page("pages/relatorio.py")
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -563,8 +563,8 @@ if submitted:
 # ── Navegação inferior ──────────────────────────────────────────────────────
 _nav_l, _nav_gap, _nav_r = st.columns([1, 3, 1])
 with _nav_l:
-    if st.button("← Benchmark", type="secondary", use_container_width=True):
+    if st.button("Benchmark", icon=":material/arrow_back:", type="secondary", use_container_width=True):
         st.switch_page("pages/calibracao.py")
 with _nav_r:
-    if st.button("→ Resultados", type="secondary", use_container_width=True):
+    if st.button("Resultados", icon=":material/analytics:", type="secondary", use_container_width=True):
         st.switch_page("pages/analise.py")
