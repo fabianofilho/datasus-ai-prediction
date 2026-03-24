@@ -556,7 +556,8 @@ def render_sidebar() -> None:
             )
             if st.button("Editar", key="sb_chg_cohort"):
                 ss["cohort"] = None
-                for k in ["feature_config", "model_config", "model_results", "calib_results", "comparison_results"]:
+                for k in ["feature_config", "treatment_config", "model_config",
+                          "model_results", "calib_results", "comparison_results"]:
                     ss[k] = _defaults[k]
                 st.rerun()
 
