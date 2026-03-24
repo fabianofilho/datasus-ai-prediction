@@ -2526,22 +2526,53 @@ if "multicalibracao" in ss.get("active_sections", set()):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Multicalibração — Ajuste de Calibração Global e por Subgrupo**")
     st.caption(
-        "Aplica Platt Scaling ou Isotonic Regression sobre as probabilidades OOF. "
+        "Aplica um método de calibração sobre as probabilidades OOF. "
         "Avalia a calibração globalmente e por subgrupo para detectar vieses de fairness."
     )
 
     _oof_mc = _np_mc.array(oof)
     _y_mc   = _np_mc.array(y_arr)
 
+    _mc_method_labels = {
+        "sigmoid":   "Platt Scaling (Sigmoid)",
+        "isotonic":  "Isotonic Regression",
+        "temperature": "Temperature Scaling",
+        "beta":      "Beta Calibration",
+        "logistic_multi": "Logistic Calibration (multivariado)",
+    }
+    _mc_method_desc = {
+        "sigmoid": (
+            "Ajusta uma regressão logística sobre os scores OOF. "
+            "Simples e eficaz para distribuições aproximadamente simétricas."
+        ),
+        "isotonic": (
+            "Ajuste isotônico não-paramétrico — mais flexível que Platt Scaling. "
+            "Pode sobreajustar em amostras pequenas."
+        ),
+        "temperature": (
+            "Muito usado em deep learning. Ajusta apenas um parâmetro (temperatura) sobre logits. "
+            "Simples e geralmente estável. Não altera o ranking das previsões."
+        ),
+        "beta": (
+            "Generaliza o Platt Scaling usando uma transformação baseada na distribuição beta. "
+            "Funciona melhor quando as probabilidades estão enviesadas nas extremidades (próximo de 0 ou 1)."
+        ),
+        "logistic_multi": (
+            "Extensão do Platt para múltiplas features (score + score²). "
+            "Pode capturar relações mais complexas entre o score bruto e a probabilidade real."
+        ),
+    }
+
     # ── Controles ────────────────────────────────────────────────────────────
     _mc_c1, _mc_c2, _mc_c3 = st.columns([2, 2, 1])
     with _mc_c1:
         _mc_method = st.selectbox(
             "Método de calibração",
-            ["sigmoid", "isotonic"],
-            format_func=lambda x: "Platt Scaling (Sigmoid)" if x == "sigmoid" else "Isotonic Regression",
+            list(_mc_method_labels.keys()),
+            format_func=lambda x: _mc_method_labels[x],
             key="mc_method",
         )
+        st.caption(_mc_method_desc[_mc_method])
     with _mc_c2:
         _mc_sg_candidates = sorted([
             c for c in X_res.columns
@@ -2568,14 +2599,53 @@ if "multicalibracao" in ss.get("active_sections", set()):
                     _cmod = _LR_mc()
                     _cmod.fit(_oof_mc.reshape(-1, 1), _y_mc)
                     _cal_p = _cmod.predict_proba(_oof_mc.reshape(-1, 1))[:, 1]
-                else:
+                elif _mc_method == "isotonic":
                     from sklearn.isotonic import IsotonicRegression as _IR_mc
                     _cmod = _IR_mc(out_of_bounds="clip")
                     _cmod.fit(_oof_mc, _y_mc)
                     _cal_p = _np_mc.clip(_cmod.predict(_oof_mc), 0, 1)
+                elif _mc_method == "temperature":
+                    # Temperature scaling: find T that minimises NLL over logits
+                    _eps_ts = 1e-7
+                    _logits = _np_mc.log(
+                        _np_mc.clip(_oof_mc, _eps_ts, 1 - _eps_ts) /
+                        _np_mc.clip(1 - _oof_mc, _eps_ts, 1 - _eps_ts)
+                    )
+                    from scipy.optimize import minimize_scalar as _ms_ts
+                    def _nll_ts(T):
+                        p = 1 / (1 + _np_mc.exp(-_logits / T))
+                        return -_np_mc.mean(_y_mc * _np_mc.log(p + _eps_ts) +
+                                            (1 - _y_mc) * _np_mc.log(1 - p + _eps_ts))
+                    _res_ts = _ms_ts(_nll_ts, bounds=(0.01, 10.0), method="bounded")
+                    _T_opt  = _res_ts.x
+                    _cal_p  = 1 / (1 + _np_mc.exp(-_logits / _T_opt))
+                elif _mc_method == "beta":
+                    # Beta calibration via log-odds transform + linear regression
+                    _eps_bc = 1e-7
+                    _p_clip = _np_mc.clip(_oof_mc, _eps_bc, 1 - _eps_bc)
+                    _x_bc = _np_mc.column_stack([
+                        _np_mc.log(_p_clip),
+                        _np_mc.log(1 - _p_clip),
+                    ])
+                    from sklearn.linear_model import LogisticRegression as _LR_bc
+                    _cmod = _LR_bc(fit_intercept=True, max_iter=500)
+                    _cmod.fit(_x_bc, _y_mc)
+                    _cal_p = _cmod.predict_proba(_x_bc)[:, 1]
+                else:  # logistic_multi
+                    _eps_lm = 1e-7
+                    _p_clip_lm = _np_mc.clip(_oof_mc, _eps_lm, 1 - _eps_lm)
+                    _x_lm = _np_mc.column_stack([
+                        _oof_mc,
+                        _oof_mc ** 2,
+                    ])
+                    from sklearn.linear_model import LogisticRegression as _LR_lm
+                    _cmod = _LR_lm(fit_intercept=True, max_iter=500)
+                    _cmod.fit(_x_lm, _y_mc)
+                    _cal_p = _cmod.predict_proba(_x_lm)[:, 1]
                 ss["mc_results"] = {
                     "cal_probs": _cal_p.tolist(),
                     "method": _mc_method,
+                    "method_label": _mc_method_labels[_mc_method],
                     "sg_col": _mc_sg_col,
                 }
             except Exception as _mc_err:
@@ -2583,6 +2653,7 @@ if "multicalibracao" in ss.get("active_sections", set()):
 
     if ss.get("mc_results"):
         _mc_cp  = _np_mc.array(ss["mc_results"]["cal_probs"])
+        _mc_lbl = ss["mc_results"].get("method_label", ss["mc_results"]["method"])
 
         def _ece_mc(y_t, p, n_bins=10):
             edges = _np_mc.linspace(0, 1, n_bins + 1)
@@ -2609,35 +2680,41 @@ if "multicalibracao" in ss.get("active_sections", set()):
                                                    line=dict(color="#9ca3af", dash="dot", width=2), marker=dict(size=6)))
         if len(_mn_cal):
             _fig_mc_glob.add_trace(_go_mc.Scatter(x=_mn_cal, y=_fr_cal, mode="lines+markers",
-                                                   name=f"Calibrado ({ss['mc_results']['method']})",
+                                                   name=f"Calibrado ({_mc_lbl})",
                                                    line=dict(color="#3b82f6", width=2.5), marker=dict(size=7)))
         _fig_mc_glob.update_layout(
             title="Curva de Calibração — OOF Global",
             xaxis=dict(title="Probabilidade média predita", range=[0, 1]),
             yaxis=dict(title="Fração de positivos (real)", range=[0, 1]),
-            height=340, legend=dict(orientation="h", y=-0.22),
+            height=380, legend=dict(orientation="h", y=-0.22),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=40, b=60, l=50, r=20),
         )
 
-        st.plotly_chart(_fig_mc_glob, use_container_width=True)
-
         from sklearn.metrics import brier_score_loss as _bsl_mc
-        _ece_b = _ece_mc(_y_mc, _oof_mc)
-        _ece_a = _ece_mc(_y_mc, _mc_cp)
+        _ece_b  = _ece_mc(_y_mc, _oof_mc)
+        _ece_a  = _ece_mc(_y_mc, _mc_cp)
         _brier_b = float(_bsl_mc(_y_mc, _oof_mc))
         _brier_a = float(_bsl_mc(_y_mc, _mc_cp))
 
-        _m1, _m2 = st.columns(2)
-        with _m1:
-            st.metric("ECE bruto", f"{_ece_b:.4f}")
-        with _m2:
-            st.metric("ECE calibrado", f"{_ece_a:.4f}",
-                      delta=f"{_ece_a - _ece_b:+.4f}", delta_color="inverse")
-        _m3, _m4 = st.columns(2)
-        with _m3:
-            st.metric("Brier bruto", f"{_brier_b:.4f}")
-        with _m4:
-            st.metric("Brier calibrado", f"{_brier_a:.4f}",
-                      delta=f"{_brier_a - _brier_b:+.4f}", delta_color="inverse")
+        # ── Chart + metrics side by side ──────────────────────────────────────
+        _col_chart, _col_metrics = st.columns([3, 2])
+        with _col_chart:
+            st.plotly_chart(_fig_mc_glob, use_container_width=True)
+        with _col_metrics:
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+            _mx1, _mx2 = st.columns(2)
+            with _mx1:
+                st.metric("ECE bruto", f"{_ece_b:.4f}")
+            with _mx2:
+                st.metric("ECE calibrado", f"{_ece_a:.4f}",
+                          delta=f"{_ece_a - _ece_b:+.4f}", delta_color="inverse")
+            _mx3, _mx4 = st.columns(2)
+            with _mx3:
+                st.metric("Brier bruto", f"{_brier_b:.4f}")
+            with _mx4:
+                st.metric("Brier calibrado", f"{_brier_a:.4f}",
+                          delta=f"{_brier_a - _brier_b:+.4f}", delta_color="inverse")
 
         # ── Calibração por subgrupo ───────────────────────────────────────────
         _sg = _mc_sg_col
