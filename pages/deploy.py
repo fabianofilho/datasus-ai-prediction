@@ -23,7 +23,7 @@ def _pd():
 
 _favicon = _PILImage.open(Path(__file__).parent.parent / "favicon.png")
 st.set_page_config(
-    page_title="Deploy — DataSUS AI",
+    page_title="DataSUS AI Prediction",
     page_icon=_favicon,
     layout="wide",
     initial_sidebar_state="expanded",
@@ -339,6 +339,10 @@ if not ss.get("model_results") or not ss.get("outcome_key") or ss.get("cohort") 
         st.switch_page("pages/analise.py")
     st.stop()
 
+# ── Voltar (acima do step bar) ─────────────────────────────────────────────────
+if st.button("← Voltar aos Resultados", type="secondary"):
+    st.switch_page("pages/analise.py")
+
 # ── Step bar ───────────────────────────────────────────────────────────────────
 render_step_bar()
 
@@ -367,9 +371,7 @@ num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").colum
 cat_cols = treatment.get("cat_cols", X_res.select_dtypes(exclude="number").columns.tolist())
 
 # ── Título ─────────────────────────────────────────────────────────────────────
-if st.button("← Voltar aos Resultados", type="secondary"):
-    st.switch_page("pages/analise.py")
-st.markdown("**Passo 9 — Deploy — Inferência Individual**")
+st.markdown("**Passo 10 — Deploy — Inferência Individual**")
 st.caption(
     f"Preencha os valores de um paciente e clique em **Predizer** para obter "
     f"a probabilidade de **{outcome.name}** com explicação SHAP individual."

@@ -492,7 +492,7 @@ def render_sidebar() -> None:
                           "treatment_config", "model_config", "model_results",
                           "calib_results", "comparison_results", "manual_needed"]:
                     ss[k] = _defaults[k]
-                ss.pop("result_tab", None)
+                ss.pop("active_sections", None)
                 st.rerun()
 
         # Step 2: Dados
@@ -510,7 +510,7 @@ def render_sidebar() -> None:
                           "model_config", "model_results", "calib_results",
                           "comparison_results", "manual_needed"]:
                     ss[k] = _defaults[k]
-                ss.pop("result_tab", None)
+                ss.pop("active_sections", None)
                 st.rerun()
 
         # Step 3: Coorte
@@ -1912,7 +1912,7 @@ if not ss["model_results"]:
                 f"Concluído. Melhor: {_best.get('algo_label', '')} — AUC {_best['mean_metrics']['roc_auc']:.4f}"
             )
             ss["model_results"] = _best
-            ss["result_tab"] = "curvas"
+            ss["active_sections"] = set()
             st.rerun()
         except Exception as e:
             st.error(f"Erro no treino: {e}")
@@ -1961,21 +1961,29 @@ if len(_all) > 1:
 if len(_all) <= 1:
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-# ── Toggle pills ─────────────────────────────────────────────────────────────
+# ── Toggle pills (multi-select) ──────────────────────────────────────────────
 _sec_keys   = ["curvas", "distribuicao", "shap_global", "shap_individual", "metricas_clinicas", "equidade", "calibracao"]
 _sec_labels = ["Curvas ROC/PR", "Distribuição", "SHAP Global",
                "SHAP Individual", "Métricas Clínicas", "Equidade", "Calibração"]
-if "result_tab" not in ss:
-    ss["result_tab"] = "curvas"
+if "active_sections" not in ss:
+    ss["active_sections"] = set()
 _pill_cols = st.columns(len(_sec_keys))
 for _pi, (_pk, _pl) in enumerate(zip(_sec_keys, _sec_labels)):
     with _pill_cols[_pi]:
-        _active = _pk == ss.get("result_tab")
+        _active = _pk in ss.get("active_sections", set())
         if st.button(_pl, key=f"pill_{_pk}",
                      type="primary" if _active else "secondary",
                      use_container_width=True):
-            ss["result_tab"] = _pk
+            _secs = set(ss.get("active_sections", set()))
+            if _pk in _secs:
+                _secs.discard(_pk)
+            else:
+                _secs.add(_pk)
+            ss["active_sections"] = _secs
             st.rerun()
+
+if not ss.get("active_sections"):
+    st.info("Selecione uma ou mais seções acima para visualizar os resultados detalhados.")
 
 m = results["mean_metrics"]
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -2027,7 +2035,7 @@ if results.get("validation_strategy") in ("holdout", "temporal"):
 else:
     y_arr = y.values
 
-if ss.get("result_tab") == "curvas":
+if "curvas" in ss.get("active_sections", set()):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Curvas de desempenho**")
     col1, col2 = st.columns(2)
@@ -2037,7 +2045,7 @@ if ss.get("result_tab") == "curvas":
         st.plotly_chart(ev.pr_chart(y_arr, oof), use_container_width=True)
     st.plotly_chart(ev.calibration_chart(y_arr, oof), use_container_width=True)
 
-if ss.get("result_tab") == "distribuicao":
+if "distribuicao" in ss.get("active_sections", set()):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Distribuição dos scores preditos**")
     fig_dist = px.histogram(
@@ -2049,7 +2057,7 @@ if ss.get("result_tab") == "distribuicao":
     fig_dist.update_layout(margin=dict(t=40, b=0))
     st.plotly_chart(fig_dist, use_container_width=True)
 
-if ss.get("result_tab") == "shap_global":
+if "shap_global" in ss.get("active_sections", set()):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**SHAP — Explicabilidade Global**")
     if results.get("feature_importances"):
@@ -2064,7 +2072,7 @@ if ss.get("result_tab") == "shap_global":
     else:
         info_box("SHAP indisponível para este algoritmo ou configuração de pré-processamento.")
 
-if ss.get("result_tab") == "shap_individual":
+if "shap_individual" in ss.get("active_sections", set()):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**SHAP — Explicabilidade Individual**")
     st.caption("Selecione um caso para ver a contribuição de cada variável na predição.")
@@ -2080,48 +2088,22 @@ if ss.get("result_tab") == "shap_individual":
     else:
         info_box("SHAP individual indisponível para este algoritmo ou configuração de pré-processamento.")
 
-if ss.get("result_tab") == "metricas_clinicas":
+if "metricas_clinicas" in ss.get("active_sections", set()):
     import plotly.graph_objects as _go
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Métricas Clínicas por Ponto de Corte**")
     st.plotly_chart(ev.threshold_curve_chart(y_arr, oof), use_container_width=True)
 
-    # ── Threshold: label + slider compacto (acima da matriz) ─────────────────
-    _th_lbl, _th_slid, _th_val, _th_pad = st.columns([1, 3, 1, 5])
-    with _th_lbl:
-        st.markdown(
-            "<div style='padding-top:26px;font-size:.85rem;font-weight:600;"
-            "color:#111827'>Threshold</div>",
-            unsafe_allow_html=True,
-        )
-    with _th_slid:
+    # ── Duas colunas: esquerda = slider + matriz | direita = cards ────────────
+    _mc_left, _mc_right = st.columns([1, 1])
+
+    with _mc_left:
         threshold = st.slider(
             "Threshold", 0.01, 0.99, 0.50, 0.01,
-            label_visibility="collapsed",
             help="Ponto de corte para classificar como positivo (alto risco).",
         )
-    with _th_val:
-        st.markdown(
-            f"<div style='padding-top:26px;font-size:.85rem;color:#6b7280'>"
-            f"{threshold:.2f}</div>",
-            unsafe_allow_html=True,
-        )
+        tm = ev.threshold_metrics(y_arr, oof, threshold)
 
-    tm = ev.threshold_metrics(y_arr, oof, threshold)
-
-    # ── Métricas derivadas extras ─────────────────────────────────────────────
-    _total  = tm["tp"] + tm["tn"] + tm["fp"] + tm["fn"]
-    _acc    = (tm["tp"] + tm["tn"]) / _total if _total > 0 else 0.0
-    _f1     = (2 * tm["sensitivity"] * tm["ppv"]) / (tm["sensitivity"] + tm["ppv"]) \
-              if (tm["sensitivity"] + tm["ppv"]) > 0 else 0.0
-    _lr_pos = tm["sensitivity"] / (1 - tm["specificity"]) \
-              if (1 - tm["specificity"]) > 1e-9 else float("inf")
-    _lr_neg = (1 - tm["sensitivity"]) / tm["specificity"] \
-              if tm["specificity"] > 1e-9 else float("inf")
-
-    # ── Matriz de confusão (centrada) ─────────────────────────────────────────
-    _cm_col, _cm_gap = st.columns([5, 7])
-    with _cm_col:
         _cm_fig = _go.Figure(_go.Heatmap(
             z=[[tm["tn"], tm["fp"]], [tm["fn"], tm["tp"]]],
             x=["Pred Negativo", "Pred Positivo"],
@@ -2134,52 +2116,59 @@ if ss.get("result_tab") == "metricas_clinicas":
         ))
         _cm_fig.update_layout(
             title=dict(text="Matriz de Confusão", font=dict(size=13)),
-            width=320, height=320,
+            height=320,
             margin=dict(t=40, b=40, l=110, r=20),
             xaxis=dict(side="bottom"),
             yaxis=dict(autorange="reversed", scaleanchor="x", scaleratio=1),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(_cm_fig, use_container_width=False)
+        st.plotly_chart(_cm_fig, use_container_width=True)
         st.markdown(
-            "<div style='font-size:0.72rem;color:#6b7280;line-height:1.7;"
-            "padding-left:4px;margin-top:-8px'>"
+            "<div style='font-size:0.72rem;color:#6b7280;line-height:1.7;margin-top:-8px'>"
             "<b>VP</b> Verdadeiro Positivo &nbsp;·&nbsp; <b>FP</b> Falso Positivo<br>"
             "<b>VN</b> Verdadeiro Negativo &nbsp;·&nbsp; <b>FN</b> Falso Negativo"
             "</div>",
             unsafe_allow_html=True,
         )
 
-    # ── 9 cards em grade 3×3, largura total da página ─────────────────────────
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    _r1a, _r1b, _r1c = st.columns(3)
-    _r1a.metric("Sensibilidade",  f"{tm['sensitivity']:.1%}",
-                help="Taxa de verdadeiros positivos (recall / TPR)")
-    _r1b.metric("Especificidade", f"{tm['specificity']:.1%}",
-                help="Taxa de verdadeiros negativos (TNR)")
-    _r1c.metric("F1-Score",       f"{_f1:.1%}",
-                help="Média harmônica de Sensibilidade e VPP")
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    _r2a, _r2b, _r2c = st.columns(3)
-    _r2a.metric("VPP (Precisão)", f"{tm['ppv']:.1%}",
-                help="Valor Preditivo Positivo — P(doente | teste+)")
-    _r2b.metric("VPN",            f"{tm['npv']:.1%}",
-                help="Valor Preditivo Negativo — P(sadio | teste−)")
-    _r2c.metric("Acurácia",       f"{_acc:.1%}",
-                help="Proporção total de classificações corretas")
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    _r3a, _r3b, _r3c = st.columns(3)
-    _r3a.metric("LR+",
-                f"{_lr_pos:.2f}" if _lr_pos != float("inf") else "∞",
-                help="Razão de verossimilhança positiva — sensib. / (1 − especif.)")
-    _r3b.metric("LR−",
-                f"{_lr_neg:.2f}" if _lr_neg != float("inf") else "∞",
-                help="Razão de verossimilhança negativa — (1 − sensib.) / especif.")
-    _r3c.metric("Positivos preditos",
-                f"{tm['tp'] + tm['fp']:,}",
-                help=f"VP {tm['tp']:,} + FP {tm['fp']:,} para threshold {threshold:.2f}")
+    with _mc_right:
+        # ── Métricas derivadas ────────────────────────────────────────────────
+        _total  = tm["tp"] + tm["tn"] + tm["fp"] + tm["fn"]
+        _acc    = (tm["tp"] + tm["tn"]) / _total if _total > 0 else 0.0
+        _f1     = (2 * tm["sensitivity"] * tm["ppv"]) / (tm["sensitivity"] + tm["ppv"]) \
+                  if (tm["sensitivity"] + tm["ppv"]) > 0 else 0.0
+        _lr_pos = tm["sensitivity"] / (1 - tm["specificity"]) \
+                  if (1 - tm["specificity"]) > 1e-9 else float("inf")
+        _lr_neg = (1 - tm["sensitivity"]) / tm["specificity"] \
+                  if tm["specificity"] > 1e-9 else float("inf")
 
-if ss.get("result_tab") == "equidade":
+        # ── 9 cards em grade 3×3 ─────────────────────────────────────────────
+        _r1a, _r1b, _r1c = st.columns(3)
+        _r1a.metric("Sensibilidade",  f"{tm['sensitivity']:.1%}",
+                    help="Taxa de verdadeiros positivos (recall / TPR)")
+        _r1b.metric("Especificidade", f"{tm['specificity']:.1%}",
+                    help="Taxa de verdadeiros negativos (TNR)")
+        _r1c.metric("F1-Score",       f"{_f1:.1%}",
+                    help="Média harmônica de Sensibilidade e VPP")
+        _r2a, _r2b, _r2c = st.columns(3)
+        _r2a.metric("VPP (Precisão)", f"{tm['ppv']:.1%}",
+                    help="Valor Preditivo Positivo — P(doente | teste+)")
+        _r2b.metric("VPN",            f"{tm['npv']:.1%}",
+                    help="Valor Preditivo Negativo — P(sadio | teste−)")
+        _r2c.metric("Acurácia",       f"{_acc:.1%}",
+                    help="Proporção total de classificações corretas")
+        _r3a, _r3b, _r3c = st.columns(3)
+        _r3a.metric("LR+",
+                    f"{_lr_pos:.2f}" if _lr_pos != float("inf") else "∞",
+                    help="Razão de verossimilhança positiva — sensib. / (1 − especif.)")
+        _r3b.metric("LR−",
+                    f"{_lr_neg:.2f}" if _lr_neg != float("inf") else "∞",
+                    help="Razão de verossimilhança negativa — (1 − sensib.) / especif.")
+        _r3c.metric("Positivos preditos",
+                    f"{tm['tp'] + tm['fp']:,}",
+                    help=f"VP {tm['tp']:,} + FP {tm['fp']:,} para threshold {threshold:.2f}")
+
+if "equidade" in ss.get("active_sections", set()):
     import plotly.graph_objects as _go_eq
     from sklearn.metrics import roc_curve as _roc_curve_eq
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
@@ -2266,7 +2255,7 @@ if ss.get("result_tab") == "equidade":
         st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
 
 # ── Aba Calibração ─────────────────────────────────────────────────────────
-if ss.get("result_tab") == "calibracao":
+if "calibracao" in ss.get("active_sections", set()):
     import numpy as _np_cal
     from sklearn.metrics import brier_score_loss as _brier_cal
     _, _, _, _calibrate_model, _, _, _ = _pipeline()

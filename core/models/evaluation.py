@@ -422,9 +422,8 @@ def fold_metrics_table(fold_metrics: list[dict]) -> pd.DataFrame:
         "f1":          "F1",
         "fold":        "Fold",
     })
-    cols_order = ["Fold", "ROC-AUC", "Sensibilidade", "Especificidade", "PR-AUC", "F1"]
+    cols_order = ["ROC-AUC", "Sensibilidade", "Especificidade", "PR-AUC", "F1"]
     cols_present = [c for c in cols_order if c in df.columns]
     df = df[cols_present]
-    numeric = [c for c in df.columns if c != "Fold"]
-    df[numeric] = df[numeric].round(4)
+    df[cols_present] = df[cols_present].round(4)
     return df
