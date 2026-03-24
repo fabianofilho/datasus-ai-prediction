@@ -460,7 +460,7 @@ if not ss.get("show_benchmark") and not ss.get("comparison_results"):
 _bm_title_col, _bm_gap_col, _bm_btn_col = st.columns([3, 1, 1])
 with _bm_title_col:
     step_title(8, "Benchmark entre Estados",
-               "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
+               "Replica o pipeline em diferentes estados e compara curva ROC e importância das features.")
 with _bm_btn_col:
     st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
     if st.button("Relatório Final", key="btn_relatorio_top", icon=":material/summarize:", type="primary", use_container_width=True):
@@ -468,15 +468,76 @@ with _bm_btn_col:
     st.markdown("</div>", unsafe_allow_html=True)
 
 if ss["comparison_results"]:
+    import plotly.graph_objects as go
+    import numpy as np
+    from sklearn.metrics import roc_curve
+
     comp = ss["comparison_results"]
     st.markdown("**Métricas por coorte**")
     st.dataframe(ev.metrics_comparison_table(comp), use_container_width=True, hide_index=True)
 
-    shap_dicts = [r["shap_dict"] for r in comp if r.get("shap_dict")]
-    shap_labels = [r["label"] for r in comp if r.get("shap_dict")]
-    if len(shap_dicts) >= 2:
-        st.markdown("**Comparação SHAP entre coortes**")
-        st.plotly_chart(ev.shap_comparison_chart(shap_dicts, shap_labels), use_container_width=True)
+    # ── ROC Overlay ──────────────────────────────────────────────────────────
+    _colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+               "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+    roc_valid = [r for r in comp if r.get("oof_probs") is not None and r.get("y_true") is not None]
+    if roc_valid:
+        st.markdown("**Curva ROC por estado**")
+        fig_roc = go.Figure()
+        fig_roc.add_trace(go.Scatter(
+            x=[0, 1], y=[0, 1], mode="lines", name="Aleatório",
+            line=dict(dash="dash", color="lightgray"), showlegend=True,
+        ))
+        for i, r in enumerate(roc_valid):
+            _fpr, _tpr, _ = roc_curve(r["y_true"], r["oof_probs"])
+            try:
+                _auc = float(np.trapezoid(_tpr, _fpr))
+            except AttributeError:
+                _auc = float(np.trapz(_tpr, _fpr))
+            fig_roc.add_trace(go.Scatter(
+                x=_fpr, y=_tpr, mode="lines",
+                name=f"{r['label']} (AUC={_auc:.3f})",
+                line=dict(color=_colors[i % len(_colors)], width=2),
+            ))
+        fig_roc.update_layout(
+            xaxis_title="Taxa de Falsos Positivos",
+            yaxis_title="Taxa de Verdadeiros Positivos",
+            height=400,
+            margin=dict(l=0, r=0, t=30, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(fig_roc, use_container_width=True)
+
+    # ── Feature Importance Comparison ────────────────────────────────────────
+    fi_valid = [r for r in comp if r.get("feature_importances")]
+    if fi_valid:
+        st.markdown("**Importância das features por estado**")
+        # Top features by mean importance across states
+        all_feats = set()
+        for r in fi_valid:
+            all_feats.update(r["feature_importances"].keys())
+        _mean_imp = {
+            f: np.mean([r["feature_importances"].get(f, 0) for r in fi_valid])
+            for f in all_feats
+        }
+        top_feats = sorted(_mean_imp, key=lambda f: _mean_imp[f], reverse=True)[:15]
+
+        fig_fi = go.Figure()
+        for i, r in enumerate(fi_valid):
+            vals = [r["feature_importances"].get(f, 0) for f in top_feats]
+            fig_fi.add_trace(go.Bar(
+                name=r["label"],
+                x=top_feats,
+                y=vals,
+                marker_color=_colors[i % len(_colors)],
+            ))
+        fig_fi.update_layout(
+            barmode="group",
+            xaxis_tickangle=-35,
+            height=400,
+            margin=dict(l=0, r=0, t=30, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(fig_fi, use_container_width=True)
 
     if st.button("Limpar e comparar outros estados", type="secondary"):
         ss["comparison_results"] = []
@@ -528,14 +589,15 @@ else:
             transferência do modelo treinado em SP.
             """
             try:
-                # ── Coorte original: reutiliza métricas já calculadas (sem re-treinar)
+                # ── Coorte original: reutiliza métricas e OOF probs já calculadas ──
                 if raw_override is not None:
-                    _shap_orig = ev.shap_values_dict(results["model"], X_res)
                     return {
                         "label": label,
                         "n": _train_n or len(X_res),
                         "metrics": results["mean_metrics"],
-                        "shap_dict": _shap_orig,
+                        "oof_probs": results.get("oof_probs"),
+                        "y_true": y.values,
+                        "feature_importances": results.get("feature_importances", {}),
                     }
 
                 # ── Estados de comparação: baixa dados e re-treina do zero ────
@@ -577,12 +639,13 @@ else:
                     treatment=_treatment,
                 )
 
-                shap_d = ev.shap_values_dict(_cmp_r["model"], X_cmp)
                 return {
                     "label": label,
                     "n": len(y_cmp),
                     "metrics": _cmp_r["mean_metrics"],
-                    "shap_dict": shap_d,
+                    "oof_probs": _cmp_r["oof_probs"],
+                    "y_true": y_cmp.values,
+                    "feature_importances": _cmp_r.get("feature_importances", {}),
                 }
 
             except Exception as exc:
