@@ -456,8 +456,8 @@ with _bm_title_col:
                "Aplica o modelo treinado a novas coortes de outros estados e compara métricas e SHAP.")
 with _bm_btn_col:
     st.markdown("<div style='padding-top:4px'>", unsafe_allow_html=True)
-    if st.button("→ Resultados", key="btn_back_results", type="secondary", use_container_width=True):
-        st.switch_page("pages/analise.py")
+    if st.button("→ Relatório Final", key="btn_relatorio_top", type="primary", use_container_width=True):
+        st.switch_page("pages/relatorio.py")
     st.markdown("</div>", unsafe_allow_html=True)
 
 if ss["comparison_results"]:
@@ -597,10 +597,10 @@ st.markdown('<p class="ds-section-caption">Prossiga para inferência individual 
             unsafe_allow_html=True)
 _dep_l, _dep_gap, _dep_r = st.columns([1, 3, 1])
 with _dep_l:
-    if st.button("→ Deploy", type="secondary", use_container_width=True):
-        st.switch_page("pages/deploy.py")
+    if st.button("← Resultados", type="secondary", use_container_width=True):
+        st.switch_page("pages/analise.py")
 with _dep_r:
-    if st.button("→ Relatório Final", type="primary", use_container_width=True):
-        st.switch_page("pages/relatorio.py")
+    if st.button("→ Deploy", type="primary", use_container_width=True):
+        st.switch_page("pages/deploy.py")
 
 st.markdown('</div>', unsafe_allow_html=True)
