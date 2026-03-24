@@ -524,7 +524,10 @@ if submitted:
             "Comprimento = magnitude da contribuição"
         )
         with st.spinner("Calculando SHAP…"):
-            shap_fig = ev.shap_waterfall_chart(model, input_df, case_idx=0)
+            try:
+                shap_fig = ev.shap_waterfall_chart(model, input_df, case_idx=0)
+            except Exception:
+                shap_fig = None
         if shap_fig:
             shap_fig.update_layout(
                 title=f"SHAP — {outcome.name} · Score {prob:.3f}",

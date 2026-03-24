@@ -115,36 +115,35 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
 
     try:
         estimator, prep = _unwrap_model(model)
-        X_transformed = prep.transform(X)
-        if hasattr(X_transformed, "toarray"):
-            X_transformed = X_transformed.toarray()
-        col_names = X.columns.tolist()
-        n_cols = X_transformed.shape[1]
-        feat_names = _feat_names_after_transform(prep, col_names, n_cols)
-        # Belt-and-suspenders: guarantee column count always matches
+        X_arr = prep.transform(X)
+        if hasattr(X_arr, "toarray"):
+            X_arr = X_arr.toarray()
+        X_arr = np.asarray(X_arr, dtype=float)
+        n_cols = X_arr.shape[1]
+        feat_names = _feat_names_after_transform(prep, X.columns.tolist(), n_cols)
         if len(feat_names) != n_cols:
             feat_names = [f"feat_{i}" for i in range(n_cols)]
-        X_t = pd.DataFrame(X_transformed, columns=feat_names)
     except Exception:
         return None
 
     try:
         explainer = shap.TreeExplainer(estimator)
-        shap_values = explainer.shap_values(X_t)
+        shap_values = explainer.shap_values(X_arr)
         if isinstance(shap_values, list):
             shap_values = shap_values[1]
     except Exception:
         try:
-            explainer = shap.LinearExplainer(estimator, X_t)
-            shap_values = explainer.shap_values(X_t)
+            explainer = shap.LinearExplainer(estimator, X_arr)
+            shap_values = explainer.shap_values(X_arr)
         except Exception:
             return None
 
     mean_abs_shap = np.abs(shap_values).mean(axis=0)
     n_shap = len(mean_abs_shap)
-    feat_names_shap = feat_names[:n_shap] if len(feat_names) >= n_shap else feat_names + [f"feat_{i}" for i in range(len(feat_names), n_shap)]
+    if len(feat_names) < n_shap:
+        feat_names = feat_names + [f"feat_{i}" for i in range(len(feat_names), n_shap)]
     idx = np.argsort(mean_abs_shap)[-max_display:]
-    df = pd.DataFrame({"feature": np.array(feat_names_shap)[idx], "shap": mean_abs_shap[idx]})
+    df = pd.DataFrame({"feature": np.array(feat_names)[idx], "shap": mean_abs_shap[idx]})
     fig = go.Figure(go.Bar(x=df["shap"], y=df["feature"], orientation="h", marker_color="#d62728"))
     fig.update_layout(
         title=f"SHAP — Importância média absoluta (top {max_display})",
@@ -335,19 +334,18 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
         X_t_raw = prep.transform(row)
         if hasattr(X_t_raw, "toarray"):
             X_t_raw = X_t_raw.toarray()
-        col_names = X.columns.tolist()
-        n_cols = X_t_raw.shape[1]
-        feat_names = _feat_names_after_transform(prep, col_names, n_cols)
-        # Belt-and-suspenders: guarantee column count always matches
+        # Use raw numpy array — avoids any column-count mismatch with DataFrame
+        X_arr = np.asarray(X_t_raw, dtype=float)
+        n_cols = X_arr.shape[1]
+        feat_names = _feat_names_after_transform(prep, X.columns.tolist(), n_cols)
         if len(feat_names) != n_cols:
             feat_names = [f"feat_{i}" for i in range(n_cols)]
-        X_t = pd.DataFrame(X_t_raw, columns=feat_names)
     except Exception:
         return None
 
     try:
         explainer = shap.TreeExplainer(estimator)
-        sv = explainer.shap_values(X_t)
+        sv = explainer.shap_values(X_arr)
         if isinstance(sv, list):
             sv = sv[1]
         base = explainer.expected_value
