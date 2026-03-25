@@ -2874,10 +2874,31 @@ if "multicalibracao" in ss.get("active_sections", set()):
             st.plotly_chart(_fig_sg, use_container_width=True)
 
             if _ece_tbl:
-                import pandas as _pd_mc
-                _df_ece = _pd_mc.DataFrame(_ece_tbl).set_index("Subgrupo")
                 st.caption("ECE = Expected Calibration Error (menor = melhor calibração)")
-                st.dataframe(_df_ece, use_container_width=True)
+                for _row_sg in _ece_tbl:
+                    _sg_label = _row_sg["Subgrupo"]
+                    _sg_n = _row_sg["n"]
+                    _ece_b_sg = _row_sg["ECE bruto"]
+                    _ece_a_sg = _row_sg["ECE calibrado"]
+                    _brier_b_sg = _row_sg["Brier bruto"]
+                    _brier_a_sg = _row_sg["Brier calibrado"]
+                    st.markdown(
+                        f'<div style="font-size:.78rem;font-weight:600;color:#374151;'
+                        f'margin:.75rem 0 .25rem">{_sg_label} '
+                        f'<span style="font-weight:400;color:#9ca3af">n={_sg_n:,}</span></div>',
+                        unsafe_allow_html=True,
+                    )
+                    _sc1, _sc2, _sc3, _sc4 = st.columns(4)
+                    with _sc1:
+                        st.metric("ECE bruto", f"{_ece_b_sg:.4f}")
+                    with _sc2:
+                        st.metric("ECE calibrado", f"{_ece_a_sg:.4f}",
+                                  delta=f"{_ece_a_sg - _ece_b_sg:+.4f}", delta_color="inverse")
+                    with _sc3:
+                        st.metric("Brier bruto", f"{_brier_b_sg:.4f}")
+                    with _sc4:
+                        st.metric("Brier calibrado", f"{_brier_a_sg:.4f}",
+                                  delta=f"{_brier_a_sg - _brier_b_sg:+.4f}", delta_color="inverse")
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown('<p class="ds-section-caption">Continue para benchmark entre estados ou vá direto para inferência individual.</p>',
