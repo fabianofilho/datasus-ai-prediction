@@ -291,7 +291,7 @@ st.markdown(
 _dict_cols = feature_cols if feature_cols else [c for c in all_cols if c != target_col]
 
 # Load existing custom dict from session state
-_existing_dict: dict = ss.get("upload_dict", {})
+_existing_dict: dict = ss.get("upload_dict") or {}
 
 _new_dict: dict = {}
 with st.expander(f"Editar dicionário — {len(_dict_cols)} variáveis", expanded=False):
