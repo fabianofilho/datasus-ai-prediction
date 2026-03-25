@@ -123,46 +123,6 @@ OUTCOME_GROUPS = {
             "note":    "Base única SINAN_HANS. Pipeline completo disponível.",
         },
         {
-            "key":     "dengue_grave",
-            "icon":    "pest_control",
-            "name":    "Dengue Grave ou com Sinais de Alarme",
-            "source":  "SINAN",
-            "est_min": 8,
-            "status":  "ok",
-            "linkage": None,
-            "note":    "Base única SINAN_DENG. Pipeline completo disponível.",
-        },
-        {
-            "key":     "chikungunya_hospitalizado",
-            "icon":    "local_hospital",
-            "name":    "Hospitalização por Chikungunya",
-            "source":  "SINAN",
-            "est_min": 6,
-            "status":  "ok",
-            "linkage": None,
-            "note":    "Base única SINAN_CHIK. Pipeline completo disponível.",
-        },
-        {
-            "key":     "obito_aids",
-            "icon":    "medical_information",
-            "name":    "Óbito por AIDS",
-            "source":  "SINAN",
-            "est_min": 5,
-            "status":  "ok",
-            "linkage": None,
-            "note":    "Base única SINAN_AIDS. Pipeline completo disponível.",
-        },
-        {
-            "key":     "sifilis_nao_cura",
-            "icon":    "medication",
-            "name":    "Não-Cura de Sífilis Adquirida",
-            "source":  "SINAN",
-            "est_min": 5,
-            "status":  "ok",
-            "linkage": None,
-            "note":    "Base única SINAN_SIFA. Pipeline completo disponível.",
-        },
-        {
             "key":     "violencia_autoprovocada",
             "icon":    "psychology",
             "name":    "Risco de Violência Autoprovocada",
@@ -181,6 +141,46 @@ OUTCOME_GROUPS = {
             "status":  "ok",
             "linkage": None,
             "note":    "Base única SINAN_IEXO. Pipeline completo disponível.",
+        },
+        {
+            "key":     "dengue_grave",
+            "icon":    "pest_control",
+            "name":    "Dengue Grave ou com Sinais de Alarme",
+            "source":  "SINAN",
+            "est_min": 8,
+            "status":  "upload",
+            "linkage": None,
+            "note":    "SINAN_DENG: download automático indisponível. Faça upload manual do arquivo.",
+        },
+        {
+            "key":     "chikungunya_hospitalizado",
+            "icon":    "local_hospital",
+            "name":    "Hospitalização por Chikungunya",
+            "source":  "SINAN",
+            "est_min": 6,
+            "status":  "upload",
+            "linkage": None,
+            "note":    "SINAN_CHIK: download automático indisponível. Faça upload manual do arquivo.",
+        },
+        {
+            "key":     "obito_aids",
+            "icon":    "medical_information",
+            "name":    "Óbito por AIDS",
+            "source":  "SINAN",
+            "est_min": 5,
+            "status":  "upload",
+            "linkage": None,
+            "note":    "SINAN_AIDS: download automático indisponível. Faça upload manual do arquivo.",
+        },
+        {
+            "key":     "sifilis_nao_cura",
+            "icon":    "medication",
+            "name":    "Não-Cura de Sífilis Adquirida",
+            "source":  "SINAN",
+            "est_min": 5,
+            "status":  "upload",
+            "linkage": None,
+            "note":    "SINAN_SIFA: download automático indisponível. Faça upload manual do arquivo.",
         },
     ],
 }
@@ -231,9 +231,10 @@ html, body, [data-testid="stAppViewContainer"],
     border-radius: 6px; background: #fafafa; width: fit-content;
 }
 .ds-legend-item { display: flex; align-items: center; gap: .35rem; }
-.dot-ok  { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink:0; }
-.dot-dev { width: 8px; height: 8px; border-radius: 50%; background: #f97316; flex-shrink:0; }
-.dot-link{ width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex-shrink:0; }
+.dot-ok     { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink:0; }
+.dot-dev    { width: 8px; height: 8px; border-radius: 50%; background: #f97316; flex-shrink:0; }
+.dot-link   { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex-shrink:0; }
+.dot-upload { width: 8px; height: 8px; border-radius: 50%; background: #a855f7; flex-shrink:0; }
 
 .ds-group {
     font-size: .68rem; font-weight: 700;
@@ -260,6 +261,12 @@ html, body, [data-testid="stAppViewContainer"],
 }
 .ds-card.dev:hover { border-color: #fb923c; }
 .ds-card.dev.sel { border: 1.5px solid #f97316; background: #fff7ed !important; }
+.ds-card.upload {
+    border-color: #e9d5ff; background: #faf5ff !important;
+    opacity: .9;
+}
+.ds-card.upload:hover { border-color: #a855f7; }
+.ds-card.upload.sel { border: 1.5px solid #a855f7; background: #f3e8ff !important; }
 
 .ds-card-name {
     font-size: .81rem; color: #111827 !important;
@@ -287,6 +294,11 @@ html, body, [data-testid="stAppViewContainer"],
 .ds-badge-link {
     font-size: .6rem; font-weight: 600; color: #92400e;
     background: #fef3c7; padding: 1px 6px; border-radius: 4px;
+}
+.ds-badge-upload {
+    font-size: .6rem; font-weight: 700; color: #7e22ce;
+    background: #f3e8ff; padding: 1px 6px; border-radius: 4px;
+    letter-spacing: .04em;
 }
 .ds-card-note {
     font-size: .67rem; color: #9ca3af; margin-top: .25rem;
@@ -337,6 +349,7 @@ st.markdown(
     '<span class="ds-legend-item"><span class="dot-ok"></span>Pipeline completo disponível</span>'
     '<span class="ds-legend-item"><span class="dot-dev"></span>Em desenvolvimento (requer linkage)</span>'
     '<span class="ds-legend-item"><span class="dot-link"></span>Linkage entre bases</span>'
+    '<span class="ds-legend-item"><span class="dot-upload"></span>Upload manual necessário</span>'
     '<span style="color:#d1d5db">|</span>'
     '<span class="ds-legend-item"><span class="ms" style="font-size:.85rem;color:#6b7280">schedule</span>'
     'Tempo estimado de download + processamento (1.000 registros)</span>'
@@ -350,8 +363,9 @@ try:
     N_COLS = 4
 
     for group_name, outcomes in OUTCOME_GROUPS.items():
-        # Ordena: ok primeiro, dev depois
-        _sorted = sorted(outcomes, key=lambda o: (0 if o["status"] == "ok" else 1))
+        # Ordena: ok primeiro, dev segundo, upload por último
+        _status_order = {"ok": 0, "dev": 1, "upload": 2}
+        _sorted = sorted(outcomes, key=lambda o: _status_order.get(o["status"], 1))
         st.markdown(f'<p class="ds-group">{group_name}</p>', unsafe_allow_html=True)
 
         for row_start in range(0, len(_sorted), N_COLS):
@@ -370,13 +384,16 @@ try:
                 is_sel = sel == key
 
                 # Badges extras
-                dev_badge  = '<span class="ds-badge-dev">EM DESENVOLVIMENTO</span>' if status == "dev" else ""
-                link_badge = '<span class="ds-badge-link">LINKAGE</span>' if linkage else ""
+                dev_badge    = '<span class="ds-badge-dev">EM DESENVOLVIMENTO</span>' if status == "dev" else ""
+                link_badge   = '<span class="ds-badge-link">LINKAGE</span>' if linkage else ""
+                upload_badge = '<span class="ds-badge-upload">UPLOAD NECESSÁRIO</span>' if status == "upload" else ""
 
                 # CSS da card
                 card_cls = "ds-card"
                 if status == "dev":
                     card_cls += " dev"
+                if status == "upload":
+                    card_cls += " upload"
                 if is_sel:
                     card_cls += " sel"
 
@@ -393,14 +410,19 @@ try:
                         f'<span class="ds-badge-time">'
                         f'<span class="ms" style="font-size:.7rem;color:#9ca3af">schedule</span>'
                         f'~{est} min</span>'
-                        f'{dev_badge}{link_badge}'
+                        f'{dev_badge}{upload_badge}{link_badge}'
                         f'</div>'
                         f'{note_html}'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
 
-                    btn_label = "Selecionar" if status == "ok" else "Ver (em dev.)"
+                    if status == "ok":
+                        btn_label = "Selecionar"
+                    elif status == "upload":
+                        btn_label = "Aguardando Upload"
+                    else:
+                        btn_label = "Ver (em dev.)"
                     try:
                         clicked = st.button(
                             btn_label, key=f"sel_{key}",
@@ -416,6 +438,8 @@ try:
                         if status == "ok":
                             st.session_state.outcome_key = key
                             st.switch_page("pages/analise.py")
+                        elif status == "upload":
+                            st.toast("Faça o upload manual do arquivo DBC/CSV para habilitar este desfecho.")
                         else:
                             st.toast("Módulo em desenvolvimento — disponível em breve.")
 
