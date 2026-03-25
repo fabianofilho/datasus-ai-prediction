@@ -16,6 +16,28 @@ from sklearn.calibration import calibration_curve
 from sklearn.metrics import roc_curve, precision_recall_curve
 
 
+def _label(col: str) -> str:
+    """Return human-readable label for a feature column, falling back to the cleaned name.
+
+    Handles:
+    - ColumnTransformer prefixes: 'cat_none__SEXO' → 'SEXO'
+    - OHE numeric suffixes:       'SEXO_1'         → 'SEXO'
+    """
+    from core.features.data_dict import get_info
+    # Strip ColumnTransformer prefix (e.g. 'num_none__GESTACAO' → 'GESTACAO')
+    clean = col.split("__", 1)[-1] if "__" in col else col
+    # Strip OHE numeric suffix (e.g. 'SEXO_1' → 'SEXO')
+    if "_" in clean and clean.rsplit("_", 1)[-1].isdigit():
+        clean = clean.rsplit("_", 1)[0]
+    info = get_info(col) or get_info(clean)
+    return info["label"] if info else clean  # fall back to cleaned name, not raw col
+
+
+def _apply_labels(names: list[str]) -> list[str]:
+    """Map a list of raw feature names to their display labels."""
+    return [_label(n) for n in names]
+
+
 def _unwrap_model(model):
     """Return (estimator, preprocessor_pipeline) regardless of model type.
 
@@ -95,7 +117,8 @@ def calibration_chart(y_true: np.ndarray, oof_probs: np.ndarray, n_bins: int = 1
 
 
 def importance_chart(feature_importances: dict, top_n: int = 20) -> go.Figure:
-    df = pd.Series(feature_importances).sort_values(ascending=True).tail(top_n)
+    labeled = {_label(k): v for k, v in feature_importances.items()}
+    df = pd.Series(labeled).sort_values(ascending=True).tail(top_n)
     fig = go.Figure(go.Bar(x=df.values, y=df.index, orientation="h", marker_color="#1f77b4"))
     fig.update_layout(
         title=f"Top {top_n} Variáveis por Importância",
@@ -154,8 +177,9 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
     n_shap = len(mean_abs_shap)
     if len(feat_names) < n_shap:
         feat_names = feat_names + [f"feat_{i}" for i in range(len(feat_names), n_shap)]
+    feat_labels = _apply_labels(feat_names)
     idx = np.argsort(mean_abs_shap)[-max_display:]
-    df = pd.DataFrame({"feature": np.array(feat_names)[idx], "shap": mean_abs_shap[idx]})
+    df = pd.DataFrame({"feature": np.array(feat_labels)[idx], "shap": mean_abs_shap[idx]})
     fig = go.Figure(go.Bar(x=df["shap"], y=df["feature"], orientation="h", marker_color="#d62728"))
     fig.update_layout(
         title=f"SHAP — Importância média absoluta (top {max_display})",
@@ -163,6 +187,105 @@ def shap_summary(model, X: pd.DataFrame, max_display: int = 20) -> go.Figure | N
         height=max(300, max_display * 22),
         width=620,
         margin=dict(l=180),
+    )
+    return fig
+
+
+def shap_beeswarm(model, X: pd.DataFrame, max_display: int = 15) -> go.Figure | None:
+    """Beeswarm SHAP chart: each dot is a sample, colored by feature value (blue=low, red=high)."""
+    try:
+        import shap
+    except ImportError:
+        return None
+
+    try:
+        estimator, prep = _unwrap_model(model)
+        X_arr = prep.transform(X)
+        if hasattr(X_arr, "toarray"):
+            X_arr = X_arr.toarray()
+        X_arr = np.asarray(X_arr, dtype=float)
+        n_cols = X_arr.shape[1]
+        feat_names = _feat_names_after_transform(prep, X.columns.tolist(), n_cols)
+        if len(feat_names) != n_cols:
+            feat_names = [f"feat_{i}" for i in range(n_cols)]
+    except Exception:
+        return None
+
+    try:
+        explainer = shap.TreeExplainer(estimator)
+        shap_values = _extract_shap_2d(
+            explainer.shap_values(X_arr, check_additivity=False)
+        )
+    except Exception:
+        try:
+            masker = shap.maskers.Independent(X_arr, max_samples=min(100, len(X_arr)))
+            explainer = shap.LinearExplainer(estimator, masker)
+            shap_values = _extract_shap_2d(explainer.shap_values(X_arr))
+        except Exception:
+            return None
+
+    n_shap = shap_values.shape[1]
+    if len(feat_names) < n_shap:
+        feat_names = feat_names + [f"feat_{i}" for i in range(len(feat_names), n_shap)]
+
+    mean_abs = np.abs(shap_values).mean(axis=0)
+    n_feats = min(max_display, n_shap)
+    top_idx = np.argsort(mean_abs)[-n_feats:]   # ascending → least important first (bottom of chart)
+    feat_labels = _apply_labels(feat_names)
+
+    rng = np.random.default_rng(42)
+    fig = go.Figure()
+
+    for rank, fi in enumerate(top_idx):
+        sv_col = shap_values[:, fi]
+        fv_col = X_arr[:, fi]
+        label = feat_labels[fi]
+
+        fv_min, fv_max = np.nanmin(fv_col), np.nanmax(fv_col)
+        fv_norm = (fv_col - fv_min) / (fv_max - fv_min) if fv_max > fv_min else np.full_like(fv_col, 0.5)
+
+        jitter = rng.uniform(-0.35, 0.35, size=len(sv_col))
+        is_last = rank == len(top_idx) - 1
+
+        fig.add_trace(go.Scatter(
+            x=sv_col,
+            y=np.full(len(sv_col), rank) + jitter,
+            mode="markers",
+            marker=dict(
+                size=4,
+                opacity=0.55,
+                color=fv_norm,
+                colorscale=[[0, "#3b82f6"], [0.5, "#e5e7eb"], [1, "#ef4444"]],
+                showscale=is_last,
+                colorbar=dict(
+                    title="Valor",
+                    tickvals=[0, 1],
+                    ticktext=["Baixo", "Alto"],
+                    len=0.35,
+                    y=0.5,
+                    thickness=12,
+                ) if is_last else None,
+            ),
+            showlegend=False,
+            hovertemplate=f"<b>{label}</b><br>SHAP: %{{x:.4f}}<extra></extra>",
+        ))
+
+    fig.add_vline(x=0, line_dash="dash", line_color="#9ca3af", line_width=1)
+    fig.update_layout(
+        title=f"SHAP Beeswarm — top {n_feats} variáveis",
+        xaxis=dict(title="Valor SHAP (negativo = reduz risco · positivo = aumenta risco)", zeroline=False),
+        yaxis=dict(
+            tickmode="array",
+            tickvals=list(range(len(top_idx))),
+            ticktext=[feat_labels[fi] for fi in top_idx],
+            showgrid=True,
+            gridcolor="#f3f4f6",
+        ),
+        height=max(380, n_feats * 30),
+        width=700,
+        margin=dict(l=175, r=80, t=50, b=50),
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff",
     )
     return fig
 
@@ -211,6 +334,7 @@ def shap_comparison_chart(
         for feat, val in d.items():
             all_features[feat] = all_features.get(feat, 0) + val
     top_features = sorted(all_features, key=all_features.get, reverse=True)[:top_n]
+    top_labels = _apply_labels(top_features)
 
     palette = ["#1a56db", "#059669", "#d97706", "#e11d48", "#7c3aed", "#0891b2"]
     fig = go.Figure()
@@ -219,7 +343,7 @@ def shap_comparison_chart(
         fig.add_trace(go.Bar(
             name=label,
             x=vals,
-            y=top_features,
+            y=top_labels,
             orientation="h",
             marker_color=palette[i % len(palette)],
         ))
@@ -369,7 +493,8 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
 
     sv_flat = sv[0]
     n = min(len(feat_names), len(sv_flat))
-    contributions = pd.Series(sv_flat[:n], index=feat_names[:n])
+    feat_labels = _apply_labels(feat_names[:n])
+    contributions = pd.Series(sv_flat[:n], index=feat_labels)
     top = contributions.abs().nlargest(15).index
     contributions = contributions[top].sort_values()
 

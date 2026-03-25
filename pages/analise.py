@@ -2079,6 +2079,11 @@ if not ss["model_results"]:
             )
             ss["model_results"] = _best
             ss["active_sections"] = set()
+            # Store a sample of X for SHAP computation in relatorio.py
+            try:
+                ss["X_res"] = X[_best["X_columns"]].head(500)
+            except Exception:
+                ss["X_res"] = None
             st.rerun()
         except Exception as e:
             st.error(f"Erro no treino: {e}")
@@ -2227,15 +2232,17 @@ if "distribuicao" in ss.get("active_sections", set()):
 if "shap_global" in ss.get("active_sections", set()):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**SHAP — Explicabilidade Global**")
-    if results.get("feature_importances"):
-        st.plotly_chart(ev.importance_chart(results["feature_importances"]), use_container_width=True)
     with st.spinner("Calculando SHAP…"):
         try:
             shap_fig = ev.shap_summary(results["model"], X_res.head(500))
+            shap_bee = ev.shap_beeswarm(results["model"], X_res.head(500))
         except Exception:
             shap_fig = None
+            shap_bee = None
     if shap_fig:
         st.plotly_chart(shap_fig, use_container_width=True)
+        if shap_bee:
+            st.plotly_chart(shap_bee, use_container_width=True)
     else:
         info_box("SHAP indisponível para este algoritmo ou configuração de pré-processamento.")
 
@@ -2364,7 +2371,12 @@ if "equidade" in ss.get("active_sections", set()):
     from sklearn.metrics import roc_curve as _roc_curve_eq
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Análise de Equidade por Subgrupo**")
-    _fairness_candidates = ["SEXO", "RACA_COR", "UF_ZI", "UF_NASC", "MUNIC_RES", "UF_SIGLA"]
+    _fairness_candidates = [
+        # SIH / SINASC
+        "SEXO", "RACA_COR", "UF_SIGLA", "UF_ZI", "UF_NASC", "MUNIC_RES",
+        # SINAN (TB, Hanseníase, Arboviroses, AIDS, Sífilis, Violência, Intoxicação)
+        "CS_SEXO", "CS_RACA", "age_group",
+    ]
     _fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
     if _fairness_cols:
         group_col = st.selectbox("Estratificar por", _fairness_cols,
@@ -2443,7 +2455,7 @@ if "equidade" in ss.get("active_sections", set()):
         else:
             st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
     else:
-        st.info("Nenhuma variável demográfica encontrada na coorte (SEXO, RACA_COR, UF).")
+        st.info("Nenhuma variável demográfica encontrada na coorte (SEXO / CS_SEXO, RACA_COR / CS_RACA, UF_SIGLA, age_group).")
 
 # ── Aba Calibração ─────────────────────────────────────────────────────────
 if "calibracao" in ss.get("active_sections", set()):

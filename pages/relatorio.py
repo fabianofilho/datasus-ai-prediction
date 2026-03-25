@@ -298,18 +298,22 @@ def step_title(n: int, title: str, caption: str = "") -> None:
 def _build_html_report(outcome, results, m, calib, comp, fc, mc, ss_data: dict) -> str:
     import datetime
     algo = results.get("algo_label", "—")
+    from core.features.data_dict import get_info as _gi_html
     features = fc.get("selected_features", results.get("X_columns", []))
     states = ", ".join(ss_data.get("sel_states") or [])
     years = ", ".join(map(str, ss_data.get("sel_years") or []))
     ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-    feat_list = "".join(f"<li><code>{f}</code></li>" for f in features)
+    feat_list = "".join(
+        f"<li>{(_gi_html(f) or {{}}).get('label', f)} <code>{f}</code></li>"
+        for f in features
+    )
 
     feat_imp_section = ""
     fi_data = results.get("feature_importances", {})
     if fi_data:
         top_fi = sorted(fi_data.items(), key=lambda x: x[1], reverse=True)[:15]
         fi_rows = "".join(
-            f"<tr><td>{i+1}</td><td><code>{name}</code></td><td>{val:.4f}</td></tr>"
+            f"<tr><td>{i+1}</td><td>{(_gi_html(name) or {{}}).get('label', name)} <code>{name}</code></td><td>{val:.4f}</td></tr>"
             for i, (name, val) in enumerate(top_fi)
         )
         feat_imp_section = f"""
@@ -463,9 +467,12 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 st.markdown("### 2. Features Selecionadas")
 _feats = fc.get("selected_features", results.get("X_columns", []))
 if _feats:
+    from core.features.data_dict import get_info as _get_info_rep
     _fcols = st.columns(4)
     for _fi, _fn in enumerate(_feats):
-        _fcols[_fi % 4].markdown(f"`{_fn}`")
+        _info = _get_info_rep(_fn)
+        _display = f"{_info['label']} (`{_fn}`)" if _info else f"`{_fn}`"
+        _fcols[_fi % 4].markdown(_display)
     st.caption(f"{len(_feats)} variável(is)")
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
@@ -571,15 +578,38 @@ if _oof is not None and _y_eval is not None:
     _cm_col50, _ = st.columns([1, 1])
     with _cm_col50:
         st.plotly_chart(_cm_fig50, use_container_width=True)
-
-st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-# ── 9. Importância de Features ─────────────────────────────────────────────────
-_fi_rep = results.get("feature_importances", {})
-if _fi_rep:
-    st.markdown("### 9. Importância de Features")
-    st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+# ── 9. Explicabilidade SHAP ────────────────────────────────────────────────────
+st.markdown("### 9. Explicabilidade SHAP")
+_X_rep = ss.get("X_res")
+_model_rep = results.get("model")
+if _X_rep is not None and _model_rep is not None:
+    with st.spinner("Calculando SHAP…"):
+        try:
+            _shap_bar = ev.shap_summary(_model_rep, _X_rep)
+            _shap_bee = ev.shap_beeswarm(_model_rep, _X_rep)
+        except Exception:
+            _shap_bar = None
+            _shap_bee = None
+    if _shap_bar:
+        st.plotly_chart(_shap_bar, use_container_width=True)
+        if _shap_bee:
+            st.plotly_chart(_shap_bee, use_container_width=True)
+    else:
+        _fi_rep = results.get("feature_importances", {})
+        if _fi_rep:
+            st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
+        else:
+            st.info("SHAP indisponível para este algoritmo.")
+else:
+    _fi_rep = results.get("feature_importances", {})
+    if _fi_rep:
+        st.caption("SHAP disponível após retreinar o modelo nesta sessão.")
+        st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
+    else:
+        st.info("Retreine o modelo para visualizar a explicabilidade SHAP.")
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── 10. Calibração ─────────────────────────────────────────────────────────────
 if calib and not calib.get("skipped"):
