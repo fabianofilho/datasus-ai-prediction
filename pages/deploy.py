@@ -240,12 +240,17 @@ def render_sidebar() -> None:
         st.markdown('<p class="sb-title">Pipeline</p>', unsafe_allow_html=True)
 
         if ss.get("outcome_key"):
-            o = OUTCOMES[ss["outcome_key"]]
+            _ok = ss["outcome_key"]
+            if _ok == "__diy__":
+                _o_name, _o_sources = "Do It Yourself (DIY)", ["UPLOAD"]
+            else:
+                _o = OUTCOMES[_ok]
+                _o_name, _o_sources = _o.name, _o.data_sources
             st.markdown(
                 f'<div class="sb-step">'
                 f'<div class="sb-step-label">1 · Desfecho</div>'
-                f'<div class="sb-step-value">{o.name}<br>'
-                f'<span style="font-size:.7rem;color:#6b7280">{", ".join(o.data_sources)}</span></div>'
+                f'<div class="sb-step-value">{_o_name}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">{", ".join(_o_sources)}</span></div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -356,7 +361,15 @@ CohortBuilder = _cohort()
 
 from core.features.data_dict import get_info as _dd_info
 
-outcome   = OUTCOMES[ss["outcome_key"]]
+_is_diy = ss["outcome_key"] == "__diy__"
+if _is_diy:
+    class _DiyProxy:
+        name = "Do It Yourself (DIY)"
+        data_sources = ["UPLOAD"]
+        key = "__diy__"
+    outcome = _DiyProxy()
+else:
+    outcome = OUTCOMES[ss["outcome_key"]]
 results   = ss["model_results"]
 treatment = ss.get("treatment_config") or {}
 cohort    = ss["cohort"]
@@ -366,9 +379,14 @@ _calib = ss.get("calib_results") or {}
 model = _calib.get("cal_model") or results["model"]
 
 feature_cols = results["X_columns"]
-builder = CohortBuilder(outcome)
-X_train, y_train = builder.get_Xy(cohort)
-X_res = X_train[feature_cols]
+if _is_diy:
+    _target = ss.get("upload_target") or cohort.columns[-1]
+    _feats = ss.get("upload_features") or [c for c in cohort.columns if c != _target]
+    X_res = cohort[_feats].reindex(columns=feature_cols).fillna(float("nan"))
+else:
+    builder = CohortBuilder(outcome)
+    X_train, _ = builder.get_Xy(cohort)
+    X_res = X_train[feature_cols]
 
 num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").columns.tolist())
 cat_cols = treatment.get("cat_cols", X_res.select_dtypes(exclude="number").columns.tolist())
