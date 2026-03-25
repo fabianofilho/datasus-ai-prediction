@@ -357,28 +357,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ── Botão DIY ─────────────────────────────────────────────────────────────────
-st.markdown(
-    '<hr style="border:none;border-top:1px solid #f3f4f6;margin:.5rem 0 1rem">',
-    unsafe_allow_html=True,
-)
-_diy_col, _ = st.columns([1, 3])
-with _diy_col:
-    if st.button(
-        "⚙ Do It Yourself (DIY)",
-        key="btn_diy",
-        type="primary",
-        use_container_width=False,
-    ):
-        st.session_state.outcome_key = "__diy__"
-        # Reset pipeline state
-        for _rk in ["raw_data", "cohort", "feature_config", "treatment_config",
-                    "model_config", "model_results", "calib_results", "upload_df",
-                    "upload_target", "upload_dict", "X_res"]:
-            if _rk in st.session_state:
-                st.session_state[_rk] = {} if _rk == "raw_data" else None
-        st.switch_page("pages/upload.py")
-
 # ── Seleção de desfecho ───────────────────────────────────────────────────────
 try:
     sel = st.session_state.outcome_key
@@ -484,8 +462,22 @@ except Exception as e:
 
 # ── Rodapé com reset de emergência ────────────────────────────────────────────
 st.markdown('<hr style="border:none;border-top:1px solid #f3f4f6;margin:2.5rem 0 1rem">', unsafe_allow_html=True)
-_r1, _r2 = st.columns([10, 1])
-with _r2:
+_r1, _r2, _r3 = st.columns([2, 8, 1])
+with _r1:
+    if st.button(
+        "⚙ Do It Yourself (DIY)",
+        key="btn_diy",
+        type="primary",
+        use_container_width=False,
+    ):
+        st.session_state.outcome_key = "__diy__"
+        for _rk in ["raw_data", "cohort", "feature_config", "treatment_config",
+                    "model_config", "model_results", "calib_results", "upload_df",
+                    "upload_target", "upload_dict", "X_res"]:
+            if _rk in st.session_state:
+                st.session_state[_rk] = {} if _rk == "raw_data" else None
+        st.switch_page("pages/upload.py")
+with _r3:
     if st.button("↺ Reset", help="Limpa toda a sessão e reinicia o pipeline", type="secondary"):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
