@@ -2473,16 +2473,33 @@ if "equidade" in ss.get("active_sections", set()):
     from sklearn.metrics import roc_curve as _roc_curve_eq
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
     st.markdown("**Análise de Equidade por Subgrupo**")
-    _fairness_candidates = [
-        # SIH / SINASC
-        "SEXO", "RACA_COR", "UF_SIGLA", "UF_ZI", "UF_NASC", "MUNIC_RES",
-        # SINAN (TB, Hanseníase, Arboviroses, AIDS, Sífilis, Violência, Intoxicação)
-        "CS_SEXO", "CS_RACA", "age_group",
-    ]
-    _fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
+    if _is_diy:
+        _target_col_eq = ss.get("upload_target") or cohort.columns[-1]
+        _fairness_cols = [
+            c for c in cohort.columns
+            if c != _target_col_eq and cohort[c].nunique() <= 30 and cohort[c].nunique() >= 2
+        ]
+        if _fairness_cols:
+            group_col = st.selectbox(
+                "Variável de subgrupo para equidade",
+                _fairness_cols,
+                help="Selecione qualquer variável categórica para estratificar a análise de equidade.",
+            )
+        else:
+            st.info("Nenhuma coluna com 2–30 valores únicos encontrada para análise de equidade.")
+            _fairness_cols = []
+    else:
+        _fairness_candidates = [
+            "SEXO", "RACA_COR", "UF_SIGLA", "UF_ZI", "UF_NASC", "MUNIC_RES",
+            "CS_SEXO", "CS_RACA", "age_group",
+        ]
+        _fairness_cols = [c for c in _fairness_candidates if c in cohort.columns]
+        if _fairness_cols:
+            group_col = st.selectbox("Estratificar por", _fairness_cols,
+                                      help="Analisa se o modelo performa igualmente para diferentes grupos.")
+        else:
+            st.info("Nenhuma variável demográfica encontrada na coorte (SEXO / CS_SEXO, RACA_COR / CS_RACA, UF_SIGLA, age_group).")
     if _fairness_cols:
-        group_col = st.selectbox("Estratificar por", _fairness_cols,
-                                  help="Analisa se o modelo performa igualmente para diferentes grupos.")
         _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
         sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
         if not sub_df.empty:
@@ -2556,8 +2573,6 @@ if "equidade" in ss.get("active_sections", set()):
                 st.dataframe(sub_df, use_container_width=True, hide_index=True)
         else:
             st.info("Nenhum subgrupo com dados suficientes (mín. 20 casos e eventos positivos).")
-    else:
-        st.info("Nenhuma variável demográfica encontrada na coorte (SEXO / CS_SEXO, RACA_COR / CS_RACA, UF_SIGLA, age_group).")
 
 # ── Aba Calibração ─────────────────────────────────────────────────────────
 if "calibracao" in ss.get("active_sections", set()):
