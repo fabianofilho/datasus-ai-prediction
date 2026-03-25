@@ -303,12 +303,17 @@ def render_sidebar() -> None:
         st.markdown('<p class="sb-title">Pipeline</p>', unsafe_allow_html=True)
 
         if ss.get("outcome_key"):
-            o = OUTCOMES[ss["outcome_key"]]
+            _ok = ss["outcome_key"]
+            if _ok == "__diy__":
+                _o_name, _o_sources = "Do It Yourself (DIY)", ["UPLOAD"]
+            else:
+                _o = OUTCOMES[_ok]
+                _o_name, _o_sources = _o.name, _o.data_sources
             st.markdown(
                 f'<div class="sb-step">'
                 f'<div class="sb-step-label">1 · Desfecho</div>'
-                f'<div class="sb-step-value">{o.name}<br>'
-                f'<span style="font-size:.7rem;color:#6b7280">{", ".join(o.data_sources)}</span></div>'
+                f'<div class="sb-step-value">{_o_name}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">{", ".join(_o_sources)}</span></div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -427,13 +432,25 @@ calibrate_model, build_pipeline = _pipeline()
 STATES, fetch = _dl()
 CohortBuilder = _cohort()
 
-outcome = OUTCOMES[ss["outcome_key"]]
+_is_diy = ss["outcome_key"] == "__diy__"
 cohort = ss["cohort"]
 results = ss["model_results"]
 
-builder = CohortBuilder(outcome)
-X, y = builder.get_Xy(cohort)
-X_res = X[results["X_columns"]]
+if _is_diy:
+    class _DiyProxy:
+        name = "Do It Yourself (DIY)"
+        data_sources = ["UPLOAD"]
+    outcome = _DiyProxy()
+    _target = ss.get("upload_target") or cohort.columns[-1]
+    _feats = ss.get("upload_features") or [c for c in cohort.columns if c != _target]
+    X = cohort[_feats]
+    y = cohort[_target].astype(int)
+    X_res = X.reindex(columns=results["X_columns"]).fillna(float("nan"))
+else:
+    outcome = OUTCOMES[ss["outcome_key"]]
+    builder = CohortBuilder(outcome)
+    X, y = builder.get_Xy(cohort)
+    X_res = X[results["X_columns"]]
 
 # ── Modelo ativo (calibrado se disponível) ─────────────────────────────────────
 _active_model = results["model"]
@@ -458,33 +475,33 @@ with _bm_btn_col:
         st.switch_page("pages/relatorio.py")
     st.markdown("</div>", unsafe_allow_html=True)
 
-if ss["comparison_results"]:
-    import plotly.graph_objects as go
-    import numpy as np
-    from sklearn.metrics import roc_curve
+# ── Shared: render comparison results ──────────────────────────────────────
+def _render_comparison(comp: list, group_label: str = "subgrupo") -> None:
+    import plotly.graph_objects as _go
+    import numpy as _np
+    from sklearn.metrics import roc_curve as _roc_curve
 
-    comp = ss["comparison_results"]
-    st.markdown("**Métricas por coorte**")
-    st.dataframe(ev.metrics_comparison_table(comp), use_container_width=True, hide_index=True)
-
-    # ── ROC Overlay ──────────────────────────────────────────────────────────
     _colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
                "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+
+    st.markdown(f"**Métricas por {group_label}**")
+    st.dataframe(ev.metrics_comparison_table(comp), use_container_width=True, hide_index=True)
+
     roc_valid = [r for r in comp if r.get("oof_probs") is not None and r.get("y_true") is not None]
     if roc_valid:
-        st.markdown("**Curva ROC por estado**")
-        fig_roc = go.Figure()
-        fig_roc.add_trace(go.Scatter(
+        st.markdown(f"**Curva ROC por {group_label}**")
+        fig_roc = _go.Figure()
+        fig_roc.add_trace(_go.Scatter(
             x=[0, 1], y=[0, 1], mode="lines", name="Aleatório",
             line=dict(dash="dash", color="lightgray"), showlegend=True,
         ))
         for i, r in enumerate(roc_valid):
-            _fpr, _tpr, _ = roc_curve(r["y_true"], r["oof_probs"])
+            _fpr, _tpr, _ = _roc_curve(r["y_true"], r["oof_probs"])
             try:
-                _auc = float(np.trapezoid(_tpr, _fpr))
+                _auc = float(_np.trapezoid(_tpr, _fpr))
             except AttributeError:
-                _auc = float(np.trapz(_tpr, _fpr))
-            fig_roc.add_trace(go.Scatter(
+                _auc = float(_np.trapz(_tpr, _fpr))
+            fig_roc.add_trace(_go.Scatter(
                 x=_fpr, y=_tpr, mode="lines",
                 name=f"{r['label']} (AUC={_auc:.3f})",
                 line=dict(color=_colors[i % len(_colors)], width=2),
@@ -492,189 +509,237 @@ if ss["comparison_results"]:
         fig_roc.update_layout(
             xaxis_title="Taxa de Falsos Positivos",
             yaxis_title="Taxa de Verdadeiros Positivos",
-            height=400,
-            margin=dict(l=0, r=0, t=30, b=0),
+            height=400, margin=dict(l=0, r=0, t=30, b=0),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
         st.plotly_chart(fig_roc, use_container_width=True)
 
-    # ── Feature Importance Comparison ────────────────────────────────────────
     fi_valid = [r for r in comp if r.get("feature_importances")]
     if fi_valid:
-        st.markdown("**Importância das features por estado**")
-        # Top features by mean importance across states
-        all_feats = set()
+        import numpy as _np2
+        st.markdown(f"**Importância das features por {group_label}**")
+        all_feats: set = set()
         for r in fi_valid:
             all_feats.update(r["feature_importances"].keys())
         _mean_imp = {
-            f: np.mean([r["feature_importances"].get(f, 0) for r in fi_valid])
+            f: _np2.mean([r["feature_importances"].get(f, 0) for r in fi_valid])
             for f in all_feats
         }
         top_feats = sorted(_mean_imp, key=lambda f: _mean_imp[f], reverse=True)[:15]
-
-        fig_fi = go.Figure()
+        fig_fi = _go.Figure()
         for i, r in enumerate(fi_valid):
-            vals = [r["feature_importances"].get(f, 0) for f in top_feats]
-            fig_fi.add_trace(go.Bar(
+            fig_fi.add_trace(_go.Bar(
                 name=r["label"],
                 x=top_feats,
-                y=vals,
+                y=[r["feature_importances"].get(f, 0) for f in top_feats],
                 marker_color=_colors[i % len(_colors)],
             ))
         fig_fi.update_layout(
-            barmode="group",
-            xaxis_tickangle=-35,
-            height=400,
+            barmode="group", xaxis_tickangle=-35, height=400,
             margin=dict(l=0, r=0, t=30, b=0),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
         st.plotly_chart(fig_fi, use_container_width=True)
 
-    if st.button("Limpar e comparar outros estados", type="secondary"):
-        ss["comparison_results"] = []
-        ss["show_benchmark"] = True
-        st.rerun()
-else:
-    st.markdown(
-        '<div class="ds-info-box">Selecione estados adicionais para comparar o '
-        'desempenho do modelo treinado em populações diferentes.</div>',
-        unsafe_allow_html=True,
+
+def _apply_model_to_subset(X_sub, y_sub, label: str):
+    """Aplica o modelo treinado a um subconjunto e retorna métricas."""
+    import numpy as _np
+    from sklearn.metrics import (
+        roc_auc_score as _rauc, average_precision_score as _ap,
+        f1_score as _f1, recall_score as _rec, brier_score_loss as _brier,
     )
-    cmp_col1, cmp_col2 = st.columns(2)
-    with cmp_col1:
-        already_used = ss["sel_states"]
-        _cmp_options = [s for s in STATES if s not in already_used]
-        cmp_states = st.multiselect(
-            "Estados para comparação",
-            _cmp_options,
-            default=["ES"] if "ES" in _cmp_options else [],
-            help="Baixa os dados, constrói a coorte e aplica o modelo treinado.",
+    if len(y_sub) < 20 or y_sub.nunique() < 2:
+        return None
+    _probs = _active_model.predict_proba(X_sub)[:, 1]
+    _preds = (_probs >= 0.5).astype(int)
+    return {
+        "label": label,
+        "n": len(y_sub),
+        "metrics": {
+            "roc_auc": float(_rauc(y_sub, _probs)),
+            "pr_auc":  float(_ap(y_sub, _probs)),
+            "f1":      float(_f1(y_sub, _preds, zero_division=0)),
+            "recall":  float(_rec(y_sub, _preds, zero_division=0)),
+            "brier":   float(_brier(y_sub, _probs)),
+        },
+        "oof_probs": _probs,
+        "y_true": y_sub.values,
+        "feature_importances": results.get("feature_importances", {}),
+    }
+
+
+# ── Branch: DIY / upload → subgroup column selector ───────────────────────
+if _is_diy:
+    if ss["comparison_results"]:
+        _render_comparison(ss["comparison_results"], group_label="subgrupo")
+        if st.button("Limpar e comparar outros subgrupos", type="secondary"):
+            ss["comparison_results"] = []
+            st.rerun()
+    else:
+        st.markdown(
+            '<div class="ds-info-box">Selecione uma coluna do dataset para estratificar '
+            'o benchmark — o modelo será aplicado separadamente em cada valor do subgrupo.</div>',
+            unsafe_allow_html=True,
         )
-        include_original = st.checkbox(
-            f"Incluir coorte original ({', '.join(already_used)})", value=True,
+        _target_col = ss.get("upload_target") or cohort.columns[-1]
+        _sg_candidates = [
+            c for c in cohort.columns
+            if c != _target_col and cohort[c].nunique() <= 30 and cohort[c].nunique() >= 2
+        ]
+        if not _sg_candidates:
+            st.warning("Nenhuma coluna categórica com 2–30 valores únicos encontrada para subgrupo.")
+        else:
+            _sg_col_sel, _sg_vals_sel = st.columns(2)
+            with _sg_col_sel:
+                _sg_col = st.selectbox(
+                    "Coluna de subgrupo",
+                    _sg_candidates,
+                    help="Coluna usada para dividir o dataset em subgrupos para benchmark.",
+                )
+            _all_vals = sorted(cohort[_sg_col].dropna().unique().tolist(), key=str)
+            with _sg_vals_sel:
+                _sel_vals = st.multiselect(
+                    "Valores do subgrupo",
+                    _all_vals,
+                    default=_all_vals[:8],
+                    help="Selecione quais valores incluir na comparação.",
+                )
+
+            _include_all_data = st.checkbox("Incluir dataset completo como referência", value=True)
+
+            if not _sel_vals:
+                st.warning("Selecione pelo menos um valor para o subgrupo.")
+            elif st.button("Rodar benchmark por subgrupo", type="primary"):
+                _train_cols = results["X_columns"]
+                comp_list = []
+
+                if _include_all_data:
+                    r_all = _apply_model_to_subset(X_res, y, "Todos os dados")
+                    if r_all:
+                        comp_list.append(r_all)
+
+                prog_sg = st.progress(0.0, text="Iniciando…")
+                for _vi, _val in enumerate(_sel_vals):
+                    prog_sg.progress(_vi / len(_sel_vals), text=f"Processando {_sg_col}={_val}…")
+                    _mask = cohort[_sg_col] == _val
+                    _sub = cohort[_mask]
+                    _X_sub = _sub.reindex(columns=_train_cols).fillna(float("nan"))
+                    _feat_col = _target_col
+                    _y_sub = _sub[_feat_col].astype(int)
+                    r = _apply_model_to_subset(_X_sub, _y_sub, f"{_sg_col}={_val}")
+                    if r:
+                        comp_list.append(r)
+                    else:
+                        st.warning(f"{_sg_col}={_val}: dados insuficientes — ignorado.")
+
+                prog_sg.progress(1.0, text="Concluído.")
+                ss["comparison_results"] = comp_list
+                st.rerun()
+
+else:
+    # ── Standard outcomes: state/year benchmark ──────────────────────────────
+    if ss["comparison_results"]:
+        _render_comparison(ss["comparison_results"], group_label="estado")
+        if st.button("Limpar e comparar outros estados", type="secondary"):
+            ss["comparison_results"] = []
+            ss["show_benchmark"] = True
+            st.rerun()
+    else:
+        st.markdown(
+            '<div class="ds-info-box">Selecione estados adicionais para comparar o '
+            'desempenho do modelo treinado em populações diferentes.</div>',
+            unsafe_allow_html=True,
         )
-    with cmp_col2:
-        cmp_years = st.multiselect("Anos", list(range(2018, 2025)), default=ss["sel_years"])
+        cmp_col1, cmp_col2 = st.columns(2)
+        with cmp_col1:
+            already_used = ss["sel_states"]
+            _cmp_options = [s for s in STATES if s not in already_used]
+            cmp_states = st.multiselect(
+                "Estados para comparação",
+                _cmp_options,
+                default=["ES"] if "ES" in _cmp_options else [],
+                help="Baixa os dados, constrói a coorte e aplica o modelo treinado.",
+            )
+            include_original = st.checkbox(
+                f"Incluir coorte original ({', '.join(already_used)})", value=True,
+            )
+        with cmp_col2:
+            cmp_years = st.multiselect("Anos", list(range(2018, 2025)), default=ss["sel_years"])
 
-    if not cmp_states and not include_original:
-        st.warning("Selecione pelo menos um estado ou mantenha a coorte original.")
-    elif st.button("Rodar comparação", type="primary"):
-        comp_list = []
+        if not cmp_states and not include_original:
+            st.warning("Selecione pelo menos um estado ou mantenha a coorte original.")
+        elif st.button("Rodar comparação", type="primary"):
+            comp_list = []
 
-        # ── Config do pipeline original (reutilizada em cada estado) ──────────
-        from core.models.pipeline import train_cv as _train_cv
-        _algo       = results.get("algorithm", ss.get("model_config", {}).get("algo", "rf"))
-        _params     = results.get("best_params", {}) or {}
-        _n_folds    = ss.get("model_config", {}).get("n_folds", 5)
-        _balancing  = ss.get("model_config", {}).get("balancing", "none")
-        _treatment  = ss.get("treatment_config")       # mesmo tratamento do treino original
-        _train_cols = results["X_columns"]
-        _train_n    = results.get("sample_n")
+            _train_cols = results["X_columns"]
+            _train_n    = results.get("sample_n")
 
-        def _run_state_group(label: str, states: list[str], years: list[int], raw_override=None):
-            """Aplica o modelo original em uma coorte de outro estado (validação externa).
+            def _run_state_group(label: str, states: list[str], years: list[int], raw_override=None):
+                try:
+                    if raw_override is not None:
+                        _oof = results.get("oof_probs")
+                        _y_true = results.get("y_eval")
+                        if _y_true is None and _oof is not None and len(y) == len(_oof):
+                            _y_true = y.values
+                        return {
+                            "label": label,
+                            "n": _train_n or len(X_res),
+                            "metrics": results["mean_metrics"],
+                            "oof_probs": _oof,
+                            "y_true": _y_true,
+                            "feature_importances": results.get("feature_importances", {}),
+                        }
 
-            Usa o modelo já treinado (pipeline completo com pré-processamento) e
-            aplica diretamente na nova coorte — sem re-treinar. Isso mede a
-            generalizabilidade do modelo para outras populações (validação externa).
-            O OneHotEncoder com handle_unknown='ignore' garante compatibilidade de shapes.
-            """
-            try:
-                # ── Coorte original: reutiliza métricas e OOF probs já calculadas ──
-                if raw_override is not None:
-                    _oof = results.get("oof_probs")
-                    _y_true = results.get("y_eval")
-                    if _y_true is None and _oof is not None and len(y) == len(_oof):
-                        _y_true = y.values
-                    return {
-                        "label": label,
-                        "n": _train_n or len(X_res),
-                        "metrics": results["mean_metrics"],
-                        "oof_probs": _oof,
-                        "y_true": _y_true,
-                        "feature_importances": results.get("feature_importances", {}),
-                    }
+                    raw = {}
+                    for src in outcome.data_sources:
+                        dfs = []
+                        for st_ in states:
+                            for yr in years:
+                                dfs.append(fetch(src, st_, yr))
+                        raw[src] = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
-                # ── Estados de comparação: baixa dados e aplica modelo original ────
-                raw = {}
-                for src in outcome.data_sources:
-                    dfs = []
-                    for st_ in states:
-                        for yr in years:
-                            dfs.append(fetch(src, st_, yr))
-                    raw[src] = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+                    builder_cmp = CohortBuilder(outcome)
+                    cohort_cmp  = builder_cmp.build(raw)
+                    X_cmp, y_cmp = builder_cmp.get_Xy(cohort_cmp)
 
-                builder_cmp = CohortBuilder(outcome)
-                cohort_cmp  = builder_cmp.build(raw)
-                X_cmp, y_cmp = builder_cmp.get_Xy(cohort_cmp)
+                    for col in _train_cols:
+                        if col not in X_cmp.columns:
+                            X_cmp[col] = float("nan")
+                    X_cmp = X_cmp[_train_cols]
 
-                # Alinha features ao mesmo conjunto do treino original
-                for col in _train_cols:
-                    if col not in X_cmp.columns:
-                        X_cmp[col] = float("nan")
-                X_cmp = X_cmp[_train_cols]
+                    if _train_n and len(X_cmp) > _train_n:
+                        _idx = X_cmp.sample(n=_train_n, random_state=42).index
+                        X_cmp = X_cmp.loc[_idx]
+                        y_cmp = y_cmp.loc[_idx]
 
-                # Limita ao mesmo N para comparação justa
-                if _train_n and len(X_cmp) > _train_n:
-                    _idx = X_cmp.sample(n=_train_n, random_state=42).index
-                    X_cmp  = X_cmp.loc[_idx]
-                    y_cmp  = y_cmp.loc[_idx]
+                    return _apply_model_to_subset(X_cmp, y_cmp, label)
 
-                if len(y_cmp) < 20 or y_cmp.nunique() < 2:
-                    st.warning(f"{label}: dados insuficientes ou sem variação no desfecho — ignorado.")
+                except Exception as exc:
+                    st.error(f"Erro em {label}: {exc}")
                     return None
 
-                # ── Aplica modelo original (validação externa) ─────────────────
-                import numpy as _np
-                from sklearn.metrics import (
-                    roc_auc_score as _rauc, average_precision_score as _ap,
-                    f1_score as _f1, recall_score as _rec,
-                    brier_score_loss as _brier,
+            prog_cmp = st.progress(0.0, text="Iniciando comparação…")
+            all_groups = []
+            if include_original:
+                all_groups.append(
+                    (f"{'+'.join(already_used)} · {'+'.join(map(str, ss['sel_years']))}",
+                     already_used, ss["sel_years"], ss["raw_data"])
                 )
-                _probs = _active_model.predict_proba(X_cmp)[:, 1]
-                _preds = (_probs >= 0.5).astype(int)
-                _metrics = {
-                    "roc_auc":   float(_rauc(y_cmp, _probs)),
-                    "pr_auc":    float(_ap(y_cmp, _probs)),
-                    "f1":        float(_f1(y_cmp, _preds, zero_division=0)),
-                    "recall":    float(_rec(y_cmp, _preds, zero_division=0)),
-                    "brier":     float(_brier(y_cmp, _probs)),
-                }
+            for st_ in cmp_states:
+                all_groups.append(
+                    (f"{st_} · {'+'.join(map(str, cmp_years))}", [st_], cmp_years, None)
+                )
 
-                return {
-                    "label": label,
-                    "n": len(y_cmp),
-                    "metrics": _metrics,
-                    "oof_probs": _probs,
-                    "y_true": y_cmp.values,
-                    "feature_importances": results.get("feature_importances", {}),
-                }
+            for idx, (lbl, sts, yrs, raw_ov) in enumerate(all_groups):
+                prog_cmp.progress(idx / len(all_groups), text=f"Processando {lbl}…")
+                r = _run_state_group(lbl, sts, yrs, raw_ov)
+                if r:
+                    comp_list.append(r)
 
-            except Exception as exc:
-                st.error(f"Erro em {label}: {exc}")
-                return None
-
-        prog_cmp = st.progress(0.0, text="Iniciando comparação…")
-        all_groups = []
-        if include_original:
-            all_groups.append(
-                (f"{'+'.join(already_used)} · {'+'.join(map(str, ss['sel_years']))}",
-                 already_used, ss["sel_years"], ss["raw_data"])
-            )
-        for st_ in cmp_states:
-            all_groups.append(
-                (f"{st_} · {'+'.join(map(str, cmp_years))}", [st_], cmp_years, None)
-            )
-
-        for idx, (lbl, sts, yrs, raw_ov) in enumerate(all_groups):
-            prog_cmp.progress(idx / len(all_groups), text=f"Processando {lbl}…")
-            r = _run_state_group(lbl, sts, yrs, raw_ov)
-            if r:
-                comp_list.append(r)
-
-        prog_cmp.progress(1.0, text="Comparação concluída.")
-        ss["comparison_results"] = comp_list
-        st.rerun()
+            prog_cmp.progress(1.0, text="Comparação concluída.")
+            ss["comparison_results"] = comp_list
+            st.rerun()
 
 
 st.markdown('</div>', unsafe_allow_html=True)
