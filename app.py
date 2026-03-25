@@ -61,16 +61,6 @@ OUTCOME_GROUPS = {
     ],
     "Internação Hospitalar": [
         {
-            "key":     "readmissao_30d",
-            "icon":    "sync",
-            "name":    "Readmissão Hospitalar 30 dias",
-            "source":  "SIH",
-            "est_min": 10,
-            "status":  "ok",
-            "linkage": None,
-            "note":    "Base única SIH. Pipeline completo disponível.",
-        },
-        {
             "key":     "permanencia_prolongada",
             "icon":    "bed",
             "name":    "Permanência Hospitalar Prolongada",
@@ -111,7 +101,7 @@ OUTCOME_GROUPS = {
             "note":    "Linkage entre internações (SIH) e óbitos (SIM). Dados do SIM podem ter atraso de publicação.",
         },
     ],
-    "SINAN — Tuberculose e Hanseníase": [
+    "SINAN": [
         {
             "key":     "abandono_tb",
             "icon":    "pulmonology",
@@ -132,8 +122,6 @@ OUTCOME_GROUPS = {
             "linkage": None,
             "note":    "Base única SINAN_HANS. Pipeline completo disponível.",
         },
-    ],
-    "SINAN — Arboviroses": [
         {
             "key":     "dengue_grave",
             "icon":    "pest_control",
@@ -154,8 +142,6 @@ OUTCOME_GROUPS = {
             "linkage": None,
             "note":    "Base única SINAN_CHIK. Pipeline completo disponível.",
         },
-    ],
-    "SINAN — HIV e ISTs": [
         {
             "key":     "obito_aids",
             "icon":    "medical_information",
@@ -176,8 +162,6 @@ OUTCOME_GROUPS = {
             "linkage": None,
             "note":    "Base única SINAN_SIFA. Pipeline completo disponível.",
         },
-    ],
-    "SINAN — Violência e Intoxicações": [
         {
             "key":     "violencia_autoprovocada",
             "icon":    "psychology",

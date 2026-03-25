@@ -23,7 +23,7 @@ _SINASC: dict[str, dict] = {
         "values": {"1": "Nenhuma", "2": "1–3 consultas", "3": "4–6 consultas", "4": "7 ou mais", "9": "Ignorado"},
     },
     "IDADEMAE": {
-        "label": "Idade da Mãe (anos)",
+        "label": "Idade da Mãe",
         "desc": "Idade da mãe em anos completos na data do parto.",
         "type": "Numérica",
     },
@@ -52,8 +52,8 @@ _SINASC: dict[str, dict] = {
         "values": {"0": "Ignorado", "1": "Masculino", "2": "Feminino"},
     },
     "TPAPRESENT": {
-        "label": "Apresentação do RN",
-        "desc": "Apresentação fetal durante o parto: Cefálica (1), Pélvica/podálica (2), Transversa (3).",
+        "label": "Tipo de Apresentação",
+        "desc": "Posição do feto no parto: Cefálica (1), Pélvica/Podálica (2), Transversa (3).",
         "type": "Categórica",
         "values": {"1": "Cefálica", "2": "Pélvica/podálica", "3": "Transversa"},
     },
@@ -64,8 +64,8 @@ _SINASC: dict[str, dict] = {
         "values": {"1": "Sim", "2": "Não", "3": "Não se aplica"},
     },
     "STCESPARTO": {
-        "label": "Cesárea antes do Trabalho de Parto",
-        "desc": "Cesárea ocorreu antes do início do trabalho de parto: Sim (1), Não (2), Não se aplica (3).",
+        "label": "Cesárea Prévia ao Trabalho de Parto",
+        "desc": "Indica se a cesárea ocorreu antes do início do trabalho de parto: Sim (1), Não (2), Não se aplica (3).",
         "type": "Categórica",
         "values": {"1": "Sim", "2": "Não", "3": "Não se aplica"},
     },
@@ -76,7 +76,7 @@ _SINASC: dict[str, dict] = {
         "values": {"1": "Sim", "2": "Não"},
     },
     "PESO": {
-        "label": "Peso ao Nascer (gramas)",
+        "label": "Peso ao Nascer",
         "desc": "Peso do recém-nascido em gramas na ocasião do parto.",
         "type": "Numérica",
     },
@@ -108,16 +108,27 @@ _SINASC: dict[str, dict] = {
         "values": {"1": "Hospital", "2": "Outro estab. de saúde", "3": "Domicílio", "4": "Outros"},
     },
     "preterm": {
-        "label": "Pré-termo (derivada)",
-        "desc": "Indica se o nascimento foi pré-termo (< 37 semanas de gestação). Variável binária derivada de GESTACAO.",
-        "type": "Categórica",
+        "label": "Prematuridade",
+        "desc": "Indica se o parto foi pré-termo (< 37 semanas de gestação). Variável binária derivada de GESTACAO.",
+        "type": "Derivada",
         "values": {"0": "Não pré-termo (≥ 37 sem)", "1": "Pré-termo (< 37 sem)"},
     },
+    "low_birth_weight": {
+        "label": "Baixo Peso",
+        "desc": "Indica se o peso ao nascer foi inferior a 2.500g. Variável binária derivada de PESO.",
+        "type": "Derivada",
+        "values": {"0": "Peso adequado (≥ 2500g)", "1": "Baixo peso (< 2500g)"},
+    },
     "age_group_mae": {
-        "label": "Faixa Etária da Mãe (derivada)",
-        "desc": "Faixa etária da mãe derivada de IDADEMAE: adolescente (<18), adulta jovem (18–34), tardia (≥35). Variável criada durante o processamento.",
+        "label": "Faixa Etária da Mãe",
+        "desc": "Faixa etária da mãe derivada de IDADEMAE: adolescente (<18), adulta jovem (18–34), tardia (≥35).",
         "type": "Derivada",
         "values": {"1": "Adolescente (< 18 anos)", "2": "Adulta jovem (18–34 anos)", "3": "Tardia (≥ 35 anos)"},
+    },
+    "UF_SIGLA": {
+        "label": "Unidade da Federação",
+        "desc": "Sigla do estado onde ocorreu o nascimento.",
+        "type": "Categórica",
     },
     "CODMUNNASC": {
         "label": "Município de Nascimento",
@@ -144,18 +155,35 @@ _SIH: dict[str, dict] = {
         "type": "Categórica",
     },
     "IDADE": {
-        "label": "Idade (anos)",
+        "label": "Idade do Paciente",
         "desc": "Idade do paciente em anos completos na data da internação.",
         "type": "Numérica",
     },
     "SEXO": {
-        "label": "Sexo",
+        "label": "Sexo do Paciente",
         "desc": "Sexo do paciente: Masculino (1), Feminino (3), Ignorado (0).",
         "type": "Categórica",
     },
+    "RACA_COR": {
+        "label": "Raça/Cor do Paciente",
+        "desc": "Classificação étnico-racial do paciente internado: Branca (1), Preta (2), Amarela (3), Parda (4), Indígena (5).",
+        "type": "Categórica",
+        "values": {"1": "Branca", "2": "Preta", "3": "Amarela", "4": "Parda", "5": "Indígena"},
+    },
+    "CAR_INT": {
+        "label": "Caráter da Internação",
+        "desc": "Tipo de admissão hospitalar: Eletiva (01), Urgência (02), Acidente (03), entre outros.",
+        "type": "Categórica",
+        "values": {"01": "Eletiva", "02": "Urgência", "03": "Acidente", "04": "Outros"},
+    },
     "PROC_REA": {
         "label": "Procedimento Realizado",
-        "desc": "Código SIGTAP do procedimento principal realizado durante a internação.",
+        "desc": "Descrição do procedimento principal realizado durante a internação.",
+        "type": "Categórica",
+    },
+    "proc_rea_code": {
+        "label": "Código do Procedimento",
+        "desc": "Código numérico SIGTAP do procedimento principal realizado.",
         "type": "Categórica",
     },
     "DIAS_PERM": {
@@ -163,13 +191,29 @@ _SIH: dict[str, dict] = {
         "desc": "Número total de dias de internação hospitalar.",
         "type": "Numérica",
     },
+    "length_of_stay_days": {
+        "label": "Dias de Permanência",
+        "desc": "Total de dias que o paciente ficou internado. Variável derivada de DIAS_PERM.",
+        "type": "Numérica",
+    },
     "UTI_MES_TO": {
         "label": "Dias em UTI",
-        "desc": "Total de dias que o paciente permaneceu em Unidade de Terapia Intensiva durante a internação.",
+        "desc": "Total de dias que o paciente permaneceu em UTI durante a internação.",
+        "type": "Numérica",
+    },
+    "used_icu": {
+        "label": "Uso de UTI",
+        "desc": "Indica se o paciente utilizou leito de UTI. Variável binária derivada de UTI_MES_TO.",
+        "type": "Derivada",
+        "values": {"0": "Não utilizou UTI", "1": "Utilizou UTI"},
+    },
+    "n_diag_sec": {
+        "label": "Diagnósticos Secundários",
+        "desc": "Quantidade de condições clínicas secundárias registradas além do diagnóstico principal.",
         "type": "Numérica",
     },
     "VAL_TOT": {
-        "label": "Valor Total da AIH (R$)",
+        "label": "Valor Total",
         "desc": "Valor total pago pelo SUS pela Autorização de Internação Hospitalar, em reais.",
         "type": "Numérica",
     },
@@ -199,12 +243,17 @@ _SIH: dict[str, dict] = {
         "type": "Ordinal",
     },
     "diag_chapter": {
-        "label": "Capítulo CID (derivado)",
-        "desc": "Capítulo do CID-10 do diagnóstico principal (letra), derivado de DIAG_PRINC. Ex: A–B = Infecciosas, C = Neoplasias.",
+        "label": "Capítulo CID-10",
+        "desc": "Grande grupo de doenças segundo a CID-10, derivado de DIAG_PRINC. Ex: A–B = Infecciosas, C = Neoplasias.",
+        "type": "Derivada",
+    },
+    "diag_block": {
+        "label": "Bloco CID-10",
+        "desc": "Agrupamento específico de diagnósticos dentro de um capítulo CID-10, derivado de DIAG_PRINC.",
         "type": "Derivada",
     },
     "age_group": {
-        "label": "Faixa Etária (derivada)",
+        "label": "Faixa Etária",
         "desc": "Faixa etária do paciente derivada de IDADE: neonato (<28d), lactente, pré-escolar, escolar, adolescente, adulto jovem, adulto, idoso.",
         "type": "Derivada",
     },
@@ -266,20 +315,36 @@ _SINAN_TB: dict[str, dict] = {
         "desc": "Escolaridade em anos de estudo: Analfabeto (0), 1–3 anos (1), 4–7 anos (2), 8–11 anos (3), 12+ anos (4), N/A (5), Ignorado (9).",
         "type": "Ordinal",
     },
+    "idade_anos": {
+        "label": "Idade em Anos",
+        "desc": "Idade do paciente notificado em anos completos.",
+        "type": "Numérica",
+    },
     "FORMA": {
-        "label": "Forma Clínica",
-        "desc": "Forma clínica da tuberculose: Pulmonar (1), Extrapulmonar (2), Pulmonar + Extrapulmonar (3).",
+        "label": "Forma da Doença",
+        "desc": "Apresentação clínica da tuberculose: Pulmonar (1), Extrapulmonar (2), Pulmonar + Extrapulmonar (3).",
         "type": "Categórica",
     },
     "BACILOSC_E": {
-        "label": "Baciloscopia de Escarro (entrada)",
-        "desc": "Resultado da baciloscopia de escarro na entrada: Positivo (1), Negativo (2), Não realizada (3), Não se aplica (4).",
+        "label": "Baciloscopia de Escarro",
+        "desc": "Resultado do exame de baciloscopia na entrada: Positivo (1), Negativo (2), Não realizado (3), Não se aplica (4).",
+        "type": "Categórica",
+    },
+    "CULTURA_ES": {
+        "label": "Cultura de Escarro",
+        "desc": "Resultado do exame de cultura para micobactéria: Positivo (1), Negativo (2), Em andamento (3), Não realizado (4).",
         "type": "Categórica",
     },
     "TRAT_SUPER": {
         "label": "Tratamento Supervisionado (TDO)",
         "desc": "Indica se o paciente recebe Tratamento Diretamente Observado: Sim, diário (1), Sim, semanal (2), Não (3).",
         "type": "Categórica",
+    },
+    "dot": {
+        "label": "Tratamento Observado",
+        "desc": "Indica se o tratamento foi acompanhado diretamente por profissional de saúde (DOTS). Derivado de TRAT_SUPER.",
+        "type": "Derivada",
+        "values": {"0": "Não supervisionado", "1": "Supervisionado"},
     },
     "ANTIRETRO": {
         "label": "Uso de Antirretrovirais",
@@ -290,6 +355,18 @@ _SINAN_TB: dict[str, dict] = {
         "label": "Coinfecção HIV",
         "desc": "Resultado da testagem para HIV: Positivo (1), Negativo (2), Em andamento (3), Não realizado (4).",
         "type": "Categórica",
+    },
+    "hiv_pos": {
+        "label": "Teste de HIV",
+        "desc": "Indica se o paciente realizou o teste HIV e seu resultado. Derivado de HIV.",
+        "type": "Derivada",
+        "values": {"0": "Negativo/Não realizado", "1": "Positivo"},
+    },
+    "AGRAVAIDS": {
+        "label": "Coinfecção AIDS",
+        "desc": "Indica se o paciente possui diagnóstico de AIDS associado à tuberculose: Sim (1), Não (2).",
+        "type": "Categórica",
+        "values": {"1": "Sim", "2": "Não"},
     },
     "DIABETES": {
         "label": "Diabetes",
@@ -311,10 +388,60 @@ _SINAN_TB: dict[str, dict] = {
         "desc": "Desfecho do tratamento: Cura (1), Abandono (2), Óbito TB (3), Óbito outras causas (4), Transferência (5), Falência (6), TB-DR (7).",
         "type": "Categórica",
     },
+    "RAIOX_TORA": {
+        "label": "Raio-X de Tórax",
+        "desc": "Resultado da imagem radiológica de tórax: Suspeito (1), Normal (2), Outros (3), Não realizado (4).",
+        "type": "Categórica",
+    },
     "age_group": {
-        "label": "Faixa Etária (derivada)",
+        "label": "Faixa Etária",
         "desc": "Faixa etária derivada de NU_IDADE_N.",
         "type": "Derivada",
+    },
+}
+
+# ── SINAN — Hanseníase ─────────────────────────────────────────────────────────
+_SINAN_HANS: dict[str, dict] = {
+    "FORMACLINI": {
+        "label": "Forma Clínica",
+        "desc": "Classificação clínica da hanseníase: Indeterminada (1), Tuberculoide (2), Dimorfa (3), Virchowiana (4).",
+        "type": "Categórica",
+        "values": {"1": "Indeterminada", "2": "Tuberculoide", "3": "Dimorfa", "4": "Virchowiana"},
+    },
+    "mb": {
+        "label": "Classificação Operacional",
+        "desc": "Categoria para fins de tratamento: Paucibacilar (1), Multibacilar (2).",
+        "type": "Categórica",
+        "values": {"1": "Paucibacilar", "2": "Multibacilar"},
+    },
+    "grau_incapacidade": {
+        "label": "Grau de Incapacidade",
+        "desc": "Avaliação do grau de incapacidade física no diagnóstico: Grau 0, Grau 1, Grau 2.",
+        "type": "Ordinal",
+        "values": {"0": "Grau 0", "1": "Grau 1", "2": "Grau 2"},
+    },
+    "MODOENTR": {
+        "label": "Modo de Entrada",
+        "desc": "Como o caso entrou no sistema: Caso novo (1), Recidiva (2), Transferência (3), Outros (4).",
+        "type": "Categórica",
+        "values": {"1": "Caso novo", "2": "Recidiva", "3": "Transferência", "4": "Outros"},
+    },
+    "MODODETECT": {
+        "label": "Modo de Detecção",
+        "desc": "Como a doença foi descoberta: Demanda espontânea (1), Exame de contatos (2), Exame coletivo (3), Outros (4).",
+        "type": "Categórica",
+        "values": {"1": "Demanda espontânea", "2": "Exame de contatos", "3": "Exame coletivo", "4": "Outros"},
+    },
+    "BACILOSCOP": {
+        "label": "Baciloscopia",
+        "desc": "Resultado do exame baciloscópico: Positivo (1), Negativo (2), Não realizado (3).",
+        "type": "Categórica",
+    },
+    "ESQ_INI_N": {
+        "label": "Esquema Terapêutico",
+        "desc": "Medicamentos iniciais prescritos (PQT): Adulto Paucibacilar (1), Adulto Multibacilar (2), Criança Paucibacilar (3), Criança Multibacilar (4).",
+        "type": "Categórica",
+        "values": {"1": "PQT Adulto PB", "2": "PQT Adulto MB", "3": "PQT Criança PB", "4": "PQT Criança MB"},
     },
 }
 
@@ -389,7 +516,7 @@ _SINAN_DENGUE: dict[str, dict] = {
 
 # ── Dicionário unificado ───────────────────────────────────────────────────────
 FEATURE_DICT: dict[str, dict] = {}
-for _d in (_SINASC, _SIH, _SIM, _SINAN_TB, _SINAN_DENGUE):
+for _d in (_SINASC, _SIH, _SIM, _SINAN_TB, _SINAN_HANS, _SINAN_DENGUE):
     FEATURE_DICT.update(_d)
 
 
