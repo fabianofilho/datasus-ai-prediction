@@ -503,24 +503,29 @@ _mc5.metric("F1-Score",       f"{m['f1']:.4f}")
 
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
+import plotly.graph_objects as _go_rep
 _oof = results.get("oof_probs")
 _y_eval = results.get("y_eval")
-if _oof is not None and _y_eval is not None:
-    import plotly.graph_objects as _go_rep
+_has_oof = _oof is not None and _y_eval is not None
+if _has_oof:
     _y_np   = _np_rep.array(_y_eval)
     _oof_np = _np_rep.array(_oof)
 
-    # ── 5. Curvas de desempenho ────────────────────────────────────────────
-    st.markdown("### 5. Curvas de Desempenho")
+# ── 5. Curvas de desempenho ────────────────────────────────────────────────────
+st.markdown("### 5. Curvas de Desempenho")
+if _has_oof:
     _col_roc, _col_pr = st.columns(2)
     with _col_roc:
         st.plotly_chart(ev.roc_chart(_y_np, _oof_np), use_container_width=True)
     with _col_pr:
         st.plotly_chart(ev.pr_chart(_y_np, _oof_np), use_container_width=True)
-    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+else:
+    st.info("Retreine o modelo para gerar as curvas de desempenho.")
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-    # ── 6. Distribuição dos scores preditos ───────────────────────────────
-    st.markdown("### 6. Distribuição dos Scores Preditos")
+# ── 6. Distribuição dos Scores Preditos ───────────────────────────────────────
+st.markdown("### 6. Distribuição dos Scores Preditos")
+if _has_oof:
     _fig_dist = _go_rep.Figure()
     _fig_dist.add_trace(_go_rep.Histogram(
         x=_oof_np[_y_np == 0], name="Negativo (y=0)", nbinsx=40,
@@ -537,16 +542,53 @@ if _oof is not None and _y_eval is not None:
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
     )
     st.plotly_chart(_fig_dist, use_container_width=True)
-    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+else:
+    st.info("Retreine o modelo para gerar a distribuição dos scores preditos.")
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-    # ── 7. Métricas Clínicas por Ponto de Corte ───────────────────────────
-    st.markdown("### 7. Métricas Clínicas por Ponto de Corte")
+# ── 7. Explicabilidade SHAP ────────────────────────────────────────────────────
+st.markdown("### 7. Explicabilidade SHAP")
+_X_rep = ss.get("X_res")
+_model_rep = results.get("model")
+if _X_rep is not None and _model_rep is not None:
+    with st.spinner("Calculando SHAP…"):
+        try:
+            _shap_bar = ev.shap_summary(_model_rep, _X_rep)
+            _shap_bee = ev.shap_beeswarm(_model_rep, _X_rep)
+        except Exception:
+            _shap_bar = None
+            _shap_bee = None
+    if _shap_bar:
+        st.plotly_chart(_shap_bar, use_container_width=True)
+        if _shap_bee:
+            st.plotly_chart(_shap_bee, use_container_width=True)
+    else:
+        _fi_rep = results.get("feature_importances", {})
+        if _fi_rep:
+            st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
+        else:
+            st.info("SHAP indisponível para este algoritmo.")
+else:
+    _fi_rep = results.get("feature_importances", {})
+    if _fi_rep:
+        st.caption("SHAP disponível após retreinar o modelo nesta sessão.")
+        st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
+    else:
+        st.info("Retreine o modelo para visualizar a explicabilidade SHAP.")
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+
+# ── 8. Métricas Clínicas por Ponto de Corte ───────────────────────────────────
+st.markdown("### 8. Métricas Clínicas por Ponto de Corte")
+if _has_oof:
     st.caption("Sensibilidade, especificidade, F1 e precisão em função do threshold de decisão.")
     st.plotly_chart(ev.threshold_curve_chart(_y_np, _oof_np), use_container_width=True)
-    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
+else:
+    st.info("Retreine o modelo para gerar as métricas clínicas por threshold.")
+st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
-    # ── 8. Matriz de confusão ─────────────────────────────────────────────
-    st.markdown("### 8. Matriz de Confusão")
+# ── 9. Matriz de Confusão ─────────────────────────────────────────────────────
+st.markdown("### 9. Matriz de Confusão")
+if _has_oof:
     st.caption("Threshold padrão 0,50. Ajuste o ponto de corte em Métricas Clínicas acima.")
     _tm50     = ev.threshold_metrics(_y_np, _oof_np, 0.5)
     _cm_z50   = [[_tm50["tn"], _tm50["fp"]], [_tm50["fn"], _tm50["tp"]]]
@@ -578,37 +620,8 @@ if _oof is not None and _y_eval is not None:
     _cm_col50, _ = st.columns([1, 1])
     with _cm_col50:
         st.plotly_chart(_cm_fig50, use_container_width=True)
-    st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
-
-# ── 9. Explicabilidade SHAP ────────────────────────────────────────────────────
-st.markdown("### 9. Explicabilidade SHAP")
-_X_rep = ss.get("X_res")
-_model_rep = results.get("model")
-if _X_rep is not None and _model_rep is not None:
-    with st.spinner("Calculando SHAP…"):
-        try:
-            _shap_bar = ev.shap_summary(_model_rep, _X_rep)
-            _shap_bee = ev.shap_beeswarm(_model_rep, _X_rep)
-        except Exception:
-            _shap_bar = None
-            _shap_bee = None
-    if _shap_bar:
-        st.plotly_chart(_shap_bar, use_container_width=True)
-        if _shap_bee:
-            st.plotly_chart(_shap_bee, use_container_width=True)
-    else:
-        _fi_rep = results.get("feature_importances", {})
-        if _fi_rep:
-            st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
-        else:
-            st.info("SHAP indisponível para este algoritmo.")
 else:
-    _fi_rep = results.get("feature_importances", {})
-    if _fi_rep:
-        st.caption("SHAP disponível após retreinar o modelo nesta sessão.")
-        st.plotly_chart(ev.importance_chart(_fi_rep, top_n=20), use_container_width=True)
-    else:
-        st.info("Retreine o modelo para visualizar a explicabilidade SHAP.")
+    st.info("Retreine o modelo para gerar a matriz de confusão.")
 st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 # ── 10. Calibração ─────────────────────────────────────────────────────────────
