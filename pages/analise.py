@@ -711,11 +711,11 @@ if ss["cohort"] is None:
             st.rerun()
 
         # Upload-status outcomes with no raw_data → redirect to upload page
-        _outcome_status = next(
-            (o["status"] for grp in OUTCOME_GROUPS.values() for o in grp if o["key"] == ss["outcome_key"]),
-            "ok",
-        )
-        if _outcome_status == "upload" and not _is_diy:
+        _UPLOAD_KEYS = {
+            "dengue_grave", "chikungunya_hospitalizado",
+            "obito_aids", "sifilis_nao_cura", "intoxicacao_grave",
+        }
+        if ss["outcome_key"] in _UPLOAD_KEYS and not _is_diy:
             st.switch_page("pages/upload.py")
 
         step_title(2, "Dados",
