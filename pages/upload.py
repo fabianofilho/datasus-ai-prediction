@@ -1,19 +1,12 @@
 """DataSUS AI Prediction — Upload & DIY: carrega base própria e entra no pipeline normal."""
 from __future__ import annotations
+import json as _json
 from pathlib import Path
 from PIL import Image as _PILImage
 
 import streamlit as st
-
-# ── Lazy loaders ──────────────────────────────────────────────────────────────
-
-@st.cache_resource(show_spinner=False)
-def _imports():
-    import pandas as pd
-    import numpy as np
-    from core.data.downloader import STATES, load_from_csv
-    from core.outcomes import OUTCOMES
-    return pd, np, STATES, load_from_csv, OUTCOMES
+import streamlit.components.v1 as _stc
+from core.outcomes import OUTCOMES
 
 # ── Page config ───────────────────────────────────────────────────────────────
 _favicon = _PILImage.open(Path(__file__).parent.parent / "favicon.png")
@@ -24,100 +17,53 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-st.markdown("""
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
+# ── CSS via JavaScript (bypasses Streamlit's markdown parser) ─────────────────
+_CSS = (
+    "header,footer,[data-testid='stSidebarNav'],[data-testid='stHeader'],"
+    "[data-testid='stToolbar'],[data-testid='stDecoration'],#MainMenu{display:none!important}"
+    "html,body,.stApp,[data-testid='stAppViewContainer'],[data-testid='stMain'],.main,.block-container{"
+    "background:#ffffff!important;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif!important;"
+    "color:#111827!important}"
+    ".block-container{padding:2.5rem 3rem!important;max-width:1100px!important}"
+    ".ms{font-family:'Material Symbols Outlined';font-style:normal;font-weight:normal;"
+    "font-size:1rem;line-height:1;vertical-align:middle;display:inline-block;color:#111827}"
+    ".ms-lg{font-size:1.4rem;margin-right:.25rem}"
+    ".up-title{font-size:1.3rem;font-weight:700;color:#111827!important;"
+    "display:flex;align-items:center;gap:.35rem;margin-bottom:.1rem}"
+    ".up-sub{font-size:.85rem;color:#6b7280!important;margin-bottom:1.25rem}"
+    ".up-step{font-size:.66rem;font-weight:700;color:#9ca3af!important;text-transform:uppercase;"
+    "letter-spacing:.1em;margin:1.4rem 0 .4rem;padding-bottom:.28rem;border-bottom:1px solid #f3f4f6}"
+    ".up-info{background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;"
+    "padding:.55rem .85rem;font-size:.8rem;color:#374151;margin-bottom:.65rem;line-height:1.5}"
+    "div[data-testid='stButton']>button[data-testid='baseButton-primary']{"
+    "background-color:#111827!important;color:#ffffff!important;border:1px solid #111827!important;"
+    "border-radius:6px!important;font-size:.82rem!important;font-weight:600!important}"
+    "div[data-testid='stButton']>button[data-testid='baseButton-primary']:hover{"
+    "background-color:#374151!important;border-color:#374151!important}"
+    "div[data-testid='stButton']>button{border-radius:6px!important;font-size:.82rem!important}"
+)
 
-<style>
-/* ── Base ─────────────────────────────────────────────────── */
-header, footer,
-[data-testid="stSidebarNav"], [data-testid="stHeader"],
-[data-testid="stToolbar"], [data-testid="stDecoration"],
-#MainMenu {
-  display: none !important;
-}
-html, body, .stApp,
-[data-testid="stAppViewContainer"],
-[data-testid="stMain"], .main, .block-container {
-  background: #ffffff !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif !important;
-  color: #111827 !important;
-}
-.block-container {
-  padding: 2.5rem 3rem !important;
-  max-width: 1100px !important;
-}
-/* ── Material Symbols ─────────────────────────────────────── */
-.ms {
-  font-family: 'Material Symbols Outlined';
-  font-style: normal;
-  font-weight: normal;
-  font-size: 1rem;
-  line-height: 1;
-  vertical-align: middle;
-  display: inline-block;
-  color: #111827;
-}
-.ms-lg {
-  font-size: 1.4rem;
-  margin-right: .25rem;
-}
-/* ── Tipografia da página ─────────────────────────────────── */
-.up-title {
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: #111827 !important;
-  display: flex;
-  align-items: center;
-  gap: .35rem;
-  margin-bottom: .1rem;
-}
-.up-sub {
-  font-size: .85rem;
-  color: #6b7280 !important;
-  margin-bottom: 1.25rem;
-}
-.up-step {
-  font-size: .66rem;
-  font-weight: 700;
-  color: #9ca3af !important;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-  margin: 1.4rem 0 .4rem;
-  padding-bottom: .28rem;
-  border-bottom: 1px solid #f3f4f6;
-}
-.up-info {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: .55rem .85rem;
-  font-size: .8rem;
-  color: #374151;
-  margin-bottom: .65rem;
-  line-height: 1.5;
-}
-/* ── Botões ───────────────────────────────────────────────── */
-div[data-testid="stButton"] > button[data-testid="baseButton-primary"] {
-  background-color: #111827 !important;
-  color: #ffffff !important;
-  border: 1px solid #111827 !important;
-  border-radius: 6px !important;
-  font-size: .82rem !important;
-  font-weight: 600 !important;
-}
-div[data-testid="stButton"] > button[data-testid="baseButton-primary"]:hover {
-  background-color: #374151 !important;
-  border-color: #374151 !important;
-}
-div[data-testid="stButton"] > button {
-  border-radius: 6px !important;
-  font-size: .82rem !important;
-}
-</style>
-""", unsafe_allow_html=True)
+_stc.html(
+    "<script>"
+    "(function(){"
+    "var l=document.createElement('link');"
+    "l.rel='stylesheet';"
+    "l.href='https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0';"
+    "window.parent.document.head.appendChild(l);"
+    "var s=document.createElement('style');"
+    f"s.textContent={_json.dumps(_CSS)};"
+    "window.parent.document.head.appendChild(s);"
+    "})();"
+    "</script>",
+    height=0,
+    scrolling=False,
+)
+
+import pandas as pd
+import numpy as np
+from core.data.downloader import STATES, load_from_csv
 
 ss = st.session_state
-pd, np, STATES, load_from_csv, OUTCOMES = _imports()
 
 # ── Identify mode ─────────────────────────────────────────────────────────────
 outcome_key = ss.get("outcome_key")
