@@ -1155,7 +1155,8 @@ if not ss.get("feature_config"):
             )
 
     # ── Dicionário de dados ────────────────────────────────────────────────
-    _custom_dict: dict = ss.get("upload_dict", {})
+    _custom_dict_raw = ss.get("upload_dict")
+    _custom_dict: dict = _custom_dict_raw if isinstance(_custom_dict_raw, dict) else {}
     _dict_editable = _is_diy or bool(ss.get("upload_target"))
     _expander_label = f"Dicionário de dados — {len(selected_features)} features selecionadas"
     if _dict_editable:
@@ -1169,7 +1170,8 @@ if not ss.get("feature_config"):
         }
         for _feat in selected_features:
             _info = _feat_info(_feat)
-            _uentry = _custom_dict.get(_feat, {})
+            _uentry_raw = _custom_dict.get(_feat, {})
+            _uentry = _uentry_raw if isinstance(_uentry_raw, dict) else {}
             # Merge: data_dict.py wins over custom_dict for known vars; custom wins for unknown
             if not _info and _uentry:
                 _info = _uentry
