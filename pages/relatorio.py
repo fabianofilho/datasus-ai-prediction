@@ -308,8 +308,9 @@ def _build_html_report(outcome, results, m, calib, comp, fc, mc, ss_data: dict) 
     states = ", ".join(ss_data.get("sel_states") or [])
     years = ", ".join(map(str, ss_data.get("sel_years") or []))
     ts = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+    _empty_dd: dict = {}
     feat_list = "".join(
-        f"<li>{(_gi_html(f) or {{}}).get('label', f)} <code>{f}</code></li>"
+        f"<li>{(_gi_html(f) or _empty_dd).get('label', f)} <code>{f}</code></li>"
         for f in features
     )
 
@@ -318,7 +319,7 @@ def _build_html_report(outcome, results, m, calib, comp, fc, mc, ss_data: dict) 
     if fi_data:
         top_fi = sorted(fi_data.items(), key=lambda x: x[1], reverse=True)[:15]
         fi_rows = "".join(
-            f"<tr><td>{i+1}</td><td>{(_gi_html(name) or {{}}).get('label', name)} <code>{name}</code></td><td>{val:.4f}</td></tr>"
+            f"<tr><td>{i+1}</td><td>{(_gi_html(name) or _empty_dd).get('label', name)} <code>{name}</code></td><td>{val:.4f}</td></tr>"
             for i, (name, val) in enumerate(top_fi)
         )
         feat_imp_section = f"""
@@ -517,11 +518,30 @@ st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
 import plotly.graph_objects as _go_rep
 _oof = results.get("oof_probs")
+
+# y_eval: para holdout/temporal está no results; para CV, reconstruir do cohort
 _y_eval = results.get("y_eval")
+if _y_eval is None and ss.get("cohort") is not None:
+    _cohort_rep = ss["cohort"]
+    _is_diy_rep = ss["outcome_key"] == "__diy__"
+    if _is_diy_rep:
+        _target_rep = ss.get("upload_target") or _cohort_rep.columns[-1]
+        _y_eval = _cohort_rep[_target_rep].astype(int).values
+    else:
+        try:
+            from core.features.cohort import CohortBuilder as _CB_rep
+            _bld_rep = _CB_rep(outcome)
+            _, _y_tmp = _bld_rep.get_Xy(_cohort_rep)
+            _y_eval = _y_tmp.values
+        except Exception:
+            _y_eval = None
+
 _has_oof = _oof is not None and _y_eval is not None
 if _has_oof:
-    _y_np   = _np_rep.array(_y_eval)
-    _oof_np = _np_rep.array(_oof)
+    # Alinha tamanhos: CV retorna OOF do mesmo tamanho de y
+    _min_len = min(len(_oof), len(_y_eval))
+    _y_np   = _np_rep.array(_y_eval[:_min_len])
+    _oof_np = _np_rep.array(_oof[:_min_len])
 
 # ── 5. Curvas de desempenho ────────────────────────────────────────────────────
 st.markdown("### 5. Curvas de Desempenho")
