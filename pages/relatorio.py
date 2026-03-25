@@ -255,12 +255,17 @@ def render_sidebar() -> None:
     with st.sidebar:
         st.markdown('<p class="sb-title">Pipeline</p>', unsafe_allow_html=True)
         if ss.get("outcome_key"):
-            o = OUTCOMES[ss["outcome_key"]]
+            _ok = ss["outcome_key"]
+            if _ok == "__diy__":
+                _o_name, _o_sources = "Do It Yourself (DIY)", ["UPLOAD"]
+            else:
+                _o = OUTCOMES[_ok]
+                _o_name, _o_sources = _o.name, _o.data_sources
             st.markdown(
                 f'<div class="sb-step">'
                 f'<div class="sb-step-label">1 · Desfecho</div>'
-                f'<div class="sb-step-value">{o.name}<br>'
-                f'<span style="font-size:.7rem;color:#6b7280">{", ".join(o.data_sources)}</span>'
+                f'<div class="sb-step-value">{_o_name}<br>'
+                f'<span style="font-size:.7rem;color:#6b7280">{", ".join(_o_sources)}</span>'
                 f'</div></div>',
                 unsafe_allow_html=True,
             )
@@ -436,7 +441,14 @@ render_step_bar()
 pd = _pd()
 ev = _ev()
 
-outcome = OUTCOMES[ss["outcome_key"]]
+if ss["outcome_key"] == "__diy__":
+    class _DiyProxy:
+        name = "Do It Yourself (DIY)"
+        data_sources = ["UPLOAD"]
+        key = "__diy__"
+    outcome = _DiyProxy()
+else:
+    outcome = OUTCOMES[ss["outcome_key"]]
 results = ss["model_results"]
 m = results["mean_metrics"]
 calib = ss.get("calib_results") or {}
