@@ -357,6 +357,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ── Botão DIY ─────────────────────────────────────────────────────────────────
+st.markdown(
+    '<hr style="border:none;border-top:1px solid #f3f4f6;margin:.5rem 0 1rem">',
+    unsafe_allow_html=True,
+)
+_diy_col, _ = st.columns([1, 3])
+with _diy_col:
+    if st.button(
+        "⚙ Do It Yourself (DIY)",
+        key="btn_diy",
+        type="primary",
+        use_container_width=False,
+    ):
+        st.switch_page("pages/diy.py")
+
 # ── Seleção de desfecho ───────────────────────────────────────────────────────
 try:
     sel = st.session_state.outcome_key
