@@ -465,7 +465,7 @@ st.markdown('<hr style="border:none;border-top:1px solid #f3f4f6;margin:2.5rem 0
 _r1, _r2, _r3 = st.columns([2, 8, 1])
 with _r1:
     if st.button(
-        "⚙ Do It Yourself (DIY)",
+        "🏗 Do It Yourself (DIY)",
         key="btn_diy",
         type="primary",
         use_container_width=False,
