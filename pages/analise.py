@@ -1,11 +1,40 @@
 """DataSUS AI Prediction — wizard completo (carregado sob demanda)."""
 from __future__ import annotations
+from dataclasses import dataclass, field
 from pathlib import Path
 from PIL import Image as _PILImage
 
 import streamlit as st
 
 from core.outcomes import OUTCOME_GROUPS, OUTCOMES
+from core.outcomes.base import OutcomeConfig
+
+
+# ── DIY pseudo-outcome (used when outcome_key == "__diy__") ───────────────────
+@dataclass
+class _DiyOutcome(OutcomeConfig):
+    """Minimal outcome wrapper for user-uploaded custom datasets."""
+    key: str = "__diy__"
+    name: str = "Do It Yourself (DIY)"
+    description: str = "Base personalizada carregada pelo usuário."
+    data_sources: list[str] = field(default_factory=lambda: ["UPLOAD"])
+    observation_window_days: int = 0
+    prediction_window_days: int = 0
+    requires_linkage: bool = False
+    suggested_features: list[str] = field(default_factory=list)
+    target_col: str = "target"
+    icon: str = "construction"
+
+    def build_cohort(self, data: dict) -> "pd.DataFrame":
+        return list(data.values())[0]
+
+    def build_features(self, cohort: "pd.DataFrame") -> "pd.DataFrame":
+        return cohort
+
+    def get_target(self, cohort: "pd.DataFrame") -> "pd.Series":
+        import streamlit as _st
+        t = _st.session_state.get("upload_target") or self.target_col
+        return cohort[t].astype(int)
 
 
 # ── Lazy loaders ──────────────────────────────────────────────────────────────
@@ -369,6 +398,11 @@ _defaults: dict = {
     "manual_needed": [],
     "sample_n": 1_000,
     "sample_seed": 42,
+    # Upload / DIY mode
+    "upload_df": None,
+    "upload_target": None,
+    "upload_features": [],
+    "upload_dict": {},
 }
 for k, v in _defaults.items():
     if k not in ss:
@@ -401,7 +435,7 @@ def current_step() -> int:
 def render_topbar() -> None:
     _ok = ss.get("outcome_key")
     if _ok:
-        _o = OUTCOMES[_ok]
+        _o = _DiyOutcome() if _ok == "__diy__" else OUTCOMES[_ok]
         _right = (
             f'<span style="display:flex;align-items:center;gap:6px;">'
             f'<span style="font-size:0.72rem;color:#9ca3af;">Módulo:</span>'
@@ -508,7 +542,8 @@ def render_sidebar() -> None:
 
         # Step 1: Desfecho
         if ss.get("outcome_key"):
-            o = OUTCOMES[ss["outcome_key"]]
+            _ok2 = ss["outcome_key"]
+            o = _DiyOutcome() if _ok2 == "__diy__" else OUTCOMES[_ok2]
             src_txt = ", ".join(o.data_sources)
             st.markdown(
                 f'<div class="sb-step">'
@@ -653,7 +688,11 @@ st.markdown('<div class="ds-page">', unsafe_allow_html=True)
 render_step_bar(current_step())
 
 
-outcome = OUTCOMES[ss["outcome_key"]]
+_is_diy = ss["outcome_key"] == "__diy__"
+outcome = _DiyOutcome(
+    target_col=ss.get("upload_target") or "target",
+    suggested_features=ss.get("upload_features") or [],
+) if _is_diy else OUTCOMES[ss["outcome_key"]]
 
 # ── Lazy: módulos de dados e visualização (step 2+) ──────────────────────────
 pd = _pd()
@@ -666,6 +705,19 @@ if ss["cohort"] is None:
     # ETAPA 2 — DADOS
     # ═════════════════════════════════════════════════════════════════════════
     if not ss["raw_data"]:
+        # DIY: upload_df was set in upload.py → inject as raw_data and proceed
+        if _is_diy and ss.get("upload_df") is not None:
+            ss["raw_data"] = {"UPLOAD": ss["upload_df"]}
+            st.rerun()
+
+        # Upload-status outcomes with no raw_data → redirect to upload page
+        _outcome_status = next(
+            (o["status"] for grp in OUTCOME_GROUPS.values() for o in grp if o["key"] == ss["outcome_key"]),
+            "ok",
+        )
+        if _outcome_status == "upload" and not _is_diy:
+            st.switch_page("pages/upload.py")
+
         step_title(2, "Dados",
                    f"Fontes necessárias para este desfecho: {', '.join(outcome.data_sources)}")
 
@@ -989,8 +1041,12 @@ if ss["cohort"] is None:
     if st.button("Construir Coorte", type="primary"):
         with st.spinner("Construindo coorte…"):
             try:
-                builder = CohortBuilder(outcome)
-                ss["cohort"] = builder.build(ss["raw_data"])
+                if _is_diy:
+                    # DIY: data is already in final form — skip build_cohort/build_features
+                    ss["cohort"] = ss["raw_data"]["UPLOAD"]
+                else:
+                    builder = CohortBuilder(outcome)
+                    ss["cohort"] = builder.build(ss["raw_data"])
                 ss["model_config"] = None
                 ss["model_results"] = None
                 st.rerun()
@@ -1007,7 +1063,23 @@ ALGORITHMS, train_cv, optimize_hyperparams, calibrate_model, build_pipeline, ran
 
 cohort = ss["cohort"]
 builder = CohortBuilder(outcome)
-X, y = builder.get_Xy(cohort)
+
+if _is_diy or ss.get("upload_target"):
+    # Custom target (DIY or upload outcome with overridden target col)
+    _custom_target = ss.get("upload_target") or outcome.target_col
+    _custom_features = ss.get("upload_features") or []
+    try:
+        y = cohort[_custom_target].astype(int)
+    except (KeyError, ValueError) as _e:
+        st.error(f"Coluna de desfecho '{_custom_target}' não encontrada ou não é binária. Volte ao upload e ajuste.")
+        st.stop()
+    if _custom_features:
+        _feat_in_cohort = [c for c in _custom_features if c in cohort.columns and c != _custom_target]
+    else:
+        _feat_in_cohort = [c for c in cohort.columns if c != _custom_target]
+    X = cohort[_feat_in_cohort].copy()
+else:
+    X, y = builder.get_Xy(cohort)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # ETAPA 4 — FEATURES
@@ -1083,7 +1155,12 @@ if not ss.get("feature_config"):
             )
 
     # ── Dicionário de dados ────────────────────────────────────────────────
-    with st.expander(f"Dicionário de dados — {len(selected_features)} features selecionadas", expanded=False):
+    _custom_dict: dict = ss.get("upload_dict", {})
+    _dict_editable = _is_diy or bool(ss.get("upload_target"))
+    _expander_label = f"Dicionário de dados — {len(selected_features)} features selecionadas"
+    if _dict_editable:
+        _expander_label += " (editável)"
+    with st.expander(_expander_label, expanded=False):
         _type_colors = {
             "Numérica": "#111827",
             "Categórica": "#374151",
@@ -1092,14 +1169,39 @@ if not ss.get("feature_config"):
         }
         for _feat in selected_features:
             _info = _feat_info(_feat)
+            _uentry = _custom_dict.get(_feat, {})
+            # Merge: data_dict.py wins over custom_dict for known vars; custom wins for unknown
+            if not _info and _uentry:
+                _info = _uentry
             _col_a, _col_b = st.columns([3, 1])
             with _col_a:
-                if _info:
+                if _info and _info.get("label"):
                     st.markdown(
                         f"**{_feat}** &nbsp;—&nbsp; {_info['label']}  \n"
-                        f"<span style='font-size:.8rem;color:#4b5563'>{_info['desc']}</span>",
+                        f"<span style='font-size:.8rem;color:#4b5563'>{_info.get('desc', '')}</span>",
                         unsafe_allow_html=True,
                     )
+                elif _dict_editable:
+                    # Show inline text inputs for custom dict editing
+                    _new_lbl = st.text_input(
+                        f"Rótulo de {_feat}", value=_uentry.get("label", ""),
+                        placeholder=f"Rótulo para {_feat}",
+                        key=f"dict_edit_lbl_{_feat}",
+                        label_visibility="collapsed",
+                    )
+                    _new_desc = st.text_input(
+                        f"Descrição de {_feat}", value=_uentry.get("desc", ""),
+                        placeholder="Descrição opcional…",
+                        key=f"dict_edit_desc_{_feat}",
+                        label_visibility="collapsed",
+                    )
+                    if _new_lbl or _new_desc:
+                        _custom_dict[_feat] = {
+                            "label": _new_lbl or _feat,
+                            "desc": _new_desc,
+                            "type": _uentry.get("type", ""),
+                        }
+                        ss["upload_dict"] = _custom_dict
                 else:
                     st.markdown(
                         f"**{_feat}**  \n"
@@ -1107,7 +1209,7 @@ if not ss.get("feature_config"):
                         unsafe_allow_html=True,
                     )
             with _col_b:
-                _type_lbl = _info.get("type", "") if _info else ""
+                _type_lbl = (_info.get("type", "") if _info else "") or _uentry.get("type", "")
                 if _type_lbl:
                     _type_color = _type_colors.get(_type_lbl, "#6b7280")
                     st.markdown(

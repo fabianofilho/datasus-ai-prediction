@@ -370,7 +370,14 @@ with _diy_col:
         type="primary",
         use_container_width=False,
     ):
-        st.switch_page("pages/diy.py")
+        st.session_state.outcome_key = "__diy__"
+        # Reset pipeline state
+        for _rk in ["raw_data", "cohort", "feature_config", "treatment_config",
+                    "model_config", "model_results", "calib_results", "upload_df",
+                    "upload_target", "upload_dict", "X_res"]:
+            if _rk in st.session_state:
+                st.session_state[_rk] = {} if _rk == "raw_data" else None
+        st.switch_page("pages/upload.py")
 
 # ── Seleção de desfecho ───────────────────────────────────────────────────────
 try:
@@ -454,7 +461,15 @@ try:
                             st.session_state.outcome_key = key
                             st.switch_page("pages/analise.py")
                         elif status == "upload":
-                            st.toast("Faça o upload manual do arquivo DBC/CSV para habilitar este desfecho.")
+                            st.session_state.outcome_key = key
+                            # Reset pipeline state before upload flow
+                            for _rk in ["raw_data", "cohort", "feature_config",
+                                        "treatment_config", "model_config", "model_results",
+                                        "calib_results", "upload_df", "upload_target",
+                                        "upload_dict", "X_res"]:
+                                if _rk in st.session_state:
+                                    st.session_state[_rk] = {} if _rk == "raw_data" else None
+                            st.switch_page("pages/upload.py")
                         else:
                             st.toast("Módulo em desenvolvimento — disponível em breve.")
 
