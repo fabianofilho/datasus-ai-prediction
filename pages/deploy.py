@@ -383,9 +383,10 @@ if _is_diy:
     _target = ss.get("upload_target") or cohort.columns[-1]
     _feats = ss.get("upload_features") or [c for c in cohort.columns if c != _target]
     X_res = cohort[_feats].reindex(columns=feature_cols).fillna(float("nan"))
+    y_train = cohort[_target].astype(int)
 else:
     builder = CohortBuilder(outcome)
-    X_train, _ = builder.get_Xy(cohort)
+    X_train, y_train = builder.get_Xy(cohort)
     X_res = X_train[feature_cols]
 
 num_cols = treatment.get("num_cols", X_res.select_dtypes(include="number").columns.tolist())
