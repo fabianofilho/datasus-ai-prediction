@@ -138,9 +138,9 @@ OUTCOME_GROUPS = {
             "name":    "Desfecho Adverso em Intoxicação Exógena",
             "source":  "SINAN",
             "est_min": 10,
-            "status":  "ok",
+            "status":  "upload",
             "linkage": None,
-            "note":    "Base única SINAN_IEXO. Pipeline completo disponível.",
+            "note":    "SINAN_IEXO: download automático indisponível. Faça upload manual do arquivo.",
         },
         {
             "key":     "dengue_grave",
@@ -234,7 +234,7 @@ html, body, [data-testid="stAppViewContainer"],
 .dot-ok     { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink:0; }
 .dot-dev    { width: 8px; height: 8px; border-radius: 50%; background: #f97316; flex-shrink:0; }
 .dot-link   { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex-shrink:0; }
-.dot-upload { width: 8px; height: 8px; border-radius: 50%; background: #a855f7; flex-shrink:0; }
+.dot-upload { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; flex-shrink:0; }
 
 .ds-group {
     font-size: .68rem; font-weight: 700;
@@ -262,11 +262,11 @@ html, body, [data-testid="stAppViewContainer"],
 .ds-card.dev:hover { border-color: #fb923c; }
 .ds-card.dev.sel { border: 1.5px solid #f97316; background: #fff7ed !important; }
 .ds-card.upload {
-    border-color: #e9d5ff; background: #faf5ff !important;
+    border-color: #fecaca; background: #fff5f5 !important;
     opacity: .9;
 }
-.ds-card.upload:hover { border-color: #a855f7; }
-.ds-card.upload.sel { border: 1.5px solid #a855f7; background: #f3e8ff !important; }
+.ds-card.upload:hover { border-color: #ef4444; }
+.ds-card.upload.sel { border: 1.5px solid #ef4444; background: #fee2e2 !important; }
 
 .ds-card-name {
     font-size: .81rem; color: #111827 !important;
@@ -296,8 +296,8 @@ html, body, [data-testid="stAppViewContainer"],
     background: #fef3c7; padding: 1px 6px; border-radius: 4px;
 }
 .ds-badge-upload {
-    font-size: .6rem; font-weight: 700; color: #7e22ce;
-    background: #f3e8ff; padding: 1px 6px; border-radius: 4px;
+    font-size: .6rem; font-weight: 700; color: #b91c1c;
+    background: #fee2e2; padding: 1px 6px; border-radius: 4px;
     letter-spacing: .04em;
 }
 .ds-card-note {
