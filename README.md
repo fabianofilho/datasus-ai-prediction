@@ -10,14 +10,30 @@ pinned: false
 license: mit
 ---
 
-# DataSUS AI Prediction
+<p align="center">
+  <img src="favicon.png" alt="DataSUS AI Prediction" width="80" />
+</p>
 
-Plataforma interativa de modelagem preditiva em saúde pública usando microdados do DataSUS — sem código, direto no navegador.
+<h1 align="center">DataSUS AI Prediction</h1>
 
-[![Hugging Face Spaces](https://img.shields.io/badge/HuggingFace-Spaces-yellow?logo=huggingface)](https://huggingface.co/spaces/fabianonbfilho/datasus-ai-prediction)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.32-red?logo=streamlit)](https://streamlit.io)
-[![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+<p align="center">
+  Plataforma interativa de modelagem preditiva em saúde pública usando microdados do DataSUS — sem código, direto no navegador.
+</p>
+
+<p align="center">
+  <a href="https://datasus-ai-prediction.streamlit.app"><img src="https://img.shields.io/badge/Acessar%20Plataforma-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Acessar Plataforma" /></a>
+</p>
+
+<p align="center">
+  <a href="https://huggingface.co/spaces/fabianonbfilho/datasus-ai-prediction"><img src="https://img.shields.io/badge/HuggingFace-Spaces-yellow?logo=huggingface" alt="Hugging Face Spaces" /></a>
+  <a href="https://streamlit.io"><img src="https://img.shields.io/badge/Streamlit-1.32-red?logo=streamlit" alt="Streamlit" /></a>
+  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.11-blue?logo=python" alt="Python" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="License: MIT" /></a>
+</p>
+
+<p align="center">
+  <img src="docs/images/screenshot-home.png" alt="Screenshot da pagina inicial" width="800" />
+</p>
 
 ---
 
