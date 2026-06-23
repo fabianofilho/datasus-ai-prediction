@@ -1739,6 +1739,18 @@ if not ss.get("model_config"):
                         "C (regularização)",
                         [0.001, 0.01, 0.1, 1.0, 10.0], value=1.0,
                         key=f"c_{_algo}")
+                if _algo == "mlp":
+                    _hl = st.select_slider(
+                        "Camadas ocultas",
+                        ["64", "128", "64,32", "128,64", "100,50,25"],
+                        value="64,32", key=f"hl_{_algo}")
+                    _p["hidden_layer_sizes"] = tuple(int(x) for x in _hl.split(","))
+                    _p["max_iter"] = st.slider(
+                        "Épocas (max_iter)", 50, 500, 200, 50, key=f"ep_{_algo}")
+                    _p["learning_rate_init"] = st.select_slider(
+                        "learning_rate_init",
+                        [1e-4, 5e-4, 1e-3, 5e-3, 1e-2], value=1e-3,
+                        key=f"lri_{_algo}")
                 params_per_algo[_algo] = _p
 
     if st.button("Confirmar Configuração", type="primary"):
@@ -1816,13 +1828,35 @@ if not ss["model_results"]:
         "#d97706", "#0891b2", "#be185d", "#65a30d",
     ]
 
+    _LC_TITLES = {
+        "epoch":    "Treinamento da rede neural — ROC-AUC por época",
+        "boosting": "Aprendizado do boosting — ROC-AUC por árvore adicionada",
+        "volume":   "Curva de Aprendizado — ROC-AUC por volume de dados",
+    }
+
     def _lc_fig(lc_data: dict):
-        """lc_data = {algo_label: {"sizes": [...], "val": [...], "train": [...]}}"""
+        """lc_data = {label: {steps, prog, val, train, labels, mode, x_label}}.
+
+        Eixo X nativo (época / árvore / volume) quando há um único tipo de
+        algoritmo; progresso normalizado (%) quando se comparam tipos distintos.
+        """
         import plotly.graph_objects as _go
 
-        # Calcula range dinâmico do eixo Y com padding
+        active = {k: v for k, v in lc_data.items() if v.get("val")}
+        modes = {v["mode"] for v in active.values()}
+
+        if len(modes) == 1:
+            _x_key = "steps"
+            _only = next(iter(modes))
+            _x_title = next(iter(active.values()))["x_label"]
+            _title = _LC_TITLES[_only]
+        else:
+            _x_key = "prog"
+            _x_title = "Progresso do treino (%)"
+            _title = "Curva de Aprendizado — ROC-AUC ao longo do treino"
+
         all_vals = []
-        for d in lc_data.values():
+        for d in active.values():
             all_vals.extend(d.get("val", []))
             all_vals.extend(d.get("train", []))
         if all_vals:
@@ -1832,27 +1866,34 @@ if not ss["model_results"]:
             _ymin, _ymax = 0.4, 1.0
 
         fig = _go.Figure()
-        for i, (lbl, d) in enumerate(lc_data.items()):
+        for i, (lbl, d) in enumerate(active.items()):
             color = _LC_COLORS[i % len(_LC_COLORS)]
-            if d["sizes"]:
+            _x = d[_x_key]
+            _cd = d.get("labels")
+            fig.add_trace(_go.Scatter(
+                x=_x, y=d["val"], mode="lines+markers",
+                name="Validação",
+                legendgroup=lbl,
+                legendgrouptitle=dict(text=lbl, font=dict(size=11, color="#374151")),
+                line=dict(color=color, width=2.5), marker=dict(size=7),
+                customdata=_cd,
+                hovertemplate=(f"<b>{lbl}</b><br>%{{customdata}}<br>"
+                               "Val AUC %{y:.3f}<extra></extra>") if _cd else None,
+            ))
+            if d.get("train"):
                 fig.add_trace(_go.Scatter(
-                    x=d["sizes"], y=d["val"], mode="lines+markers",
-                    name="Validação",
+                    x=_x, y=d["train"], mode="lines+markers",
+                    name="Treino",
                     legendgroup=lbl,
-                    legendgrouptitle=dict(text=lbl, font=dict(size=11, color="#374151")),
-                    line=dict(color=color, width=2.5), marker=dict(size=8),
+                    line=dict(color=color, width=1.5, dash="dot"),
+                    marker=dict(size=5, symbol="circle-open"),
+                    customdata=_cd,
+                    hovertemplate=(f"<b>{lbl}</b><br>%{{customdata}}<br>"
+                                   "Treino AUC %{y:.3f}<extra></extra>") if _cd else None,
                 ))
-                if d["train"]:
-                    fig.add_trace(_go.Scatter(
-                        x=d["sizes"], y=d["train"], mode="lines+markers",
-                        name="Treino",
-                        legendgroup=lbl,
-                        line=dict(color=color, width=1.5, dash="dot"),
-                        marker=dict(size=6, symbol="circle-open"),
-                    ))
         fig.update_layout(
-            title="Curva de Aprendizado — ROC-AUC por volume de dados",
-            xaxis_title="Registros de treinamento",
+            title=_title,
+            xaxis_title=_x_title,
             yaxis=dict(
                 title="ROC-AUC",
                 range=[_ymin, _ymax],
@@ -1872,12 +1913,162 @@ if not ss["model_results"]:
             ),
             margin=dict(t=50, b=40, l=70, r=180),
             font=dict(size=13),
-            hovermode="x unified",
+            hovermode="closest",
         )
         return fig
 
+    # ── Visualização estrutural: a rede / as árvores aprendendo ao vivo ───────
+    _TREE_DRAW_DEPTH = 4
+
+    def _net_fig(state):
+        """Diagrama da rede neural: neurônios, pesos (azul +, vermelho −) e as
+        arestas onde o backpropagation mais ajustou nesta época (douradas)."""
+        import plotly.graph_objects as _go
+        sizes = state["disp_sizes"]; real = state["real_sizes"]
+        W = state["weights"]; dW = state.get("dW", [])
+        wmax = state.get("wmax", 1.0) or 1.0
+        dmax = state.get("dmax", 1.0) or 1.0
+        L = len(sizes)
+
+        pos = []
+        for li, c in enumerate(sizes):
+            pos.append([(float(li), (i - (c - 1) / 2.0)) for i in range(c)])
+
+        thr = 0.18
+        dthr = 0.6 * dmax
+        posx, posy, negx, negy, pulx, puly = [], [], [], [], [], []
+        for li, w in enumerate(W):
+            dw = dW[li] if li < len(dW) else None
+            for i, row in enumerate(w):
+                x0, y0 = pos[li][i]
+                for jj, wv in enumerate(row):
+                    x1, y1 = pos[li + 1][jj]
+                    if dw is not None and dmax > 1e-6 and dw[i][jj] >= dthr:
+                        pulx += [x0, x1, None]; puly += [y0, y1, None]
+                    if abs(wv) / wmax < thr:
+                        continue
+                    if wv >= 0:
+                        posx += [x0, x1, None]; posy += [y0, y1, None]
+                    else:
+                        negx += [x0, x1, None]; negy += [y0, y1, None]
+
+        fig = _go.Figure()
+        fig.add_trace(_go.Scatter(x=negx, y=negy, mode="lines", name="peso −",
+            line=dict(color="rgba(225,29,72,0.30)", width=1), hoverinfo="skip"))
+        fig.add_trace(_go.Scatter(x=posx, y=posy, mode="lines", name="peso +",
+            line=dict(color="rgba(26,86,219,0.35)", width=1), hoverinfo="skip"))
+        fig.add_trace(_go.Scatter(x=pulx, y=puly, mode="lines", name="backprop (Δ)",
+            line=dict(color="rgba(217,119,6,0.95)", width=2), hoverinfo="skip"))
+        for li, c in enumerate(sizes):
+            fig.add_trace(_go.Scatter(
+                x=[p[0] for p in pos[li]], y=[p[1] for p in pos[li]], mode="markers",
+                marker=dict(size=13, color="#1f2937", line=dict(color="#fff", width=1.5)),
+                hoverinfo="skip", showlegend=False))
+
+        for i, nm in enumerate(state.get("in_names", [])):
+            x0, y0 = pos[0][i]
+            fig.add_annotation(x=x0 - 0.07, y=y0, text=str(nm)[:16], showarrow=False,
+                xanchor="right", font=dict(size=10, color="#6b7280"))
+        ox, oy = pos[-1][0]
+        fig.add_annotation(x=ox + 0.07, y=oy, text="saída", showarrow=False,
+            xanchor="left", font=dict(size=10, color="#6b7280"))
+
+        ytop = max((c - 1) / 2.0 for c in sizes) + 0.9
+        names = ["Entrada"] + [f"Oculta ({real[li]})" for li in range(1, L - 1)] + ["Saída"]
+        for li in range(L):
+            fig.add_annotation(x=float(li), y=ytop, text=names[li], showarrow=False,
+                font=dict(size=11, color="#374151"))
+        for li, u in enumerate(state.get("updates", [])):
+            fig.add_annotation(x=li + 0.5, y=-ytop, text=f"Δ {u:.2f}", showarrow=False,
+                font=dict(size=10, color="#d97706"))
+
+        fig.update_layout(
+            title=(f"Rede neural aprendendo — época {state.get('epoch', '')} · "
+                   "arestas douradas = onde o backprop mais ajustou os pesos"),
+            xaxis=dict(visible=False, range=[-0.85, (L - 1) + 0.85]),
+            yaxis=dict(visible=False, range=[-ytop - 0.6, ytop + 0.6]),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            height=440, margin=dict(t=48, b=30, l=20, r=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1.0,
+                        font=dict(size=11)),
+        )
+        return fig
+
+    def _tree_fig(state):
+        """Estrutura da árvore recém-adicionada pelo boosting (nós de decisão azuis,
+        folhas verdes). Cada árvore corrige o erro residual das anteriores."""
+        import plotly.graph_objects as _go
+        nodes = state.get("nodes", [])
+        fig = _go.Figure()
+        if not nodes:
+            fig.add_annotation(text="Estrutura da árvore indisponível para este round",
+                showarrow=False, x=0.5, y=0.5, xref="paper", yref="paper",
+                font=dict(size=13, color="#9ca3af"))
+            fig.update_layout(height=440, paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(visible=False),
+                yaxis=dict(visible=False))
+            return fig
+
+        byid = {n["id"]: n for n in nodes}
+
+        def path_x(n):
+            bits, cur = [], n
+            while cur["parent"] is not None and cur["parent"] in byid:
+                bits.append(0 if cur["side"] == "L" else 1)
+                cur = byid[cur["parent"]]
+            bits = bits[::-1]
+            x = sum(b / (2 ** (k + 1)) for k, b in enumerate(bits))
+            return x + 1.0 / (2 ** (len(bits) + 1))
+
+        draw = [n for n in nodes if n["depth"] <= _TREE_DRAW_DEPTH]
+        kids: dict = {}
+        for n in nodes:
+            kids.setdefault(n["parent"], []).append(n)
+        xy = {n["id"]: (path_x(n), -float(n["depth"])) for n in draw}
+
+        ex, ey = [], []
+        for n in draw:
+            p = n["parent"]
+            if p is not None and p in xy:
+                x0, y0 = xy[p]; x1, y1 = xy[n["id"]]
+                ex += [x0, x1, None]; ey += [y0, y1, None]
+        fig.add_trace(_go.Scatter(x=ex, y=ey, mode="lines", showlegend=False,
+            line=dict(color="rgba(100,116,139,0.6)", width=1.3), hoverinfo="skip"))
+
+        for is_leaf, color, nm in [(False, "#1a56db", "decisão"), (True, "#059669", "folha")]:
+            sub = [n for n in draw if bool(n["is_leaf"]) == is_leaf]
+            if not sub:
+                continue
+            xs = [xy[n["id"]][0] for n in sub]
+            ys = [xy[n["id"]][1] for n in sub]
+            hov, txt = [], []
+            for n in sub:
+                lbl = n["label"]
+                if (not n["is_leaf"]) and n["depth"] == _TREE_DRAW_DEPTH and kids.get(n["id"]):
+                    lbl = lbl + " …"
+                hov.append(lbl)
+                txt.append(lbl if (not is_leaf and n["depth"] <= 1) else "")
+            fig.add_trace(_go.Scatter(x=xs, y=ys, mode="markers+text", name=nm,
+                marker=dict(size=15, color=color, line=dict(color="#fff", width=1.5)),
+                text=txt, textposition="top center", textfont=dict(size=10, color="#374151"),
+                hovertext=hov, hoverinfo="text"))
+
+        fig.update_layout(
+            title=(f"Boosting ({state.get('lib', '')}) — árvore {state.get('round', '')}/"
+                   f"{state.get('total', '')} recém-adicionada · cada árvore corrige o erro das anteriores"),
+            xaxis=dict(visible=False, range=[-0.05, 1.05]),
+            yaxis=dict(visible=False, range=[-_TREE_DRAW_DEPTH - 0.6, 0.8]),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            height=440, margin=dict(t=48, b=20, l=20, r=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1.0,
+                        font=dict(size=11)),
+        )
+        return fig
+
+    _struct_ph = st.empty()
     _lc_chart_ph = st.empty()
     _lc_status_ph = st.empty()
+    _struct_ph.caption("A estrutura do modelo aprendendo (neurônios ou árvores) aparecerá aqui durante o treinamento.")
     _lc_chart_ph.caption("A curva de aprendizado será exibida durante o treinamento.")
 
     _hpo_prefix = {
@@ -1908,9 +2099,25 @@ if not ss["model_results"]:
             X_train = X_model
             y_train = y
 
-            # ── Learning curve — uma curva por algoritmo, cores distintas ─────
-            _fracs = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
-            _lc_data: dict = {lbl: {"sizes": [], "val": [], "train": []} for lbl in algo_labels}
+            # ── Curva de aprendizado — perspectiva por família de algoritmo ───
+            #   rede neural → por época · boosting → por árvore · demais → volume
+            from core.models.pipeline import (
+                training_curve as _training_curve,
+                BOOSTING_ALGORITHMS as _BOOST, NEURAL_ALGORITHMS as _NEURAL,
+            )
+
+            def _algo_mode(a):
+                if a in _NEURAL:
+                    return "epoch", "Época"
+                if a in _BOOST:
+                    return "boosting", "Árvores (rounds de boosting)"
+                return "volume", "Registros de treinamento"
+
+            _lc_data: dict = {}
+            for _a, _l in zip(algos, algo_labels):
+                _m, _xl = _algo_mode(_a)
+                _lc_data[_l] = {"steps": [], "prog": [], "val": [], "train": [],
+                                "labels": [], "mode": _m, "x_label": _xl}
 
             try:
                 _X_lc, _X_hold, _y_lc, _y_hold = train_test_split(
@@ -1952,38 +2159,57 @@ if not ss["model_results"]:
                 _ms_st(_mstatus[_lbl], "hourglass_empty", "Aguardando…")
 
             for _lc_algo, _lc_lbl in zip(algos, algo_labels):
-                _ms_st(_mstatus[_lc_lbl], "bar_chart", "Calculando curva de aprendizado…")
+                _store = _lc_data[_lc_lbl]
+                # Reinicia o painel estrutural a cada modelo: evita que a rede/árvore
+                # de um modelo anterior fique na tela, e explica o modo volume.
+                if _store["mode"] == "volume":
+                    _struct_ph.caption(
+                        f"**{_lc_lbl}** — Random Forest, Logistic e TabPFN não têm estrutura "
+                        "sequencial para animar. Acompanhe a curva de aprendizado por volume "
+                        "de dados abaixo.")
+                else:
+                    _struct_ph.caption(f"Preparando visualização de **{_lc_lbl}**…")
+                _start_msg = {
+                    "epoch":    "Treinando rede neural — época a época…",
+                    "boosting": "Boosting — adicionando árvores…",
+                    "volume":   "Calculando curva de aprendizado…",
+                }[_store["mode"]]
+                _ms_st(_mstatus[_lc_lbl], "bar_chart", _start_msg)
                 _mprog[_lc_lbl].progress(0.0, text=f"Curva de aprendizado — {_lc_lbl}…")
-                for _fi, _frac in enumerate(_fracs):
-                    _n = max(30, int(len(_X_lc) * _frac))
-                    try:
-                        if _frac < 1.0:
-                            _Xs, _, _ys, _ = train_test_split(
-                                _X_lc, _y_lc, train_size=_n, stratify=_y_lc, random_state=42,
-                            )
-                        else:
-                            _Xs, _ys = _X_lc, _y_lc
-                        # Use fast params for LC (shape matters, not optimality)
-                        _lc_fast = {"n_estimators": 80, "max_depth": 4}
-                        _qp = build_pipeline(_Xs, _lc_algo, _lc_fast, balancing="none", treatment=treatment)
-                        _qp.fit(_Xs, _ys)
-                        _tr_auc = float(_roc_auc(_ys, _qp.predict_proba(_Xs)[:, 1])) if _ys.sum() > 0 else 0.5
-                        _vl_auc = float(_roc_auc(_y_hold, _qp.predict_proba(_X_hold)[:, 1])) if _y_hold.sum() > 0 else 0.5
-                    except Exception:
-                        _tr_auc = _vl_auc = 0.5
-                    _lc_data[_lc_lbl]["sizes"].append(_n)
-                    _lc_data[_lc_lbl]["train"].append(_tr_auc)
-                    _lc_data[_lc_lbl]["val"].append(_vl_auc)
+
+                def _lc_cb(done, total, xval, label, ta, va, state=None,
+                           _st=_store, _lbl=_lc_lbl,
+                           _pb=_mprog[_lc_lbl], _dph=_mdetail[_lc_lbl]):
+                    _st["steps"].append(xval)
+                    _st["prog"].append(100.0 * done / max(total, 1))
+                    _st["train"].append(ta)
+                    _st["val"].append(va)
+                    _st["labels"].append(label)
+                    # Estrutura aprendendo: rede (neurônios + backprop) ou árvore
+                    if state is not None:
+                        try:
+                            if state.get("kind") == "net":
+                                _struct_ph.plotly_chart(_net_fig(state), use_container_width=True)
+                            elif state.get("kind") == "tree":
+                                _struct_ph.plotly_chart(_tree_fig(state), use_container_width=True)
+                        except Exception:
+                            pass
                     _lc_chart_ph.plotly_chart(_lc_fig(_lc_data), use_container_width=True)
-                    _mprog[_lc_lbl].progress(
-                        (_fi + 1) / len(_fracs),
-                        text=f"LC {int(_frac*100)}% ({_n:,} amostras) — Val AUC: {_vl_auc:.3f}",
+                    _pb.progress(done / max(total, 1), text=f"{label} — Val AUC: {va:.3f}")
+                    _ms_dt(_dph, f"{label} — Val AUC: {va:.3f}")
+                    _lc_status_ph.caption(f"{_lbl} — {label} — Val AUC: {va:.3f}")
+
+                try:
+                    _training_curve(
+                        _X_lc, _y_lc, _X_hold, _y_hold,
+                        algorithm=_lc_algo,
+                        params=dict(params_per_algo.get(_lc_algo, {})),
+                        treatment=treatment,
+                        progress_callback=_lc_cb,
                     )
-                    _ms_dt(_mdetail[_lc_lbl],
-                           f"LC {int(_frac*100)}% ({_n:,} amostras) — Val AUC: {_vl_auc:.3f}")
-                    _lc_status_ph.caption(
-                        f"Curva de aprendizado ({_lc_lbl}) — {int(_frac*100)}% — Val AUC: {_vl_auc:.3f}"
-                    )
+                except Exception as _lc_err:
+                    _ms_dt(_mdetail[_lc_lbl], f"Curva indisponível — {_lc_err}")
+
                 _mprog[_lc_lbl].progress(1.0, text=f"Curva de aprendizado concluída — {_lc_lbl}")
                 _ms_st(_mstatus[_lc_lbl], "check", "Curva de aprendizado concluída")
                 _mdetail[_lc_lbl].empty()
