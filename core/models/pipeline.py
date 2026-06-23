@@ -1,6 +1,7 @@
 """ML training pipeline with cross-validation and optional HPO.
 
-Supported algorithms: LightGBM, XGBoost, Logistic Regression, Random Forest.
+Supported algorithms: LightGBM, XGBoost, CatBoost, Logistic Regression,
+Random Forest, Rede Neural (MLP), TabPFN (opcional).
 HPO modes: Manual, Random Search, Grid Search, Optuna.
 Balancing: None, Class Weight, SMOTE (oversample), SMOTE + Undersampling.
 Treatment: per-column encoding (OHE, Ordinal, Target) and scaling (Standard, MinMax).
@@ -29,7 +30,13 @@ ALGORITHMS: dict[str, str] = {
     "CatBoost": "catboost",
     "Logistic Regression": "logreg",
     "Random Forest": "rf",
+    "Rede Neural (MLP)": "mlp",
 }
+
+# Algorithm families — used by the training screen to pick the right
+# learning-curve perspective (epochs for the net, boosting rounds for trees).
+BOOSTING_ALGORITHMS: set[str] = {"lgbm", "xgb", "catboost"}
+NEURAL_ALGORITHMS: set[str] = {"mlp"}
 
 # TabPFN: always listed, but only usable if torch+tabpfn installed
 TABPFN_AVAILABLE: bool = False
@@ -66,6 +73,11 @@ _RANDOM_GRIDS: dict[str, dict] = {
         "model__learning_rate": [0.01, 0.05, 0.1, 0.2],
         "model__depth":        [4, 6, 8, 10],
     },
+    "mlp": {
+        "model__hidden_layer_sizes": [(64,), (128,), (64, 32), (128, 64), (100, 50, 25)],
+        "model__alpha":              [1e-4, 1e-3, 1e-2],
+        "model__learning_rate_init": [1e-3, 5e-3, 1e-2],
+    },
 }
 
 # ── Param grids for Grid Search (focused) ────────────────────────────────────
@@ -91,6 +103,10 @@ _GRID_GRIDS: dict[str, dict] = {
         "model__iterations":    [100, 300, 500],
         "model__learning_rate": [0.05, 0.1],
         "model__depth":         [4, 6, 8],
+    },
+    "mlp": {
+        "model__hidden_layer_sizes": [(64,), (64, 32)],
+        "model__alpha":              [1e-4, 1e-3],
     },
 }
 
@@ -149,6 +165,19 @@ def _build_model(algorithm: str, params: dict, class_weight: str | None = None):
             auto_class_weights="Balanced" if class_weight else None,
             random_seed=42,
             verbose=0,
+            allow_writing_files=False,
+        )
+    if algorithm == "mlp":
+        from sklearn.neural_network import MLPClassifier
+        # class_weight não é suportado por MLPClassifier — balanceamento via SMOTE.
+        return MLPClassifier(
+            hidden_layer_sizes=params.get("hidden_layer_sizes", (64, 32)),
+            alpha=params.get("alpha", 1e-4),
+            learning_rate_init=params.get("learning_rate_init", 1e-3),
+            max_iter=params.get("max_iter", 300),
+            early_stopping=params.get("early_stopping", True),
+            n_iter_no_change=10,
+            random_state=42,
         )
     if algorithm == "tabpfn":
         try:
@@ -316,9 +345,9 @@ def build_pipeline(
         steps.append(("sentinel", SentinelReplacer(sentinels)))
     steps.append(("prep", preprocessor))
 
-    # Add StandardScaler for logreg when numerics aren't already scaled
+    # Add StandardScaler for logreg / MLP when numerics aren't already scaled
     _num_scaled = treatment is not None and treatment.get("num_default") in ("standard", "minmax")
-    if algorithm == "logreg" and not _num_scaled:
+    if algorithm in ("logreg", "mlp") and not _num_scaled:
         steps.append(("scaler", StandardScaler()))
 
     # Resolve effective resampling
@@ -428,6 +457,15 @@ def _suggest_params(trial, algorithm: str) -> dict:
             "learning_rate": trial.suggest_float("learning_rate", 0.005, 0.2, log=True),
             "depth":         trial.suggest_int("depth", 4, 10),
         }
+    if algorithm == "mlp":
+        _hl = trial.suggest_categorical(
+            "hidden_layer_sizes", ["64", "128", "64,32", "128,64", "100,50,25"]
+        )
+        return {
+            "hidden_layer_sizes": tuple(int(x) for x in _hl.split(",")),
+            "alpha":              trial.suggest_float("alpha", 1e-5, 1e-2, log=True),
+            "learning_rate_init": trial.suggest_float("learning_rate_init", 1e-4, 1e-2, log=True),
+        }
     return {}
 
 
@@ -471,7 +509,13 @@ def optimize_hyperparams(
 
     study = optuna.create_study(direction="maximize")
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
-    return study.best_params
+    best = dict(study.best_params)
+    # MLP: hidden_layer_sizes é sugerido como string categórica ("64,32") —
+    # study.best_params guarda a string, então converte de volta para tupla.
+    _hl = best.get("hidden_layer_sizes")
+    if isinstance(_hl, str):
+        best["hidden_layer_sizes"] = tuple(int(x) for x in _hl.split(","))
+    return best
 
 
 def train_cv(
@@ -617,3 +661,380 @@ def _get_importances(pipe: Pipeline, feature_names: list[str]) -> dict | None:
         if len(imp) == len(actual_names):
             return dict(zip(actual_names, imp))
     return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Curva de aprendizado ao vivo — uma perspectiva por família de algoritmo
+# ══════════════════════════════════════════════════════════════════════════════
+#   • Rede neural (MLP)  → ROC-AUC por época   (treino incremental real)
+#   • Boosting (lgbm/xgb/catboost) → ROC-AUC por árvore adicionada
+#   • Demais (logreg/rf/tabpfn)    → ROC-AUC por volume de dados
+#
+# Estas curvas são apenas para visualização do aprendizado. As métricas oficiais
+# continuam vindo de train_cv / holdout / validação temporal, intocados.
+
+def _safe_auc(y, p) -> float:
+    """ROC-AUC tolerante a classe única ou falha — devolve 0.5 nesses casos."""
+    try:
+        y_arr = np.asarray(y)
+        if len(np.unique(y_arr)) < 2:
+            return 0.5
+        return float(roc_auc_score(y_arr, p))
+    except Exception:
+        return 0.5
+
+
+def _even_indices(n: int, k: int) -> list[int]:
+    """Até k índices espaçados uniformemente em [0, n-1] (sempre inclui o último)."""
+    if n <= 0:
+        return []
+    if n <= k:
+        return list(range(n))
+    return sorted({int(round(x)) for x in np.linspace(0, n - 1, k)})
+
+
+def _preprocess_fit_transform(X_tr, X_val, algorithm: str, treatment: dict | None):
+    """Ajusta só o pré-processamento no treino e devolve arrays densos (tr, val).
+
+    Espelha o build_pipeline (sentinel + prep [+ scaler p/ logreg/mlp]) mas para
+    antes do modelo, para que um booster/MLP possa ser treinado com eval_set.
+    """
+    sentinels = list((treatment or {}).get("null_sentinels", []))
+    steps: list = []
+    if sentinels:
+        steps.append(("sentinel", SentinelReplacer(sentinels)))
+    steps.append(("prep", _build_preprocessor(X_tr, treatment, algorithm)))
+    _num_scaled = treatment is not None and treatment.get("num_default") in ("standard", "minmax")
+    if algorithm in ("logreg", "mlp") and not _num_scaled:
+        steps.append(("scaler", StandardScaler()))
+    pre = Pipeline(steps)
+    Xt_tr = pre.fit_transform(X_tr)
+    Xt_val = pre.transform(X_val)
+    Xt_tr = np.asarray(Xt_tr)
+    Xt_val = np.asarray(Xt_val)
+    try:
+        names = list(pre.named_steps["prep"].get_feature_names_out())
+        if len(names) != Xt_tr.shape[1]:
+            raise ValueError
+    except Exception:
+        names = [f"f{i}" for i in range(Xt_tr.shape[1])]
+    return Xt_tr, Xt_val, names
+
+
+def _boosting_round_aucs(algorithm, Xt, y_tr, Xv, y_val, params: dict):
+    """ROC-AUC por round (treino, validação) + modelo treinado para lgbm/xgb/catboost.
+
+    Devolve (train_aucs, val_aucs, model) — o modelo permite extrair a estrutura
+    de cada árvore para a visualização do boosting.
+    """
+    if algorithm == "lgbm":
+        import lightgbm as lgb
+        from lightgbm import LGBMClassifier
+        ev: dict = {}
+        m = LGBMClassifier(
+            n_estimators=int(params.get("n_estimators", 200)),
+            learning_rate=params.get("learning_rate", 0.05),
+            max_depth=params.get("max_depth", -1),
+            num_leaves=params.get("num_leaves", 31),
+            random_state=42, verbose=-1,
+        )
+        m.fit(
+            Xt, y_tr, eval_set=[(Xt, y_tr), (Xv, y_val)],
+            eval_names=["train", "val"], eval_metric="auc",
+            callbacks=[lgb.record_evaluation(ev)],
+        )
+        return list(ev["train"]["auc"]), list(ev["val"]["auc"]), m
+
+    if algorithm == "xgb":
+        from xgboost import XGBClassifier
+        m = XGBClassifier(
+            n_estimators=int(params.get("n_estimators", 200)),
+            learning_rate=params.get("learning_rate", 0.05),
+            max_depth=params.get("max_depth", 6),
+            eval_metric="auc", tree_method="hist", verbosity=0,
+            n_jobs=-1, random_state=42,
+        )
+        m.fit(Xt, y_tr, eval_set=[(Xt, y_tr), (Xv, y_val)], verbose=False)
+        er = m.evals_result()
+        keys = list(er.keys())  # validation_0 = treino, validation_1 = validação
+        tr = list(er[keys[0]]["auc"])
+        vl = list(er[keys[1]]["auc"]) if len(keys) > 1 else tr
+        return tr, vl, m
+
+    if algorithm == "catboost":
+        from catboost import CatBoostClassifier
+        m = CatBoostClassifier(
+            iterations=int(params.get("iterations", params.get("n_estimators", 200))),
+            learning_rate=params.get("learning_rate", 0.05),
+            depth=params.get("depth", 6),
+            eval_metric="AUC", random_seed=42, verbose=0,
+            allow_writing_files=False,
+            # mantém nº de árvores == nº de rounds avaliados (senão use_best_model
+            # trunca o modelo e os últimos rounds da curva ficam sem árvore)
+            use_best_model=False,
+        )
+        m.fit(Xt, y_tr, eval_set=[(Xt, y_tr), (Xv, y_val)])
+        er = m.get_evals_result()  # learn, validation_0 (treino), validation_1 (val)
+        vl = er.get("validation_1", {}).get("AUC") or er.get("validation_0", {}).get("AUC") or []
+        tr = er.get("validation_0", {}).get("AUC") or list(vl)
+        return list(tr), list(vl), m
+
+    return [], [], None
+
+
+# ── Estado estrutural para visualizar o aprendizado ───────────────────────────
+# Caps de exibição (apenas para o desenho — o modelo real usa tudo).
+_NET_MAX_IN = 10      # neurônios de entrada exibidos
+_NET_MAX_HID = 14     # neurônios por camada oculta exibidos
+_TREE_MAX_DEPTH = 4   # profundidade máxima desenhada da árvore
+
+
+def _clean_feat(name: str) -> str:
+    """Remove o prefixo do ColumnTransformer ('num_none__feat0' -> 'feat0')."""
+    s = str(name)
+    return s.rsplit("__", 1)[-1] if "__" in s else s
+
+
+def _net_state(prev_coefs, coefs, feat_names, epoch: int) -> dict:
+    """Snapshot da rede para desenho: pesos por camada (recortados), magnitude
+    do passo de backprop (|Δpesos|) por camada e por aresta exibida."""
+    n_in = coefs[0].shape[0]
+    real_sizes = [n_in] + [c.shape[1] for c in coefs]
+    caps = []
+    for li, s in enumerate(real_sizes):
+        if li == 0:
+            caps.append(min(s, _NET_MAX_IN))
+        elif li == len(real_sizes) - 1:
+            caps.append(s)  # saída (1)
+        else:
+            caps.append(min(s, _NET_MAX_HID))
+
+    weights, dW, updates = [], [], []
+    wmax, dmax = 1e-9, 1e-9
+    for li, C in enumerate(coefs):
+        w = C[:caps[li], :caps[li + 1]]
+        weights.append(w.tolist())
+        wmax = max(wmax, float(np.abs(w).max()) if w.size else 0.0)
+        if prev_coefs is not None and prev_coefs[li].shape == C.shape:
+            full_d = C - prev_coefs[li]
+        else:
+            full_d = C
+        updates.append(float(np.linalg.norm(full_d)))
+        d = np.abs(full_d[:caps[li], :caps[li + 1]])
+        dW.append(d.tolist())
+        dmax = max(dmax, float(d.max()) if d.size else 0.0)
+
+    in_names = [_clean_feat(feat_names[i]) if i < len(feat_names) else f"x{i}"
+                for i in range(caps[0])]
+    return {
+        "kind": "net", "epoch": epoch,
+        "real_sizes": real_sizes, "disp_sizes": caps,
+        "weights": weights, "dW": dW, "updates": updates,
+        "wmax": wmax, "dmax": dmax, "in_names": in_names,
+    }
+
+
+def _extract_trees(algorithm, model, indices, feat_names) -> dict:
+    """{tree_idx: [nós normalizados]} para os índices pedidos.
+
+    Cada nó: {id, parent, side('L'/'R'/None), depth, label, is_leaf}.
+    Estrutura extraída uma única vez do modelo já treinado.
+    """
+    if model is None or not indices:
+        return {}
+
+    def fname(i):
+        try:
+            return _clean_feat(feat_names[int(i)])
+        except Exception:
+            return f"f{i}"
+
+    want = set(int(i) for i in indices)
+    out: dict = {}
+
+    try:
+        if algorithm == "lgbm":
+            tree_info = model.booster_.dump_model().get("tree_info", [])
+            for ti in want:
+                if ti >= len(tree_info):
+                    continue
+                root = tree_info[ti]["tree_structure"]
+                nodes: list = []
+                ctr = [0]
+
+                def rec(node, parent, side, depth):
+                    nid = ctr[0]; ctr[0] += 1
+                    if "split_feature" in node:
+                        lbl = f"{fname(node['split_feature'])} ≤ {node.get('threshold', 0):.2f}"
+                        nodes.append({"id": nid, "parent": parent, "side": side,
+                                      "depth": depth, "label": lbl, "is_leaf": False})
+                        rec(node["left_child"], nid, "L", depth + 1)
+                        rec(node["right_child"], nid, "R", depth + 1)
+                    else:
+                        nodes.append({"id": nid, "parent": parent, "side": side,
+                                      "depth": depth, "label": f"{node.get('leaf_value', 0):.2f}",
+                                      "is_leaf": True})
+                rec(root, None, None, 0)
+                out[ti] = nodes
+
+        elif algorithm == "xgb":
+            df = model.get_booster().trees_to_dataframe()
+
+            def xfeat(ft):
+                s = str(ft)
+                return fname(int(s[1:])) if (s.startswith("f") and s[1:].isdigit()) else s
+
+            for ti in want:
+                sub = df[df["Tree"] == ti]
+                if sub.empty:
+                    continue
+                parent, side = {}, {}
+                for row in sub.itertuples():
+                    if str(row.Feature) != "Leaf":
+                        parent[row.Yes] = row.ID; side[row.Yes] = "L"
+                        parent[row.No] = row.ID; side[row.No] = "R"
+                idmap = {row.ID: k for k, row in enumerate(sub.itertuples())}
+
+                def depth_of(idv):
+                    d, cur = 0, idv
+                    while cur in parent:
+                        cur = parent[cur]; d += 1
+                    return d
+                nodes = []
+                for row in sub.itertuples():
+                    leaf = str(row.Feature) == "Leaf"
+                    lbl = f"{row.Gain:.2f}" if leaf else f"{xfeat(row.Feature)} ≤ {row.Split:.2f}"
+                    par = parent.get(row.ID)
+                    nodes.append({"id": idmap[row.ID],
+                                  "parent": idmap.get(par) if par is not None else None,
+                                  "side": side.get(row.ID), "depth": depth_of(row.ID),
+                                  "label": lbl, "is_leaf": leaf})
+                out[ti] = nodes
+
+        elif algorithm == "catboost":
+            import tempfile, os, json
+            p = os.path.join(tempfile.gettempdir(), "_cb_tree_viz.json")
+            model.save_model(p, format="json")
+            with open(p) as fh:
+                js = json.load(fh)
+            ot = js.get("oblivious_trees", [])
+            for ti in want:
+                if ti >= len(ot):
+                    continue
+                splits = ot[ti].get("splits", [])
+                depth = len(splits)
+                nodes = []
+                ctr = [0]
+
+                def rec(level, parent, side, d):
+                    nid = ctr[0]; ctr[0] += 1
+                    if level >= len(splits):
+                        nodes.append({"id": nid, "parent": parent, "side": side,
+                                      "depth": d, "label": "folha", "is_leaf": True})
+                        return
+                    s = splits[level]
+                    fi = s.get("float_feature_index", s.get("feature_index", 0))
+                    lbl = f"{fname(fi)} ≤ {s.get('border', 0.0):.2f}"
+                    nodes.append({"id": nid, "parent": parent, "side": side,
+                                  "depth": d, "label": lbl, "is_leaf": False})
+                    rec(level + 1, nid, "L", d + 1)
+                    rec(level + 1, nid, "R", d + 1)
+                rec(0, None, None, 0)
+                out[ti] = nodes
+    except Exception:
+        return out
+    return out
+
+
+def training_curve(
+    X_tr, y_tr, X_val, y_val,
+    algorithm: str = "lgbm",
+    params: dict | None = None,
+    treatment: dict | None = None,
+    progress_callback=None,
+    max_points: int = 40,
+) -> dict:
+    """Trajetória de aprendizado passo a passo para visualização ao vivo.
+
+    Devolve {"mode", "x_label", "steps", "train", "val", "metric"} onde mode é
+    "epoch" (rede neural), "boosting" (árvores) ou "volume" (demais modelos).
+    Chama progress_callback(done, total, x_value, step_label, train_auc, val_auc, state)
+    a cada passo. `state` traz a estrutura para desenhar o aprendizado:
+      • rede neural → {"kind":"net", pesos/Δpesos por camada, ...}
+      • boosting    → {"kind":"tree", estrutura da árvore recém-adicionada, ...}
+      • volume      → None
+    """
+    params = params or {}
+    y_tr = np.asarray(y_tr)
+    y_val = np.asarray(y_val)
+
+    # ── Rede neural: trajetória real por época via partial_fit ────────────────
+    if algorithm in NEURAL_ALGORITHMS:
+        from sklearn.neural_network import MLPClassifier
+        Xt, Xv, feat_names = _preprocess_fit_transform(X_tr, X_val, "mlp", treatment)
+        n_epochs = max(5, min(int(params.get("max_iter", 25)), 60))
+        clf = MLPClassifier(
+            hidden_layer_sizes=params.get("hidden_layer_sizes", (64, 32)),
+            alpha=params.get("alpha", 1e-4),
+            learning_rate_init=params.get("learning_rate_init", 1e-3),
+            random_state=42,
+        )
+        steps, tr, vl = [], [], []
+        classes = np.array([0, 1])
+        prev_coefs = None
+        for ep in range(1, n_epochs + 1):
+            clf.partial_fit(Xt, y_tr, classes=classes)
+            ta = _safe_auc(y_tr, clf.predict_proba(Xt)[:, 1])
+            va = _safe_auc(y_val, clf.predict_proba(Xv)[:, 1])
+            steps.append(ep); tr.append(ta); vl.append(va)
+            state = _net_state(prev_coefs, clf.coefs_, feat_names, ep)
+            prev_coefs = [c.copy() for c in clf.coefs_]
+            if progress_callback:
+                progress_callback(ep, n_epochs, ep, f"Época {ep}/{n_epochs}", ta, va, state)
+        return {"mode": "epoch", "x_label": "Época",
+                "steps": steps, "train": tr, "val": vl, "metric": "roc_auc"}
+
+    # ── Boosting: trajetória real por round, revelada progressivamente ────────
+    if algorithm in BOOSTING_ALGORITHMS:
+        Xt, Xv, feat_names = _preprocess_fit_transform(X_tr, X_val, algorithm, treatment)
+        tr_curve, vl_curve, model = _boosting_round_aucs(algorithm, Xt, y_tr, Xv, y_val, params)
+        n = len(vl_curve)
+        idx = _even_indices(n, max_points)
+        trees = _extract_trees(algorithm, model, idx, feat_names)
+        steps, tr, vl = [], [], []
+        for j, i in enumerate(idx, 1):
+            steps.append(i + 1)
+            tr.append(tr_curve[i] if i < len(tr_curve) else vl_curve[i])
+            vl.append(vl_curve[i])
+            state = {"kind": "tree", "round": i + 1, "total": n,
+                     "lib": algorithm, "nodes": trees.get(i, [])}
+            if progress_callback:
+                progress_callback(j, len(idx), i + 1, f"Árvore {i + 1}/{n}",
+                                  tr[-1], vl[-1], state)
+        return {"mode": "boosting", "x_label": "Árvores (rounds de boosting)",
+                "steps": steps, "train": tr, "val": vl, "metric": "roc_auc"}
+
+    # ── Demais modelos: curva por volume de dados ─────────────────────────────
+    from sklearn.model_selection import train_test_split
+    fracs = [0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+    steps, tr, vl = [], [], []
+    for k, frac in enumerate(fracs, 1):
+        n = max(30, int(len(X_tr) * frac))
+        try:
+            if frac < 1.0 and n < len(X_tr):
+                Xs, _, ys, _ = train_test_split(
+                    X_tr, y_tr, train_size=n, stratify=y_tr, random_state=42)
+            else:
+                Xs, ys = X_tr, y_tr
+            fast = {"n_estimators": 80, "max_depth": 4}
+            pipe = build_pipeline(Xs, algorithm, fast, balancing="none", treatment=treatment)
+            pipe.fit(Xs, ys)
+            ta = _safe_auc(ys, pipe.predict_proba(Xs)[:, 1])
+            va = _safe_auc(y_val, pipe.predict_proba(X_val)[:, 1])
+        except Exception:
+            ta = va = 0.5
+        steps.append(n); tr.append(ta); vl.append(va)
+        if progress_callback:
+            progress_callback(k, len(fracs), n, f"{int(frac * 100)}% ({n:,} amostras)", ta, va, None)
+    return {"mode": "volume", "x_label": "Registros de treinamento",
+            "steps": steps, "train": tr, "val": vl, "metric": "roc_auc"}

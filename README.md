@@ -112,7 +112,7 @@ datasus-ai-prediction/
 
 ### Stack
 - **Download:** `datasus-dbc` (DBC → DBF sem compilador C) + mirror HTTP DigitalOcean + FTP DataSUS
-- **ML:** LightGBM, XGBoost, Logistic Regression, Random Forest
+- **ML:** LightGBM, XGBoost, CatBoost, Logistic Regression, Random Forest, Rede Neural (MLP)
 - **Otimizacao:** Optuna (hyperparameter search automatico)
 - **Explicabilidade:** SHAP values com graficos interativos
 - **Validacao:** StratifiedKFold(5) + amostragem estratificada
