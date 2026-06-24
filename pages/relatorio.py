@@ -107,7 +107,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   color: #ffffff !important; text-decoration: none !important;
 }
 .ds-topbar-badge {
-  background: var(--fg); color: #fff;
+  background: var(--accent); color: var(--primary);
   font-size: 0.62rem; font-weight: 700;
   padding: 2px 7px; border-radius: 4px; letter-spacing: .06em;
 }
@@ -128,7 +128,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   font-size: 0.7rem; font-weight: 500; white-space: nowrap; flex-shrink: 0;
 }
 .ds-step-done   { color: var(--muted); }
-.ds-step-active { background: var(--fg); color: #fff; font-weight: 600; }
+.ds-step-active { background: var(--primary); color: #fff; font-weight: 600; }
 .ds-step-locked { color: #d1d5db; }
 .ds-step-optional { color: #d1d5db; }
 .ds-step-arrow  { color: #d1d5db; font-size: 0.75rem; padding: 0; flex-shrink: 0; }
@@ -153,7 +153,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   cursor: pointer !important; white-space: nowrap !important;
 }
 .stButton > button[kind="primary"] {
-  background: var(--fg) !important; border: 1px solid var(--fg) !important;
+  background: var(--primary) !important; border: 1px solid var(--primary) !important;
   color: #fff !important; font-weight: 600 !important; box-shadow: none !important;
 }
 .stButton > button[kind="primary"]:hover {
