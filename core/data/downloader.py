@@ -214,7 +214,9 @@ def _filter_national(df: pd.DataFrame, cfg: dict, state: str) -> pd.DataFrame:
                 filter_col = col
                 break
     if filter_col:
-        df = df[df[filter_col].astype(str).str.strip() == str(int(code))]
+        # compara numericamente: tolera UF como '35', '35.0' (float) ou 35, descarta NaN
+        _uf = pd.to_numeric(df[filter_col], errors="coerce")
+        df = df[_uf == int(code)]
     return df
 
 

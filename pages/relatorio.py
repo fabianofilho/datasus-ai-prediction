@@ -445,6 +445,7 @@ ev = _ev()
 if ss["outcome_key"] == "__diy__":
     class _DiyProxy:
         name = "Do It Yourself (DIY)"
+        description = "Dataset enviado pelo usuário (DIY)."
         data_sources = ["UPLOAD"]
         key = "__diy__"
     outcome = _DiyProxy()

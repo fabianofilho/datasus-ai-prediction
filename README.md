@@ -124,15 +124,26 @@ datasus-ai-prediction/
 
 ### Na plataforma web
 
-Acesse [datasus-ai-prediction.vercel.app](https://datasus-ai-prediction.vercel.app) e siga as 5 etapas:
+Acesse [datasus-ai-prediction.vercel.app](https://datasus-ai-prediction.vercel.app) e siga o fluxo guiado:
 
 ```
-1. Desfecho   → escolha o que quer prever
-2. Dados      → selecione estado(s) e ano(s), download automatico
-3. Coorte     → revise distribuicao, balanceamento, features
-4. Modelo     → escolha algoritmo e treine com validacao cruzada
-5. Resultados → curvas ROC, SHAP, calibracao, comparacao entre grupos
+1.  Desfecho     → escolha o que quer prever
+2.  Dados        → selecione estado(s) e ano(s), download automatico
+3.  Features     → revise distribuicao, balanceamento, selecione variaveis
+4.  Tratamento   → encoding/escalonamento por coluna, sentinelas de ausente
+5.  Modelo       → escolha algoritmo(s), validacao e busca de hiperparametros
+6.  Treinamento  → treine e acompanhe o aprendizado ao vivo (ver abaixo)
+7.  Resultados   → curvas ROC/PR, SHAP, metricas clinicas, equidade
+8.  Benchmark    → compare algoritmos lado a lado
+9.  Deploy       → inferencia individual com explicacao SHAP local
+10. Relatorio    → exporta o estudo completo
 ```
+
+Na etapa de **Treinamento**, a visualizacao se adapta ao algoritmo selecionado:
+rede neural (MLP) mostra os neuronios aprendendo (pesos, backpropagation e o dado
+atravessando a rede no forward pass); boosting (LightGBM/XGBoost/CatBoost) mostra o
+residuo de cada paciente encolhendo a cada arvore; os demais, a curva de aprendizado
+por volume de dados.
 
 ### Localmente
 

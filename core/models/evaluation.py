@@ -13,7 +13,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.calibration import calibration_curve
-from sklearn.metrics import roc_curve, precision_recall_curve
+from sklearn.metrics import roc_curve, precision_recall_curve, auc as _sk_auc
 
 
 def _label(col: str) -> str:
@@ -88,7 +88,8 @@ def roc_chart(y_true: np.ndarray, oof_probs: np.ndarray) -> go.Figure:
 
 def pr_chart(y_true: np.ndarray, oof_probs: np.ndarray) -> go.Figure:
     precision, recall, _ = precision_recall_curve(y_true, oof_probs)
-    auc = _trapz(precision, recall[::-1])
+    # recall já vem monotônico; integrar precision contra o recall correto
+    auc = _sk_auc(recall, precision)
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=recall, y=precision, mode="lines", name=f"PR (AUC={auc:.3f})", line=dict(color="#ff7f0e", width=2)))
     prevalence = y_true.mean()
@@ -117,8 +118,9 @@ def calibration_chart(y_true: np.ndarray, oof_probs: np.ndarray, n_bins: int = 1
 
 
 def importance_chart(feature_importances: dict, top_n: int = 20) -> go.Figure:
-    labeled = {_label(k): v for k, v in feature_importances.items()}
-    df = pd.Series(labeled).sort_values(ascending=True).tail(top_n)
+    # Soma as importâncias por rótulo (níveis OHE da mesma variável somam, não se sobrescrevem)
+    labeled = pd.Series(feature_importances).groupby(_label).sum()
+    df = labeled.sort_values(ascending=True).tail(top_n)
     fig = go.Figure(go.Bar(x=df.values, y=df.index, orientation="h", marker_color="#1f77b4"))
     fig.update_layout(
         title=f"Top {top_n} Variáveis por Importância",
@@ -493,19 +495,25 @@ def shap_waterfall_chart(model, X: pd.DataFrame, case_idx: int = 0) -> go.Figure
 
     sv_flat = sv[0]
     n = min(len(feat_names), len(sv_flat))
-    feat_labels = _apply_labels(feat_names[:n])
-    contributions = pd.Series(sv_flat[:n], index=feat_labels)
+    # Indexa pelos nomes ÚNICOS de feature (evita expansão cartesiana quando OHE
+    # gera rótulos repetidos); o rótulo amigável só entra na hora de plotar.
+    contributions = pd.Series(sv_flat[:n], index=feat_names[:n])
     top = contributions.abs().nlargest(15).index
     contributions = contributions[top].sort_values()
 
     colors = ["#ef4444" if v > 0 else "#3b82f6" for v in contributions.values]
-    final = float(base) + float(sv_flat.sum())
+    # Probabilidade prevista real (TreeExplainer opera em log-odds para boosters)
+    try:
+        prob = float(model.predict_proba(row)[0, 1])
+        _score_txt = f"prob. predita: {prob:.3f}"
+    except Exception:
+        _score_txt = f"log-odds: {float(base) + float(sv_flat.sum()):.3f}"
     fig = go.Figure(go.Bar(
-        x=contributions.values, y=contributions.index,
+        x=contributions.values, y=_apply_labels(list(contributions.index)),
         orientation="h", marker_color=colors,
     ))
     fig.update_layout(
-        title=f"SHAP Individual — Caso #{case_idx} (score predito: {final:.3f})",
+        title=f"SHAP Individual — Caso #{case_idx} ({_score_txt})",
         xaxis_title="Contribuição SHAP (vermelho = aumenta risco, azul = reduz)",
         height=max(320, len(contributions) * 26),
         margin=dict(l=170, t=50),

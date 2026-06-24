@@ -222,28 +222,28 @@ target_col = st.selectbox(
     help="Selecione a coluna que representa o desfecho binário a predizer.",
 )
 
-# Validate binary
+# Validate binary: precisa resultar EXATAMENTE em {0,1} após coerção de 0/1/True/False
 _tvals = df_raw[target_col].dropna().unique()
-_coercible = all(str(v) in {"0", "1", "0.0", "1.0", "True", "False"} for v in _tvals)
-if not _coercible and len(_tvals) > 2:
+_map = {"0": 0, "1": 1, "0.0": 0, "1.0": 1, "True": 1, "False": 0, "true": 1, "false": 0}
+_y_preview = df_raw[target_col].astype(str).str.strip().map(_map)
+if (_y_preview.dropna().empty or _y_preview.isna().any()
+        or not set(_y_preview.dropna().unique()).issubset({0, 1})):
     st.warning(
-        f"**{target_col}** tem {len(_tvals)} valores únicos. "
-        "Selecione uma coluna com apenas 2 valores (0/1)."
+        f"**{target_col}** não é um desfecho binário 0/1 "
+        f"(valores: {', '.join(map(str, list(_tvals)[:6]))}"
+        f"{'…' if len(_tvals) > 6 else ''}). "
+        "Selecione uma coluna com apenas 0 e 1, ou recodifique antes (ex.: 1/2 → 0/1)."
     )
     st.stop()
 
-_y_preview = df_raw[target_col].astype(str).map({"0": 0, "1": 1, "0.0": 0, "1.0": 1, "True": 1, "False": 0}).fillna(df_raw[target_col])
-try:
-    _y_preview = _y_preview.astype(int)
-    _pos_rate = _y_preview.mean()
-    _tc1, _tc2, _tc3 = st.columns(3)
-    _tc1.metric("Total", f"{len(_y_preview):,}")
-    _tc2.metric("Positivos (1)", f"{_y_preview.sum():,} ({_pos_rate:.1%})")
-    _tc3.metric("Negativos (0)", f"{(~_y_preview.astype(bool)).sum():,} ({1-_pos_rate:.1%})")
-    if _pos_rate < 0.03 or _pos_rate > 0.97:
-        st.warning("Prevalência muito extrema. Considere balanceamento na etapa de configuração do modelo.")
-except Exception:
-    st.warning("Não foi possível validar a distribuição do desfecho.")
+_y_preview = _y_preview.astype(int)
+_pos_rate = _y_preview.mean()
+_tc1, _tc2, _tc3 = st.columns(3)
+_tc1.metric("Total", f"{len(_y_preview):,}")
+_tc2.metric("Positivos (1)", f"{_y_preview.sum():,} ({_pos_rate:.1%})")
+_tc3.metric("Negativos (0)", f"{(len(_y_preview) - int(_y_preview.sum())):,} ({1 - _pos_rate:.1%})")
+if _pos_rate < 0.03 or _pos_rate > 0.97:
+    st.warning("Prevalência muito extrema. Considere balanceamento na etapa de configuração do modelo.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STEP 4 — FEATURES (apenas DIY ou se desfecho foi alterado)

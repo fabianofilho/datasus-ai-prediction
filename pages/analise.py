@@ -660,6 +660,7 @@ def render_sidebar() -> None:
             if st.button("Editar", key="sb_chg_model_config"):
                 for k in ["model_config", "model_results", "calib_results", "comparison_results"]:
                     ss[k] = _defaults[k]
+                ss.pop("mc_results", None)  # multicalibração obsoleta após reconfigurar
                 st.rerun()
 
         # Step 5: Treinamento
@@ -679,6 +680,7 @@ def render_sidebar() -> None:
             if st.button("Retreinar", key="sb_chg_model"):
                 for k in ["model_results", "calib_results", "comparison_results"]:
                     ss[k] = _defaults[k]
+                ss.pop("mc_results", None)  # multicalibração obsoleta após retreinar
                 st.rerun()
 
 
@@ -2599,6 +2601,9 @@ if not ss["model_results"]:
                                 "f1": float(_f1(y_te, _te_preds, zero_division=0)),
                                 "precision": float(_prec(y_te, _te_preds, zero_division=0)),
                                 "recall": float(_rec(y_te, _te_preds, zero_division=0)),
+                                "specificity": float(
+                                    ((_te_preds == 0) & (_np.asarray(y_te) == 0)).sum()
+                                    / max(int((_np.asarray(y_te) == 0).sum()), 1)),
                                 "brier": float(_brier(y_te, _te_probs)),
                                 "fold": 1,
                             }
@@ -2612,6 +2617,7 @@ if not ss["model_results"]:
                                 "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
                                 "oof_probs": _te_probs,
                                 "y_eval": y_te.values,
+                                "test_index": list(X_te.index),
                                 "feature_importances": _imp,
                                 "model": _final,
                                 "X_columns": X_train.columns.tolist(),
@@ -2638,6 +2644,9 @@ if not ss["model_results"]:
                                 "f1": float(_f1(y_te, _te_preds, zero_division=0)),
                                 "precision": float(_prec(y_te, _te_preds, zero_division=0)),
                                 "recall": float(_rec(y_te, _te_preds, zero_division=0)),
+                                "specificity": float(
+                                    ((_te_preds == 0) & (_np.asarray(y_te) == 0)).sum()
+                                    / max(int((_np.asarray(y_te) == 0).sum()), 1)),
                                 "brier": float(_brier(y_te, _te_probs)),
                                 "fold": 1,
                             }
@@ -2651,6 +2660,7 @@ if not ss["model_results"]:
                                 "mean_metrics": {k: v for k, v in _m.items() if k != "fold"},
                                 "oof_probs": _te_probs,
                                 "y_eval": y_te.values,
+                                "test_index": list(X_te.index),
                                 "feature_importances": _imp,
                                 "model": _final,
                                 "X_columns": X_train.columns.tolist(),
@@ -2810,11 +2820,14 @@ with col_exp2:
 
 X_res = X[results["X_columns"]]
 oof = results["oof_probs"]
-# Holdout/Temporal: usar apenas os labels do conjunto de teste
+# Holdout/Temporal: oof/y_eval têm o tamanho do conjunto de TESTE; guardamos os
+# índices reais desse conjunto para alinhar subgrupos (equidade, multicalibração).
+_eval_index = results.get("test_index")
 if results.get("validation_strategy") in ("holdout", "temporal"):
     y_arr = results["y_eval"]
 else:
     y_arr = y.values
+    _eval_index = None  # em CV o oof é full-length, alinha com a coorte inteira
 
 if "curvas" in ss.get("active_sections", set()):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
@@ -3007,7 +3020,9 @@ if "equidade" in ss.get("active_sections", set()):
         else:
             st.info("Nenhuma variável demográfica encontrada na coorte (SEXO / CS_SEXO, RACA_COR / CS_RACA, UF_SIGLA, age_group).")
     if _fairness_cols:
-        _groups = cohort.loc[X_res.index, group_col].reset_index(drop=True)
+        # alinha os grupos ao conjunto avaliado (teste em holdout/temporal; coorte toda em CV)
+        _eq_idx = _eval_index if _eval_index is not None else X_res.index
+        _groups = cohort.loc[_eq_idx, group_col].reset_index(drop=True)
         sub_df = ev.subgroup_metrics_table(y_arr, oof, _groups)
         if not sub_df.empty:
             # ── Paleta de cores por subgrupo ─────────────────────────────
@@ -3356,7 +3371,10 @@ if "multicalibracao" in ss.get("active_sections", set()):
         _sg = _mc_sg_col
         if _mc_apply and _sg and _sg != "(nenhum)" and _sg in X_res.columns:
             st.markdown(f"**Calibração por subgrupo: `{_sg}`**")
-            _sg_vals = X_res[_sg].value_counts().head(8).index.tolist()
+            # alinha X ao conjunto avaliado (teste em holdout/temporal) p/ as máscaras
+            # baterem com _y_mc/_oof_mc/_mc_cp; em CV usa a coorte inteira
+            _X_sg = X_res.loc[_eval_index] if _eval_index is not None else X_res
+            _sg_vals = _X_sg[_sg].value_counts().head(8).index.tolist()
 
             _fig_sg = _go_mc.Figure()
             _fig_sg.add_trace(_go_mc.Scatter(x=[0, 1], y=[0, 1], mode="lines", name="Perfeito",
@@ -3364,7 +3382,7 @@ if "multicalibracao" in ss.get("active_sections", set()):
             _sg_palette = ["#3b82f6", "#ef4444", "#f97316", "#a855f7", "#14b8a6", "#eab308", "#ec4899", "#64748b"]
             _ece_tbl = []
             for _ci_sg, _gv in enumerate(_sg_vals):
-                _gm = (X_res[_sg] == _gv).values
+                _gm = (_X_sg[_sg] == _gv).values
                 if _gm.sum() < 20:
                     continue
                 _yg = _y_mc[_gm]; _rg = _oof_mc[_gm]; _cg = _mc_cp[_gm]
