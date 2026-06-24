@@ -1548,12 +1548,22 @@ if not ss.get("model_config"):
     st.markdown('<hr class="ds-divider">', unsafe_allow_html=True)
 
     # ── Algoritmos ────────────────────────────────────────────────────────────
+    from core.models.pipeline import TABPFN_AVAILABLE as _TABPFN_OK
+    # TabPFN só entra na lista quando realmente instalado neste ambiente
+    _algo_options = [k for k in ALGORITHMS.keys()
+                     if ALGORITHMS[k] != "tabpfn" or _TABPFN_OK]
     algo_labels = st.multiselect(
         "Algoritmos",
-        list(ALGORITHMS.keys()),
+        _algo_options,
         default=["Random Forest"],
         help="Selecione um ou mais algoritmos para treinar e comparar.",
     )
+    if not _TABPFN_OK:
+        st.caption(
+            "ℹ️ **TabPFN** não aparece na lista: apesar de ser estado da arte para dados "
+            "tabulares, ele não está instalado neste ambiente (requer torch, ~1 GB). "
+            "Recomendo testá-lo em um ambiente com mais recursos (instalação dedicada ou GPU)."
+        )
     if not algo_labels:
         st.warning("Selecione pelo menos um algoritmo.")
         st.stop()
@@ -1567,15 +1577,9 @@ if not ss.get("model_config"):
             "Considere reduzir o número de trials ou usar LightGBM para treinamentos mais rápidos."
         )
 
-    # Aviso TabPFN sobre disponibilidade e limite de amostras
+    # Aviso TabPFN sobre limite de amostras (só aparece quando instalado e selecionado)
     if "tabpfn" in algos:
-        from core.models.pipeline import TABPFN_MAX_TRAIN_SAMPLES, TABPFN_WARN_TRAIN_SAMPLES, TABPFN_AVAILABLE
-        if not TABPFN_AVAILABLE:
-            st.error(
-                "**TabPFN não está instalado** neste ambiente. "
-                "Instale com `pip install tabpfn` (requer torch ~1 GB) ou remova TabPFN da seleção."
-            )
-
+        from core.models.pipeline import TABPFN_MAX_TRAIN_SAMPLES, TABPFN_WARN_TRAIN_SAMPLES
         _n_total = builder.class_balance(cohort)["total"]
         if _n_total > TABPFN_MAX_TRAIN_SAMPLES:
             st.error(
@@ -2217,6 +2221,64 @@ if not ss["model_results"]:
             height=480, margin=dict(t=50, b=44, l=70, r=60), showlegend=False)
         return fig
 
+    def _resid_fig(state):
+        """Boosting: o resíduo (y − p) de cada paciente encolhendo a cada árvore.
+        Cada ponto é um paciente; a linha cinza vai da previsão p até o alvo (0 ou 1)
+        e é o resíduo. Classe 1 migra para a direita, classe 0 para a esquerda."""
+        import plotly.graph_objects as _go
+        probs = state.get("probs", []); ys = state.get("y", [])
+        n = len(probs)
+        idx1 = [k for k in range(n) if ys[k] == 1]
+        idx0 = [k for k in range(n) if ys[k] == 0]
+        ymap = {}
+        for r, k in enumerate(idx1):
+            ymap[k] = 0.18 + 0.80 * (r / max(len(idx1) - 1, 1))
+        for r, k in enumerate(idx0):
+            ymap[k] = -0.18 - 0.80 * (r / max(len(idx0) - 1, 1))
+
+        fig = _go.Figure()
+        # resíduo de cada paciente: linha de p até o alvo (0 ou 1)
+        segx, segy = [], []
+        for k in range(n):
+            target = 1.0 if ys[k] == 1 else 0.0
+            segx += [probs[k], target, None]; segy += [ymap[k], ymap[k], None]
+        fig.add_trace(_go.Scatter(x=segx, y=segy, mode="lines", hoverinfo="skip",
+            showlegend=False, line=dict(color="rgba(120,120,120,0.30)", width=1)))
+        # limiar de decisão
+        fig.add_shape(type="line", x0=0.5, x1=0.5, y0=-1.05, y1=1.05,
+            line=dict(color="rgba(0,0,0,0.25)", width=1, dash="dot"))
+        # pontos por classe (posição estável; só o x muda entre rounds)
+        for cls, col, nm, band in [(1, "#e11d48", "classe 1 (evento)", idx1),
+                                   (0, "#1a56db", "classe 0", idx0)]:
+            fig.add_trace(_go.Scatter(
+                x=[probs[k] for k in band], y=[ymap[k] for k in band],
+                mode="markers", name=nm,
+                marker=dict(size=8, color=col, line=dict(color="#fff", width=0.5)),
+                hovertext=[f"p = {probs[k]:.2f} · resíduo = "
+                           f"{abs((1 if ys[k] == 1 else 0) - probs[k]):.2f}" for k in band],
+                hoverinfo="text"))
+        fig.add_annotation(x=1.0, y=1.02, text="alvo da classe 1 →", showarrow=False,
+            xanchor="right", font=dict(size=10, color="#e11d48"))
+        fig.add_annotation(x=0.0, y=-1.02, text="← alvo da classe 0", showarrow=False,
+            xanchor="left", font=dict(size=10, color="#1a56db"))
+        R = state.get("mean_abs", 0.0)
+        fig.add_annotation(
+            x=0.5, y=-1.28, xref="x", yref="y", showarrow=False,
+            font=dict(size=10, color="#6b7280"),
+            text=("a linha cinza de cada paciente é o resíduo (distância até o alvo); "
+                  "cada árvore nova encolhe esse resíduo"))
+        fig.update_layout(
+            title=(f"Boosting ({state.get('lib','')}) — árvore {state.get('round','')}/"
+                   f"{state.get('total','')} · resíduo médio |y − p| = {R:.3f}"),
+            xaxis=dict(title="previsão p (probabilidade do evento)", range=[-0.05, 1.05],
+                       tickformat=".1f", gridcolor="rgba(0,0,0,0.06)", zeroline=False),
+            yaxis=dict(visible=False, range=[-1.45, 1.2]),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            height=470, margin=dict(t=50, b=30, l=20, r=20),
+            legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1.0,
+                        font=dict(size=11)))
+        return fig
+
     _struct_ph = st.empty()
     _lc_chart_ph = st.empty()
     _lc_status_ph = st.empty()
@@ -2351,7 +2413,7 @@ if not ss["model_results"]:
                     _struct_ph.caption(f"Preparando visualização de **{_lc_lbl}**…")
                 _start_msg = {
                     "epoch":    "Treinando rede neural — época a época…",
-                    "boosting": "Boosting — adicionando árvores…",
+                    "boosting": "Boosting — resíduo encolhendo a cada árvore…",
                     "volume":   "Calculando curva de aprendizado…",
                 }[_store["mode"]]
                 _ms_st(_mstatus[_lc_lbl], "bar_chart", _start_msg)
@@ -2366,12 +2428,15 @@ if not ss["model_results"]:
                     _st["train"].append(ta)
                     _st["val"].append(va)
                     _st["labels"].append(label)
-                    # Estrutura aprendendo: rede (neurônios + backprop) ou árvore
+                    # Estrutura aprendendo: rede (neurônios) ou resíduo do boosting
                     if state is not None:
                         try:
-                            if state.get("kind") == "net":
+                            _k = state.get("kind")
+                            if _k == "net":
                                 _struct_ph.plotly_chart(_net_fig(state), use_container_width=True)
-                            elif state.get("kind") == "tree":
+                            elif _k == "resid":
+                                _struct_ph.plotly_chart(_resid_fig(state), use_container_width=True)
+                            elif _k == "tree":
                                 _struct_ph.plotly_chart(_tree_fig(state), use_container_width=True)
                         except Exception:
                             pass
@@ -2382,18 +2447,25 @@ if not ss["model_results"]:
                     if _delay:
                         _time.sleep(_delay)  # ritmo da animação (não afeta o modelo)
 
-                # Forward pass (só rede neural): exemplos reais atravessando a rede
-                def _fwd_cb(done, total, state, _lbl=_lc_lbl, _delay=_anim_delay):
+                # Animação secundária: rede → forward pass; boosting → árvores do comitê
+                def _extra_cb(done, total, state, _lbl=_lc_lbl, _delay=_anim_delay):
                     try:
-                        _struct_ph.plotly_chart(_forward_fig(state), use_container_width=True)
+                        _k = state.get("kind")
+                        if _k == "forward":
+                            _struct_ph.plotly_chart(_forward_fig(state), use_container_width=True)
+                            _msg = (f"dado atravessando a rede (exemplo "
+                                    f"{state.get('sample')}/{state.get('n_samples')})")
+                        elif _k == "tree":
+                            _struct_ph.plotly_chart(_tree_fig(state), use_container_width=True)
+                            _msg = (f"exemplo de árvore do comitê "
+                                    f"(árvore {state.get('round')}/{state.get('total')})")
+                        else:
+                            _msg = ""
+                        _ms_dt(_mdetail[_lc_lbl], _msg)
+                        _lc_status_ph.caption(f"{_lbl} — {_msg}")
                     except Exception:
                         pass
-                    _ms_dt(_mdetail[_lc_lbl],
-                           f"Dado atravessando a rede — exemplo {state.get('sample')}/{state.get('n_samples')}")
-                    _lc_status_ph.caption(
-                        f"{_lbl} — dado atravessando a rede (exemplo "
-                        f"{state.get('sample')}/{state.get('n_samples')})")
-                    _time.sleep(max(_delay, 0.12))  # forward pass sempre acompanhável
+                    _time.sleep(max(_delay, 0.12))  # animação secundária sempre acompanhável
 
                 if _training_curve is None:
                     _ms_st(_mstatus[_lc_lbl], "check", "Treino seguindo (sem animação)")
@@ -2405,12 +2477,15 @@ if not ss["model_results"]:
                         params=dict(params_per_algo.get(_lc_algo, {})),
                         treatment=treatment,
                         progress_callback=_lc_cb,
-                        forward_callback=(_fwd_cb if _store["mode"] == "epoch" else None),
+                        extra_callback=_extra_cb,
                         forward_samples=_fwd_n,
                     )
                     if _store["mode"] == "epoch":
                         _ms_st(_mstatus[_lc_lbl], "check",
                                "Rede treinada + forward pass concluído")
+                    elif _store["mode"] == "boosting":
+                        _ms_st(_mstatus[_lc_lbl], "check",
+                               "Resíduo encolhido + árvores do comitê")
                 except Exception as _lc_err:
                     _ms_dt(_mdetail[_lc_lbl], f"Curva indisponível — {_lc_err}")
 
