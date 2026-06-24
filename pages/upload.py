@@ -153,7 +153,10 @@ try:
             df_raw = pd.read_parquet(uploaded_file)
         else:
             try:
-                df_raw = pd.read_csv(uploaded_file, sep=None, engine="python", low_memory=False)
+                # sep=None deixa o engine python detectar o delimitador (vírgula ou ;).
+                # NÃO passar low_memory aqui: é incompatível com engine="python" e fazia
+                # esta leitura sempre falhar, caindo no fallback ';' (CSV lido como 1 coluna).
+                df_raw = pd.read_csv(uploaded_file, sep=None, engine="python")
             except Exception:
                 uploaded_file.seek(0)
                 df_raw = pd.read_csv(uploaded_file, sep=";", low_memory=False)
