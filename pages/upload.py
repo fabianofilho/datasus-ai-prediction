@@ -44,6 +44,9 @@ _CSS = (
     "div[data-testid='stButton']>button[data-testid='baseButton-primary']:hover{"
     "background-color:#1a2b66!important;border-color:#1a2b66!important}"
     "div[data-testid='stButton']>button{border-radius:6px!important;font-size:.82rem!important}"
+    "[data-baseweb='tag']{background:#223886!important;border:none!important;border-radius:4px!important}"
+    "[data-baseweb='tag'],[data-baseweb='tag'] *{color:#fff!important}"
+    "[data-baseweb='tag'] svg{fill:#fff!important;color:#fff!important}"
 )
 
 _stc.html(

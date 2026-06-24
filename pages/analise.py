@@ -202,7 +202,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 }
 .ds-topbar-logo:hover { color: #9ec83b !important; }
 .ds-topbar-badge {
-  background: var(--fg); color: #fff;
+  background: var(--accent); color: var(--primary);
   font-size: 0.62rem; font-weight: 700;
   padding: 2px 7px; border-radius: 4px;
   letter-spacing: .06em; text-transform: uppercase;
@@ -227,7 +227,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   font-size: 0.7rem; font-weight: 500; white-space: nowrap; flex-shrink: 0;
 }
 .ds-step-done   { color: var(--muted); }
-.ds-step-active { background: var(--fg); color: #fff; font-weight: 600; }
+.ds-step-active { background: var(--primary); color: #fff; font-weight: 600; }
 .ds-step-locked { color: #d1d5db; }
 .ds-step-optional { color: #d1d5db; }
 .ds-step-arrow  { color: #d1d5db; font-size: 0.75rem; padding: 0; flex-shrink: 0; }
@@ -283,7 +283,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   padding: 6px 4px !important; display: flex !important; align-items: center !important;
 }
 .stButton > button[kind="primary"] {
-  background: var(--fg) !important; border: 1px solid var(--fg) !important;
+  background: var(--primary) !important; border: 1px solid var(--primary) !important;
   color: #fff !important; font-weight: 600 !important; box-shadow: none !important;
 }
 .stButton > button[kind="primary"]:hover {
@@ -311,11 +311,11 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   border-radius: var(--radius) !important; box-shadow: none !important;
 }
 [data-baseweb="tag"] {
-  background: var(--fg) !important; border: none !important;
+  background: var(--primary) !important; border: none !important;
   border-radius: 4px !important; padding: 0 8px !important;
 }
-[data-baseweb="tag"] span { color: #fff !important; font-size: 0.78rem !important; }
-[data-baseweb="tag"] [role="button"] svg { fill: rgba(255,255,255,.7) !important; }
+[data-baseweb="tag"], [data-baseweb="tag"] * { color: #fff !important; font-size: 0.78rem !important; }
+[data-baseweb="tag"] svg { fill: #fff !important; color: #fff !important; }
 
 /* ── Labels ─────────────────────────────────────────────────── */
 [data-testid="stMultiSelect"] label,
@@ -1148,7 +1148,7 @@ if not ss.get("feature_config"):
         st.markdown(
             f"<div style='margin:8px 0 4px'>"
             f"<div style='display:flex;height:10px;border-radius:5px;overflow:hidden'>"
-            f"<div style='width:{_bar_pos/60*100:.1f}%;background:#111827'></div>"
+            f"<div style='width:{_bar_pos/60*100:.1f}%;background:#223886'></div>"
             f"<div style='width:{_bar_neg/60*100:.1f}%;background:#e5e7eb'></div>"
             f"</div>"
             f"<div style='display:flex;justify-content:space-between;font-size:.75rem;color:#6b7280;margin-top:3px'>"
