@@ -153,8 +153,9 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 [data-testid="stSidebar"] > div:first-child {
   padding: 0 0.75rem 0.5rem !important;
   height: 100% !important;
-  overflow-y: hidden !important;
+  overflow-y: auto !important;   /* rola quando os passos passam da altura */
   overflow-x: hidden !important;
+  scrollbar-width: thin;
 }
 [data-testid="stSidebar"] > div:first-child > div:first-child,
 [data-testid="stSidebarUserContent"] {
