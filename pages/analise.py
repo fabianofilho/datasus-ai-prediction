@@ -2140,10 +2140,25 @@ if not ss["model_results"]:
                             line=dict(color="#111827", width=2)),
                 hoverinfo="skip", showlegend=False))
 
+        # Rótulos de entrada: valor real do paciente quando disponível, senão z-score (sufixo z)
         in_names = state.get("in_names", []); in_vals = state.get("in_values", [])
+        in_real = state.get("in_real", [])
+
+        def _fmt_in(v):
+            if isinstance(v, bool):
+                return "sim" if v else "não"
+            if isinstance(v, (int, float)):
+                return f"{v:g}"
+            return str(v)[:10]
         for i, nm in enumerate(in_names):
             x0, y0 = pos[0][i]
-            txt = f"{str(nm)[:12]} = {in_vals[i]:+.1f}" if i < len(in_vals) else str(nm)[:12]
+            rv = in_real[i] if i < len(in_real) else None
+            if rv is not None and not (isinstance(rv, float) and rv != rv):  # ignora NaN
+                txt = f"{str(nm)[:12]} = {_fmt_in(rv)}"
+            elif i < len(in_vals):
+                txt = f"{str(nm)[:12]} = {in_vals[i]:+.1f}z"
+            else:
+                txt = str(nm)[:12]
             fig.add_annotation(x=x0 - 0.07, y=y0, text=txt, showarrow=False, xanchor="right",
                 font=dict(size=9, color="#6b7280"))
 
@@ -2188,7 +2203,7 @@ if not ss["model_results"]:
             text=("● cor/tamanho = ativação do neurônio (ReLU) &nbsp;·&nbsp; "
                   "<span style='color:#d97706'>—</span> dourado = sinal passando<br>"
                   "○ anel = neurônio mais ativo da camada &nbsp;·&nbsp; "
-                  "entrada padronizada (z-score)"))
+                  "entrada = valor do paciente (sufixo <i>z</i> = padronizado)"))
 
         cls = "positivo" if yt == 1 else "negativo"
         fig.update_layout(
@@ -2198,7 +2213,7 @@ if not ss["model_results"]:
             xaxis=dict(visible=False, range=[-0.98, (L - 1) + 1.05]),
             yaxis=dict(visible=False, range=[-ytop - 1.0, ytop + 0.6]),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            height=480, margin=dict(t=50, b=44, l=20, r=50), showlegend=False)
+            height=480, margin=dict(t=50, b=44, l=70, r=60), showlegend=False)
         return fig
 
     _struct_ph = st.empty()
@@ -2216,6 +2231,13 @@ if not ss["model_results"]:
              "sem precisar aumentar a amostra.",
     )
     _anim_delay = {"Rápida": 0.0, "Normal": 0.10, "Lenta (didática)": 0.28}[_anim_speed]
+
+    if "mlp" in algos:
+        _fwd_n = st.slider(
+            "Exemplos no forward pass (rede neural)", 2, 8, 4,
+            help="Quantos pacientes reais atravessam a rede na animação do forward pass.")
+    else:
+        _fwd_n = 4
 
     _hpo_prefix = {
         "Optuna (automático)": "Optuna + ",
@@ -2383,6 +2405,7 @@ if not ss["model_results"]:
                         treatment=treatment,
                         progress_callback=_lc_cb,
                         forward_callback=(_fwd_cb if _store["mode"] == "epoch" else None),
+                        forward_samples=_fwd_n,
                     )
                     if _store["mode"] == "epoch":
                         _ms_st(_mstatus[_lc_lbl], "check",

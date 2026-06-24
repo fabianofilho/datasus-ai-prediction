@@ -847,7 +847,7 @@ def _net_caps(real_sizes):
     return caps
 
 
-def _mlp_forward_frames(clf, X_val, y_val, feat_names, n_samples=4):
+def _mlp_forward_frames(clf, X_val, y_val, feat_names, raw_X=None, n_samples=4):
     """Frames do forward pass: alguns exemplos reais atravessando a rede já treinada.
 
     Para cada exemplo, calcula as ativações camada a camada (entrada → ocultas →
@@ -879,6 +879,10 @@ def _mlp_forward_frames(clf, X_val, y_val, feat_names, n_samples=4):
     wmax = max(1e-9, max(float(np.abs(np.asarray(c)[:caps[li], :caps[li + 1]]).max())
                          for li, c in enumerate(coefs)))
 
+    # raw_X (DataFrame original, alinhado linha a linha com X_val) permite mostrar
+    # o valor real do paciente no neurônio de entrada, em vez do z-score.
+    raw_ok = hasattr(raw_X, "columns") and hasattr(raw_X, "iloc")
+
     X_val = np.asarray(X_val)
     y_val = np.asarray(y_val)
     probs = clf.predict_proba(X_val)[:, 1]
@@ -898,11 +902,21 @@ def _mlp_forward_frames(clf, X_val, y_val, feat_names, n_samples=4):
             a = f_out(z) if i == len(coefs) - 1 else f_hidden(z)
             acts.append(np.asarray(a))
         capped = [np.asarray(av).ravel()[:caps[li]].tolist() for li, av in enumerate(acts)]
+        in_real = []
+        for nm in in_names:
+            if raw_ok and nm in raw_X.columns:
+                try:
+                    in_real.append(raw_X.iloc[idx][nm])
+                except Exception:
+                    in_real.append(None)
+            else:
+                in_real.append(None)
         frames.append({
             "sample": si + 1, "n_samples": n_samples,
             "real_sizes": real_sizes, "caps": caps,
             "activations": capped, "weights": weights, "wmax": wmax,
             "in_names": in_names, "in_values": x.ravel()[:caps[0]].tolist(),
+            "in_real": in_real,
             "pred": float(np.asarray(acts[-1]).ravel()[0]), "y_true": int(y_val[idx]),
         })
     return frames
@@ -1075,7 +1089,8 @@ def training_curve(
         # ── Forward pass: exemplos reais atravessando a rede já treinada ──────
         if forward_callback is not None:
             try:
-                frames = _mlp_forward_frames(clf, Xv, y_val, feat_names, n_samples=forward_samples)
+                frames = _mlp_forward_frames(clf, Xv, y_val, feat_names,
+                                             raw_X=X_val, n_samples=forward_samples)
                 total_steps = sum(len(fr["activations"]) for fr in frames) or 1
                 done = 0
                 for fr in frames:
