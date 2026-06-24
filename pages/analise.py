@@ -2065,6 +2065,93 @@ if not ss["model_results"]:
         )
         return fig
 
+    def _forward_fig(state):
+        """Forward pass: um exemplo real atravessando a rede já treinada. Os neurônios
+        acendem conforme o sinal avança (camada ativa colorida pela ativação) e as
+        arestas que carregam o sinal até a camada ativa aparecem em dourado."""
+        import plotly.graph_objects as _go
+        sizes = state["caps"]; real = state["real_sizes"]; L = len(sizes)
+        acts = state["activations"]; W = state["weights"]
+        active = state.get("active_layer", L - 1)
+        pos = [[(float(li), (i - (c - 1) / 2.0)) for i in range(c)] for li, c in enumerate(sizes)]
+
+        fig = _go.Figure()
+        # 1) todas as conexões, bem fracas (a estrutura ao fundo)
+        gx, gy = [], []
+        for li, w in enumerate(W):
+            for i, row in enumerate(w):
+                x0, y0 = pos[li][i]
+                for jj in range(len(row)):
+                    x1, y1 = pos[li + 1][jj]
+                    gx += [x0, x1, None]; gy += [y0, y1, None]
+        fig.add_trace(_go.Scatter(x=gx, y=gy, mode="lines",
+            line=dict(color="rgba(0,0,0,0.05)", width=0.5), hoverinfo="skip", showlegend=False))
+
+        # 2) o sinal que chega à camada ativa: arestas |a_prev * peso| mais fortes
+        if 1 <= active < len(acts):
+            a_prev = acts[active - 1]; w = W[active - 1]
+            contrib = []
+            for i, row in enumerate(w):
+                ai = a_prev[i] if i < len(a_prev) else 0.0
+                for jj, wv in enumerate(row):
+                    contrib.append((abs(ai * wv), i, jj))
+            cmax = max((m for m, _, _ in contrib), default=0.0) or 1e-9
+            sx, sy = [], []
+            for mag, i, jj in contrib:
+                if mag / cmax < 0.25:
+                    continue
+                x0, y0 = pos[active - 1][i]; x1, y1 = pos[active][jj]
+                sx += [x0, x1, None]; sy += [y0, y1, None]
+            fig.add_trace(_go.Scatter(x=sx, y=sy, mode="lines", name="sinal",
+                line=dict(color="rgba(217,119,6,0.85)", width=1.6), hoverinfo="skip", showlegend=False))
+
+        # 3) neurônios: já percorridos acendem pela ativação; os demais ficam apagados
+        for li, c in enumerate(sizes):
+            av = acts[li] if li < len(acts) else [0.0] * c
+            amax = max((abs(v) for v in av), default=0.0) or 1e-9
+            xs = [pos[li][i][0] for i in range(c)]
+            ys = [pos[li][i][1] for i in range(c)]
+            if li <= active:
+                inten = [min(1.0, abs(av[i]) / amax) for i in range(c)]
+                fig.add_trace(_go.Scatter(x=xs, y=ys, mode="markers",
+                    marker=dict(size=[9 + 15 * t for t in inten], color=inten,
+                                colorscale="YlOrRd", cmin=0, cmax=1, showscale=False,
+                                line=dict(color="#fff", width=1)),
+                    hovertext=[f"ativação {av[i]:.2f}" for i in range(c)], hoverinfo="text",
+                    showlegend=False))
+            else:
+                fig.add_trace(_go.Scatter(x=xs, y=ys, mode="markers",
+                    marker=dict(size=9, color="rgba(150,150,150,0.30)",
+                                line=dict(color="#fff", width=1)),
+                    hoverinfo="skip", showlegend=False))
+
+        in_names = state.get("in_names", []); in_vals = state.get("in_values", [])
+        for i, nm in enumerate(in_names):
+            x0, y0 = pos[0][i]
+            txt = f"{str(nm)[:12]} = {in_vals[i]:.2f}" if i < len(in_vals) else str(nm)[:12]
+            fig.add_annotation(x=x0 - 0.07, y=y0, text=txt, showarrow=False, xanchor="right",
+                font=dict(size=9, color="#6b7280"))
+        ox, oy = pos[-1][0]
+        prob = state.get("pred", 0.0); yt = state.get("y_true")
+        ok = "✓" if (yt is not None and int(prob >= 0.5) == yt) else ("✗" if yt is not None else "")
+        fig.add_annotation(x=ox + 0.09, y=oy, text=f"saída {prob:.2f} {ok}", showarrow=False,
+            xanchor="left", font=dict(size=12, color="#111827"))
+
+        ytop = max((c - 1) / 2.0 for c in sizes) + 0.9
+        names = ["Entrada"] + [f"Oculta ({real[li]})" for li in range(1, L - 1)] + ["Saída"]
+        for li in range(L):
+            fig.add_annotation(x=float(li), y=ytop, text=names[li], showarrow=False,
+                font=dict(size=11, color="#374151"))
+        cls = "positivo" if yt == 1 else "negativo"
+        fig.update_layout(
+            title=(f"Dado atravessando a rede — exemplo {state.get('sample', '')}/"
+                   f"{state.get('n_samples', '')} · classe real: {cls} · saída {prob:.2f}"),
+            xaxis=dict(visible=False, range=[-0.98, (L - 1) + 0.98]),
+            yaxis=dict(visible=False, range=[-ytop - 0.6, ytop + 0.6]),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            height=440, margin=dict(t=48, b=30, l=20, r=40), showlegend=False)
+        return fig
+
     _struct_ph = st.empty()
     _lc_chart_ph = st.empty()
     _lc_status_ph = st.empty()
@@ -2223,6 +2310,19 @@ if not ss["model_results"]:
                     if _delay:
                         _time.sleep(_delay)  # ritmo da animação (não afeta o modelo)
 
+                # Forward pass (só rede neural): exemplos reais atravessando a rede
+                def _fwd_cb(done, total, state, _lbl=_lc_lbl, _delay=_anim_delay):
+                    try:
+                        _struct_ph.plotly_chart(_forward_fig(state), use_container_width=True)
+                    except Exception:
+                        pass
+                    _ms_dt(_mdetail[_lc_lbl],
+                           f"Dado atravessando a rede — exemplo {state.get('sample')}/{state.get('n_samples')}")
+                    _lc_status_ph.caption(
+                        f"{_lbl} — dado atravessando a rede (exemplo "
+                        f"{state.get('sample')}/{state.get('n_samples')})")
+                    _time.sleep(max(_delay, 0.12))  # forward pass sempre acompanhável
+
                 if _training_curve is None:
                     _ms_st(_mstatus[_lc_lbl], "check", "Treino seguindo (sem animação)")
                     continue
@@ -2233,7 +2333,11 @@ if not ss["model_results"]:
                         params=dict(params_per_algo.get(_lc_algo, {})),
                         treatment=treatment,
                         progress_callback=_lc_cb,
+                        forward_callback=(_fwd_cb if _store["mode"] == "epoch" else None),
                     )
+                    if _store["mode"] == "epoch":
+                        _ms_st(_mstatus[_lc_lbl], "check",
+                               "Rede treinada + forward pass concluído")
                 except Exception as _lc_err:
                     _ms_dt(_mdetail[_lc_lbl], f"Curva indisponível — {_lc_err}")
 

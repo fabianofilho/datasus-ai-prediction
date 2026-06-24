@@ -834,6 +834,80 @@ def _net_state(prev_coefs, coefs, feat_names, epoch: int) -> dict:
     }
 
 
+def _net_caps(real_sizes):
+    """Tamanhos exibidos por camada (mesma regra do _net_state)."""
+    caps = []
+    for li, s in enumerate(real_sizes):
+        if li == 0:
+            caps.append(min(s, _NET_MAX_IN))
+        elif li == len(real_sizes) - 1:
+            caps.append(s)
+        else:
+            caps.append(min(s, _NET_MAX_HID))
+    return caps
+
+
+def _mlp_forward_frames(clf, X_val, y_val, feat_names, n_samples=4):
+    """Frames do forward pass: alguns exemplos reais atravessando a rede já treinada.
+
+    Para cada exemplo, calcula as ativações camada a camada (entrada → ocultas →
+    saída) usando os pesos atuais. Devolve uma lista de dicts (um por exemplo) com
+    as ativações recortadas e normalizadas, valores de entrada, predição e rótulo.
+    """
+    coefs = clf.coefs_
+    intercepts = clf.intercepts_
+    act = getattr(clf, "activation", "relu")
+
+    def f_hidden(z):
+        if act == "tanh":
+            return np.tanh(z)
+        if act == "logistic":
+            return 1.0 / (1.0 + np.exp(-z))
+        if act == "identity":
+            return z
+        return np.maximum(0.0, z)  # relu (padrão)
+
+    def f_out(z):
+        return 1.0 / (1.0 + np.exp(-z))  # binário → logística
+
+    n_in = coefs[0].shape[0]
+    real_sizes = [n_in] + [c.shape[1] for c in coefs]
+    caps = _net_caps(real_sizes)
+    in_names = [_clean_feat(feat_names[i]) if i < len(feat_names) else f"x{i}"
+                for i in range(caps[0])]
+    weights = [np.asarray(c)[:caps[li], :caps[li + 1]].tolist() for li, c in enumerate(coefs)]
+    wmax = max(1e-9, max(float(np.abs(np.asarray(c)[:caps[li], :caps[li + 1]]).max())
+                         for li, c in enumerate(coefs)))
+
+    X_val = np.asarray(X_val)
+    y_val = np.asarray(y_val)
+    probs = clf.predict_proba(X_val)[:, 1]
+    order = np.argsort(probs)
+    n_samples = min(n_samples, len(order))
+    if n_samples <= 0:
+        return []
+    pick = [int(order[int(round(k))]) for k in np.linspace(0, len(order) - 1, n_samples)]
+
+    frames = []
+    for si, idx in enumerate(pick):
+        x = X_val[idx].astype(float)
+        acts = [x]
+        a = x
+        for i, (W, b) in enumerate(zip(coefs, intercepts)):
+            z = a @ W + b
+            a = f_out(z) if i == len(coefs) - 1 else f_hidden(z)
+            acts.append(np.asarray(a))
+        capped = [np.asarray(av).ravel()[:caps[li]].tolist() for li, av in enumerate(acts)]
+        frames.append({
+            "sample": si + 1, "n_samples": n_samples,
+            "real_sizes": real_sizes, "caps": caps,
+            "activations": capped, "weights": weights, "wmax": wmax,
+            "in_names": in_names, "in_values": x.ravel()[:caps[0]].tolist(),
+            "pred": float(np.asarray(acts[-1]).ravel()[0]), "y_true": int(y_val[idx]),
+        })
+    return frames
+
+
 def _extract_trees(algorithm, model, indices, feat_names) -> dict:
     """{tree_idx: [nós normalizados]} para os índices pedidos.
 
@@ -953,6 +1027,8 @@ def training_curve(
     treatment: dict | None = None,
     progress_callback=None,
     max_points: int = 40,
+    forward_callback=None,
+    forward_samples: int = 4,
 ) -> dict:
     """Trajetória de aprendizado passo a passo para visualização ao vivo.
 
@@ -963,6 +1039,10 @@ def training_curve(
       • rede neural → {"kind":"net", pesos/Δpesos por camada, ...}
       • boosting    → {"kind":"tree", estrutura da árvore recém-adicionada, ...}
       • volume      → None
+
+    Para rede neural, ao final, se forward_callback for dado, anima alguns exemplos
+    reais atravessando a rede já treinada (forward pass), chamando
+    forward_callback(done, total, state) com state {"kind":"forward", "active_layer", ...}.
     """
     params = params or {}
     y_tr = np.asarray(y_tr)
@@ -991,6 +1071,23 @@ def training_curve(
             prev_coefs = [c.copy() for c in clf.coefs_]
             if progress_callback:
                 progress_callback(ep, n_epochs, ep, f"Época {ep}/{n_epochs}", ta, va, state)
+
+        # ── Forward pass: exemplos reais atravessando a rede já treinada ──────
+        if forward_callback is not None:
+            try:
+                frames = _mlp_forward_frames(clf, Xv, y_val, feat_names, n_samples=forward_samples)
+                total_steps = sum(len(fr["activations"]) for fr in frames) or 1
+                done = 0
+                for fr in frames:
+                    for li in range(len(fr["activations"])):
+                        done += 1
+                        fwd = dict(fr)
+                        fwd["kind"] = "forward"
+                        fwd["active_layer"] = li
+                        forward_callback(done, total_steps, fwd)
+            except Exception:
+                pass
+
         return {"mode": "epoch", "x_label": "Época",
                 "steps": steps, "train": tr, "val": vl, "metric": "roc_auc"}
 
