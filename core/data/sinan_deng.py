@@ -60,25 +60,25 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     ]
     for col in bool_cols:
         if col in df.columns:
-            df[col] = (df[col].astype(str).str.strip() == "1").astype(int)
+            df[col] = (df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1").astype(int)
 
     # Hospitalization flag
     if "HOSPITALIZ" in df.columns:
-        df["hospitalizado"] = (df["HOSPITALIZ"].astype(str).str.strip() == "1").astype(int)
+        df["hospitalizado"] = (df["HOSPITALIZ"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1").astype(int)
 
     # Target derivations
     if "CLASSI_FIN" in df.columns:
-        classi = df["CLASSI_FIN"].astype(str).str.strip()
+        classi = df["CLASSI_FIN"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
         df["dengue_grave"] = classi.isin([CLASSI_ALARME, CLASSI_GRAVE]).astype(int)
         df["dengue_confirmado"] = classi.isin([CLASSI_DENGUE, CLASSI_ALARME, CLASSI_GRAVE]).astype(int)
 
     if "EVOLUCAO" in df.columns:
-        evolucao = df["EVOLUCAO"].astype(str).str.strip()
+        evolucao = df["EVOLUCAO"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
         df["obito_dengue"] = (evolucao == EVOLUCAO_OBITO_DENGUE).astype(int)
 
     # Identifiers
     if "CS_SEXO" in df.columns:
-        df["CS_SEXO"] = df["CS_SEXO"].astype(str).str.strip()
+        df["CS_SEXO"] = df["CS_SEXO"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
 
     return df
 

@@ -56,7 +56,8 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 
     if "GESTACAO" in df.columns:
         # GESTACAO: 1=<22w, 2=22-27, 3=28-31, 4=32-36, 5=37-41, 6=42+
-        df["preterm"] = df["GESTACAO"].astype(str).isin(["1", "2", "3", "4"]).astype(int)
+        _gest = df["GESTACAO"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+        df["preterm"] = _gest.isin(["1", "2", "3", "4"]).astype(int)
 
     # UF derivada dos 2 primeiros dígitos do código IBGE do município de residência
     _UF_MAP = {
@@ -74,6 +75,6 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     # Identifiers
     for col in ["CNS_MAE", "CPF_MAE", "CNS", "NOMEMAE"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().str.upper().replace("NAN", "")
+            df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.upper().replace("NAN", "")
 
     return df

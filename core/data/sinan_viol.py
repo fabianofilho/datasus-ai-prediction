@@ -58,7 +58,7 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     ]
     for col in bool_cols:
         if col in df.columns:
-            df[col] = (df[col].astype(str).str.strip() == "1").astype(int)
+            df[col] = (df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1").astype(int)
 
     # Target: consequência de suicídio ou violência autoprovocada
     suic = df.get("CONS_SUIC", pd.Series(0, index=df.index))
@@ -67,7 +67,7 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in ["CS_SEXO", "CS_RACA", "CS_ESCOL_N", "ORIENT_SEX", "IDENT_GEN"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
 
     return df
 
