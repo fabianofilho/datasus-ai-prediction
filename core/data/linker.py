@@ -26,8 +26,9 @@ def link_deterministic(
     """
     pairs = []
     for col in id_cols:
-        l_col = next((c for c in left.columns if col in c.upper()), None)
-        r_col = next((c for c in right.columns if col in c.upper()), None)
+        # match exato tem prioridade sobre substring (evita CNS_MAE no lugar de CNS)
+        l_col = col if col in left.columns else next((c for c in left.columns if col in c.upper()), None)
+        r_col = col if col in right.columns else next((c for c in right.columns if col in c.upper()), None)
         if l_col is None or r_col is None:
             continue
 
@@ -126,7 +127,9 @@ def link_probabilistic(
     matched[left_id] = left.loc[matched["left_idx"], left_id].values
     matched[right_id] = right.loc[matched["right_idx"], right_id].values
 
-    return matched[[left_id, right_id, "score"]].drop_duplicates(subset=[left_id])
+    # ordena por score desc antes de deduplicar: mantém o melhor pareamento por left_id
+    return (matched.sort_values("score", ascending=False)[[left_id, right_id, "score"]]
+            .drop_duplicates(subset=[left_id]))
 
 
 def link_sih_sim(

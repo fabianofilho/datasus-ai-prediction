@@ -195,6 +195,36 @@ def _class_weight_for_balancing(balancing: str) -> str | None:
     return "balanced" if balancing == "class_weight" else None
 
 
+def _safe_over_sampler(random_state: int = 42):
+    """SMOTE que ajusta k_neighbors ao tamanho da classe minoritária no fit.
+
+    O default k_neighbors=5 exige >=6 amostras minoritárias; em CV com desfecho
+    raro o fold de treino pode ter menos e o SMOTE quebra. Aqui o k é reduzido
+    dinamicamente (e o resampling é pulado se houver <=1 amostra minoritária).
+    """
+    from imblearn.over_sampling import SMOTE
+
+    class _SafeSMOTE(SMOTE):
+        def fit_resample(self, X, y):  # noqa: N803
+            _, counts = np.unique(np.asarray(y), return_counts=True)
+            n_min = int(counts.min()) if len(counts) else 0
+            if n_min <= 1:
+                return X, y  # nada a sintetizar com segurança
+            self.k_neighbors = max(1, min(5, n_min - 1))
+            return super().fit_resample(X, y)
+
+    return _SafeSMOTE(random_state=random_state)
+
+
+def _safe_combine_sampler(random_state: int = 42):
+    """SMOTETomek com o SMOTE interno auto-ajustável; cai para SMOTE se indisponível."""
+    try:
+        from imblearn.combine import SMOTETomek
+        return SMOTETomek(random_state=random_state, smote=_safe_over_sampler(random_state))
+    except ImportError:
+        return _safe_over_sampler(random_state)
+
+
 class SentinelReplacer(BaseEstimator, TransformerMixin):
     """Replace DATASUS sentinel values (e.g. 9, 99 = 'Ignorado') with NaN.
 
@@ -358,15 +388,9 @@ def build_pipeline(
         try:
             from imblearn.pipeline import Pipeline as ImbPipeline
             if do_smote_under:
-                try:
-                    from imblearn.combine import SMOTETomek
-                    steps.append(("resample", SMOTETomek(random_state=42)))
-                except ImportError:
-                    from imblearn.over_sampling import SMOTE
-                    steps.append(("resample", SMOTE(random_state=42)))
+                steps.append(("resample", _safe_combine_sampler()))
             else:
-                from imblearn.over_sampling import SMOTE
-                steps.append(("resample", SMOTE(random_state=42)))
+                steps.append(("resample", _safe_over_sampler()))
             steps.append(("model", _build_model(algorithm, params, cw)))
             return ImbPipeline(steps)
         except ImportError:
@@ -591,33 +615,59 @@ def calibrate_model(
     method: str = "sigmoid",
     cal_fraction: float = 0.25,
 ) -> dict:
-    """Post-hoc Platt/isotonic calibration using a held-out calibration set."""
+    """Calibração pós-hoc (Platt/isotônica) com avaliação honesta em held-out.
+
+    Para o Brier antes/depois não ser medido in-sample (o que dava ~0 porque o
+    modelo já tinha visto os dados), particionamos em 50% fit / 25% calibração /
+    25% avaliação: o modelo base é re-treinado só no fit (não vê cal nem eval), o
+    calibrador é ajustado no cal, e os Briers são medidos no eval, que nenhum dos
+    dois viu. Se a partição estratificada falhar (desfecho muito raro), cai para o
+    modo prefit sobre uma fração de calibração.
+    """
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.model_selection import train_test_split
+    from sklearn.base import clone
 
-    _, X_cal, _, y_cal = train_test_split(
-        X, y, test_size=cal_fraction, stratify=y, random_state=7
-    )
-
-    raw_probs = model.predict_proba(X_cal)[:, 1]
+    def _frozen_cal(est):
+        try:
+            from sklearn.frozen import FrozenEstimator
+            return CalibratedClassifierCV(estimator=FrozenEstimator(est), method=method)
+        except ImportError:
+            return CalibratedClassifierCV(estimator=est, cv="prefit", method=method)
 
     try:
-        from sklearn.frozen import FrozenEstimator
-        cal_clf = CalibratedClassifierCV(estimator=FrozenEstimator(model), method=method)
-    except ImportError:
-        cal_clf = CalibratedClassifierCV(estimator=model, cv="prefit", method=method)
-    cal_clf.fit(X_cal, y_cal)
-    cal_probs = cal_clf.predict_proba(X_cal)[:, 1]
+        # 50% fit (re-treina o base) · 25% calibração · 25% avaliação (held-out de ambos)
+        X_fit, X_tmp, y_fit, y_tmp = train_test_split(
+            X, y, test_size=0.5, stratify=y, random_state=7)
+        X_cal, X_eval, y_cal, y_eval = train_test_split(
+            X_tmp, y_tmp, test_size=0.5, stratify=y_tmp, random_state=7)
+        base = clone(model)
+        base.fit(X_fit, y_fit)
+        raw_probs = base.predict_proba(X_eval)[:, 1]
+        cal_clf = _frozen_cal(base)
+        cal_clf.fit(X_cal, y_cal)
+        cal_probs = cal_clf.predict_proba(X_eval)[:, 1]
+        y_out = y_eval
+    except Exception:
+        # Fallback robusto: calibra o modelo dado numa fração (sem re-treino).
+        # Avalia in-sample (menos honesto, mas não quebra com desfecho raríssimo).
+        _, X_cal, _, y_cal = train_test_split(
+            X, y, test_size=cal_fraction, stratify=y, random_state=7)
+        raw_probs = model.predict_proba(X_cal)[:, 1]
+        cal_clf = _frozen_cal(model)
+        cal_clf.fit(X_cal, y_cal)
+        cal_probs = cal_clf.predict_proba(X_cal)[:, 1]
+        y_out = y_cal
 
-    brier_before = brier_score_loss(y_cal, raw_probs)
-    brier_after  = brier_score_loss(y_cal, cal_probs)
+    brier_before = brier_score_loss(y_out, raw_probs)
+    brier_after  = brier_score_loss(y_out, cal_probs)
 
     return {
         "cal_model": cal_clf,
         "method": method,
         "raw_probs": raw_probs,
         "cal_probs": cal_probs,
-        "y_eval": y_cal.values,
+        "y_eval": np.asarray(y_out),
         "brier_before": float(brier_before),
         "brier_after":  float(brier_after),
         "brier_delta":  float(brier_before - brier_after),

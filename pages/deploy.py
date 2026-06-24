@@ -488,8 +488,17 @@ if not ss["deploy_show_result"]:
                 val = input_vals.get(col)
                 if col in num_cols:
                     row_data[col] = float(val) if val is not None else float("nan")
+                elif val is None or (isinstance(val, str) and val == "—"):
+                    row_data[col] = None
+                elif col in X_res:
+                    # reconverte para o dtype ORIGINAL da coluna (categórica numérica
+                    # como SEXO=1/2 voltaria como string e quebraria o encoding)
+                    try:
+                        row_data[col] = X_res[col].dropna().dtype.type(val)
+                    except Exception:
+                        row_data[col] = val
                 else:
-                    row_data[col] = str(val) if val is not None else None
+                    row_data[col] = str(val)
             input_df = pd.DataFrame([row_data], columns=feature_cols)
 
             prob = float(model.predict_proba(input_df)[0, 1])
