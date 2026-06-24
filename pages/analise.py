@@ -1974,9 +1974,14 @@ if not ss["model_results"]:
             xanchor="left", font=dict(size=10, color="#6b7280"))
 
         ytop = max((c - 1) / 2.0 for c in sizes) + 0.9
-        names = ["Entrada"] + [f"Oculta ({real[li]})" for li in range(1, L - 1)] + ["Saída"]
+
+        def _lname(li):
+            base = "Entrada" if li == 0 else ("Saída" if li == L - 1 else f"Oculta ({real[li]})")
+            if sizes[li] < real[li]:
+                base += f"<br><span style='font-size:9px;color:#9ca3af'>amostra de {sizes[li]}</span>"
+            return base
         for li in range(L):
-            fig.add_annotation(x=float(li), y=ytop, text=names[li], showarrow=False,
+            fig.add_annotation(x=float(li), y=ytop, text=_lname(li), showarrow=False,
                 font=dict(size=11, color="#374151"))
         for li, u in enumerate(state.get("updates", [])):
             fig.add_annotation(x=li + 0.5, y=-ytop, text=f"Δ {u:.2f}", showarrow=False,
@@ -2067,8 +2072,9 @@ if not ss["model_results"]:
 
     def _forward_fig(state):
         """Forward pass: um exemplo real atravessando a rede já treinada. Os neurônios
-        acendem conforme o sinal avança (camada ativa colorida pela ativação) e as
-        arestas que carregam o sinal até a camada ativa aparecem em dourado."""
+        acendem conforme o sinal avança (camada ativa colorida pela ativação), as
+        arestas que carregam o sinal aparecem em dourado e o neurônio que mais dispara
+        em cada camada ganha um anel. A saída mostra a probabilidade prevista."""
         import plotly.graph_objects as _go
         sizes = state["caps"]; real = state["real_sizes"]; L = len(sizes)
         acts = state["activations"]; W = state["weights"]
@@ -2103,9 +2109,11 @@ if not ss["model_results"]:
                 x0, y0 = pos[active - 1][i]; x1, y1 = pos[active][jj]
                 sx += [x0, x1, None]; sy += [y0, y1, None]
             fig.add_trace(_go.Scatter(x=sx, y=sy, mode="lines", name="sinal",
-                line=dict(color="rgba(217,119,6,0.85)", width=1.6), hoverinfo="skip", showlegend=False))
+                line=dict(color="rgba(217,119,6,0.85)", width=1.8), hoverinfo="skip", showlegend=False))
 
-        # 3) neurônios: já percorridos acendem pela ativação; os demais ficam apagados
+        # 3) neurônios: já percorridos acendem pela ativação; os demais ficam apagados.
+        #    O mais ativo de cada camada acesa ganha um anel destacado.
+        hx, hy = [], []  # halos do neurônio mais ativo por camada
         for li, c in enumerate(sizes):
             av = acts[li] if li < len(acts) else [0.0] * c
             amax = max((abs(v) for v in av), default=0.0) or 1e-9
@@ -2114,42 +2122,83 @@ if not ss["model_results"]:
             if li <= active:
                 inten = [min(1.0, abs(av[i]) / amax) for i in range(c)]
                 fig.add_trace(_go.Scatter(x=xs, y=ys, mode="markers",
-                    marker=dict(size=[9 + 15 * t for t in inten], color=inten,
+                    marker=dict(size=[10 + 16 * t for t in inten], color=inten,
                                 colorscale="YlOrRd", cmin=0, cmax=1, showscale=False,
                                 line=dict(color="#fff", width=1)),
                     hovertext=[f"ativação {av[i]:.2f}" for i in range(c)], hoverinfo="text",
                     showlegend=False))
+                _top = max(range(c), key=lambda k: abs(av[k])) if c else 0
+                hx.append(pos[li][_top][0]); hy.append(pos[li][_top][1])
             else:
                 fig.add_trace(_go.Scatter(x=xs, y=ys, mode="markers",
                     marker=dict(size=9, color="rgba(150,150,150,0.30)",
                                 line=dict(color="#fff", width=1)),
                     hoverinfo="skip", showlegend=False))
+        if hx:
+            fig.add_trace(_go.Scatter(x=hx, y=hy, mode="markers",
+                marker=dict(size=30, color="rgba(0,0,0,0)",
+                            line=dict(color="#111827", width=2)),
+                hoverinfo="skip", showlegend=False))
 
         in_names = state.get("in_names", []); in_vals = state.get("in_values", [])
         for i, nm in enumerate(in_names):
             x0, y0 = pos[0][i]
-            txt = f"{str(nm)[:12]} = {in_vals[i]:.2f}" if i < len(in_vals) else str(nm)[:12]
+            txt = f"{str(nm)[:12]} = {in_vals[i]:+.1f}" if i < len(in_vals) else str(nm)[:12]
             fig.add_annotation(x=x0 - 0.07, y=y0, text=txt, showarrow=False, xanchor="right",
                 font=dict(size=9, color="#6b7280"))
+
+        # Nó de saída: acende só quando o sinal chega (verde no acerto, vermelho no erro)
         ox, oy = pos[-1][0]
         prob = state.get("pred", 0.0); yt = state.get("y_true")
-        ok = "✓" if (yt is not None and int(prob >= 0.5) == yt) else ("✗" if yt is not None else "")
-        fig.add_annotation(x=ox + 0.09, y=oy, text=f"saída {prob:.2f} {ok}", showarrow=False,
-            xanchor="left", font=dict(size=12, color="#111827"))
+        reached = active >= L - 1
+        hit = (yt is not None and int(prob >= 0.5) == yt)
+        if reached:
+            out_color = "#059669" if hit else ("#e11d48" if yt is not None else "#1f2937")
+        else:
+            out_color = "rgba(150,150,150,0.30)"
+        fig.add_trace(_go.Scatter(x=[ox], y=[oy], mode="markers",
+            marker=dict(size=26, color=out_color, line=dict(color="#fff", width=2)),
+            hoverinfo="skip", showlegend=False))
+        if reached:
+            _mark = "✓ acertou" if hit else ("✗ errou" if yt is not None else "")
+            fig.add_annotation(x=ox + 0.10, y=oy,
+                text=f"<b>P = {prob:.2f}</b><br><span style='font-size:9px'>{_mark}</span>",
+                showarrow=False, xanchor="left", align="left", font=dict(size=12, color="#111827"))
 
-        ytop = max((c - 1) / 2.0 for c in sizes) + 0.9
-        names = ["Entrada"] + [f"Oculta ({real[li]})" for li in range(1, L - 1)] + ["Saída"]
+        # Rótulos de camada, com aviso de amostragem quando exibimos menos neurônios
+        def _lname(li):
+            if li == 0:
+                base = "Entrada"
+            elif li == L - 1:
+                base = "Saída"
+            else:
+                base = f"Oculta ({real[li]})"
+            if sizes[li] < real[li]:
+                base += f"<br><span style='font-size:9px;color:#9ca3af'>amostra de {sizes[li]}</span>"
+            return base
+        ytop = max((c - 1) / 2.0 for c in sizes) + 1.0
         for li in range(L):
-            fig.add_annotation(x=float(li), y=ytop, text=names[li], showarrow=False,
+            fig.add_annotation(x=float(li), y=ytop, text=_lname(li), showarrow=False,
                 font=dict(size=11, color="#374151"))
+
+        # Legenda didática (o que cada cor/forma significa) — duas linhas p/ não cortar
+        fig.add_annotation(
+            x=0.0, y=-ytop - 0.45, xref="x", yref="y", xanchor="left", showarrow=False,
+            align="left", font=dict(size=10, color="#6b7280"),
+            text=("● cor/tamanho = ativação do neurônio (ReLU) &nbsp;·&nbsp; "
+                  "<span style='color:#d97706'>—</span> dourado = sinal passando<br>"
+                  "○ anel = neurônio mais ativo da camada &nbsp;·&nbsp; "
+                  "entrada padronizada (z-score)"))
+
         cls = "positivo" if yt == 1 else "negativo"
         fig.update_layout(
             title=(f"Dado atravessando a rede — exemplo {state.get('sample', '')}/"
-                   f"{state.get('n_samples', '')} · classe real: {cls} · saída {prob:.2f}"),
-            xaxis=dict(visible=False, range=[-0.98, (L - 1) + 0.98]),
-            yaxis=dict(visible=False, range=[-ytop - 0.6, ytop + 0.6]),
+                   f"{state.get('n_samples', '')} · classe real: <b>{cls}</b> · "
+                   f"camada ativa: {(_lname(active).split('<')[0])}"),
+            xaxis=dict(visible=False, range=[-0.98, (L - 1) + 1.05]),
+            yaxis=dict(visible=False, range=[-ytop - 1.0, ytop + 0.6]),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            height=440, margin=dict(t=48, b=30, l=20, r=40), showlegend=False)
+            height=480, margin=dict(t=50, b=44, l=20, r=50), showlegend=False)
         return fig
 
     _struct_ph = st.empty()
