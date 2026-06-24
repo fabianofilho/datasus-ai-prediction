@@ -82,18 +82,20 @@ st.set_page_config(
 
 st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" />
 
 <style>
 /* ── Tokens — paleta preto/branco ────────────────────────────── */
 :root {
-  --primary:        #111827;
-  --primary-hover:  #374151;
-  --primary-light:  #f3f4f6;
-  --primary-ring:   rgba(17,24,39,.12);
+  --primary:        #223886;
+  --primary-hover:  #1a2b66;
+  --primary-light:  #eef1fb;
+  --primary-ring:   rgba(34,56,134,.15);
+  --accent:         #9ec83b;
   --bg:             #ffffff;
   --bg-page:        #ffffff;
-  --fg:             #111827;
-  --muted:          #6b7280;
+  --fg:             #0f1730;
+  --muted:          #4b5563;
   --border:         #e5e7eb;
   --done-bg:        #f9fafb;
   --done-border:    #e5e7eb;
@@ -103,6 +105,9 @@ st.markdown("""
   --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
   --shadow-md: 0 2px 8px rgba(0,0,0,.08);
 }
+h1,h2,h3,h4,h5,h6 { font-family:"Space Grotesk","Inter",sans-serif !important; letter-spacing:-.01em; }
+[data-testid="collapsedControl"],[data-testid="stSidebarCollapseButton"]{background:var(--primary)!important;border-right:1px solid var(--primary)!important;}
+[data-testid="collapsedControl"] svg,[data-testid="stSidebarCollapseButton"] svg{color:#fff!important;fill:#fff!important;}
 
 /* Material Symbols */
 .ms {
@@ -122,7 +127,7 @@ header, footer,
 /* ── Base ───────────────────────────────────────────────────── */
 html, body, .stApp, [data-testid="stAppViewContainer"] {
   background: var(--bg) !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif !important;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   color: var(--fg) !important;
 }
 
@@ -184,17 +189,18 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 /* ── Topbar ─────────────────────────────────────────────────── */
 .ds-topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-  height: var(--topbar-h); background: var(--bg);
-  border-bottom: 1px solid var(--border);
+  height: var(--topbar-h); background: var(--primary);
+  border-bottom: 3px solid var(--accent);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 48px 0 24px;
 }
 .ds-topbar-logo {
   display: flex; align-items: center; gap: 8px;
+  font-family: "Space Grotesk", "Inter", sans-serif !important; letter-spacing: .02em;
   font-size: 0.93rem; font-weight: 700;
-  color: #111827 !important; text-decoration: none !important;
+  color: #ffffff !important; text-decoration: none !important;
 }
-.ds-topbar-logo:hover { color: #374151 !important; }
+.ds-topbar-logo:hover { color: #9ec83b !important; }
 .ds-topbar-badge {
   background: var(--fg); color: #fff;
   font-size: 0.62rem; font-weight: 700;
@@ -1831,8 +1837,8 @@ if not ss["model_results"]:
     sample_n = total_n
 
     _LC_COLORS = [
-        "#1a56db", "#e11d48", "#059669", "#7c3aed",
-        "#d97706", "#0891b2", "#be185d", "#65a30d",
+        "#223886", "#9ec83b", "#e11d48", "#7c3aed",
+        "#d97706", "#0891b2", "#be185d", "#059669",
     ]
 
     _LC_TITLES = {

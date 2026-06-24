@@ -19,16 +19,18 @@ st.set_page_config(
 
 # ── CSS via JavaScript (bypasses Streamlit's markdown parser) ─────────────────
 _CSS = (
+    "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');"
+    "h1,h2,h3,h4,h5,h6{font-family:'Space Grotesk','Inter',sans-serif!important;letter-spacing:-.01em}"
     "header,footer,[data-testid='stSidebarNav'],[data-testid='stHeader'],"
     "[data-testid='stToolbar'],[data-testid='stDecoration'],#MainMenu{display:none!important}"
     "html,body,.stApp,[data-testid='stAppViewContainer'],[data-testid='stMain'],.main,.block-container{"
-    "background:#ffffff!important;font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif!important;"
-    "color:#111827!important}"
+    "background:#ffffff!important;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif!important;"
+    "color:#0f1730!important}"
     ".block-container{padding:2.5rem 3rem!important;max-width:1100px!important}"
     ".ms{font-family:'Material Symbols Outlined';font-style:normal;font-weight:normal;"
     "font-size:1rem;line-height:1;vertical-align:middle;display:inline-block;color:#111827}"
     ".ms-lg{font-size:1.4rem;margin-right:.25rem}"
-    ".up-title{font-size:1.3rem;font-weight:700;color:#111827!important;"
+    ".up-title{font-family:'Space Grotesk','Inter',sans-serif;font-size:1.3rem;font-weight:700;color:#223886!important;"
     "display:flex;align-items:center;gap:.35rem;margin-bottom:.1rem}"
     ".up-sub{font-size:.85rem;color:#6b7280!important;margin-bottom:1.25rem}"
     ".up-step{font-size:.66rem;font-weight:700;color:#9ca3af!important;text-transform:uppercase;"
@@ -36,10 +38,11 @@ _CSS = (
     ".up-info{background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;"
     "padding:.55rem .85rem;font-size:.8rem;color:#374151;margin-bottom:.65rem;line-height:1.5}"
     "div[data-testid='stButton']>button[data-testid='baseButton-primary']{"
-    "background-color:#111827!important;color:#ffffff!important;border:1px solid #111827!important;"
+    "background-color:#223886!important;color:#ffffff!important;border:1px solid #223886!important;"
+    "border-bottom:3px solid #9ec83b!important;"
     "border-radius:6px!important;font-size:.82rem!important;font-weight:600!important}"
     "div[data-testid='stButton']>button[data-testid='baseButton-primary']:hover{"
-    "background-color:#374151!important;border-color:#374151!important}"
+    "background-color:#1a2b66!important;border-color:#1a2b66!important}"
     "div[data-testid='stButton']>button{border-radius:6px!important;font-size:.82rem!important}"
 )
 

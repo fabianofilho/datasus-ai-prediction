@@ -192,6 +192,7 @@ if "outcome_key" not in st.session_state:
 # ── CSS + Material Symbols ────────────────────────────────────────────────────
 st.markdown("""
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,300,0,0" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" />
 
 <style>
 header, footer,
@@ -203,7 +204,7 @@ html, body, [data-testid="stAppViewContainer"],
 [data-testid="stMain"], .main, .block-container {
     background-color: #ffffff !important;
     color: #111827 !important;
-    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif !important;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
 
 .block-container { padding: 3rem 3rem !important; max-width: 1200px !important; }
@@ -217,9 +218,11 @@ html, body, [data-testid="stAppViewContainer"],
 }
 .ms-lg { font-size: 1.4rem; margin-right: .25rem; }
 
+h1,h2,h3,h4,h5,h6 { font-family:"Space Grotesk","Inter",sans-serif !important; letter-spacing:-.01em; }
 .ds-title {
+    font-family: "Space Grotesk", "Inter", sans-serif;
     font-size: 1.6rem; font-weight: 700;
-    color: #111827 !important; margin-bottom: .15rem;
+    color: #223886 !important; margin-bottom: .15rem;
     display: flex; align-items: center; gap: .35rem;
 }
 .ds-sub { font-size: 0.9rem; color: #6b7280 !important; margin-bottom: .75rem; }
@@ -254,7 +257,7 @@ html, body, [data-testid="stAppViewContainer"],
     transition: border-color .12s;
 }
 .ds-card:hover { border-color: #9ca3af; }
-.ds-card.sel { border: 1.5px solid #111827; background: #f9fafb !important; }
+.ds-card.sel { border: 1.5px solid #223886; background: #eef1fb !important; }
 .ds-card.dev {
     border-color: #fed7aa; background: #fffbf5 !important;
     opacity: .9;
@@ -317,15 +320,16 @@ div[data-testid="stButton"] > button {
     transition: all .12s !important;
 }
 div[data-testid="stButton"] > button:hover {
-    background-color: #f3f4f6 !important;
-    border-color: #111827 !important;
+    background-color: #eef1fb !important;
+    border-color: #223886 !important;
 }
 div[data-testid="stButton"] > button[data-testid="baseButton-primary"] {
-    background-color: #111827 !important; color: #ffffff !important;
-    border-color: #111827 !important; font-weight: 600 !important;
+    background-color: #223886 !important; color: #ffffff !important;
+    border-color: #223886 !important; font-weight: 600 !important;
+    border-bottom: 3px solid #9ec83b !important;
 }
 div[data-testid="stButton"] > button[data-testid="baseButton-primary"]:hover {
-    background-color: #374151 !important; border-color: #374151 !important;
+    background-color: #1a2b66 !important; border-color: #1a2b66 !important;
 }
 </style>
 """, unsafe_allow_html=True)
