@@ -782,6 +782,21 @@ def _boosting_round_aucs(algorithm, Xt, y_tr, Xv, y_val, params: dict):
     return [], [], None
 
 
+def _staged_proba(algorithm, model, X, k):
+    """Probabilidade prevista usando apenas as primeiras k árvores (predição acumulada).
+
+    Permite ver o resíduo (y - p) encolhendo conforme as árvores são somadas.
+    """
+    k = max(1, int(k))
+    if algorithm == "lgbm":
+        return model.predict_proba(X, num_iteration=k)[:, 1]
+    if algorithm == "xgb":
+        return model.predict_proba(X, iteration_range=(0, k))[:, 1]
+    if algorithm == "catboost":
+        return model.predict_proba(X, ntree_end=k)[:, 1]
+    return model.predict_proba(X)[:, 1]
+
+
 # ── Estado estrutural para visualizar o aprendizado ───────────────────────────
 # Caps de exibição (apenas para o desenho — o modelo real usa tudo).
 _NET_MAX_IN = 10      # neurônios de entrada exibidos
@@ -1041,7 +1056,7 @@ def training_curve(
     treatment: dict | None = None,
     progress_callback=None,
     max_points: int = 40,
-    forward_callback=None,
+    extra_callback=None,
     forward_samples: int = 4,
 ) -> dict:
     """Trajetória de aprendizado passo a passo para visualização ao vivo.
@@ -1051,12 +1066,12 @@ def training_curve(
     Chama progress_callback(done, total, x_value, step_label, train_auc, val_auc, state)
     a cada passo. `state` traz a estrutura para desenhar o aprendizado:
       • rede neural → {"kind":"net", pesos/Δpesos por camada, ...}
-      • boosting    → {"kind":"tree", estrutura da árvore recém-adicionada, ...}
+      • boosting    → {"kind":"resid", resíduo (y-p) por paciente encolhendo, ...}
       • volume      → None
 
-    Para rede neural, ao final, se forward_callback for dado, anima alguns exemplos
-    reais atravessando a rede já treinada (forward pass), chamando
-    forward_callback(done, total, state) com state {"kind":"forward", "active_layer", ...}.
+    extra_callback(done, total, state) recebe a animação secundária ao final:
+      • rede neural → {"kind":"forward", ...} (exemplos atravessando a rede)
+      • boosting    → {"kind":"tree", ...} (algumas árvores reais do comitê)
     """
     params = params or {}
     y_tr = np.asarray(y_tr)
@@ -1087,7 +1102,7 @@ def training_curve(
                 progress_callback(ep, n_epochs, ep, f"Época {ep}/{n_epochs}", ta, va, state)
 
         # ── Forward pass: exemplos reais atravessando a rede já treinada ──────
-        if forward_callback is not None:
+        if extra_callback is not None:
             try:
                 frames = _mlp_forward_frames(clf, Xv, y_val, feat_names,
                                              raw_X=X_val, n_samples=forward_samples)
@@ -1099,30 +1114,53 @@ def training_curve(
                         fwd = dict(fr)
                         fwd["kind"] = "forward"
                         fwd["active_layer"] = li
-                        forward_callback(done, total_steps, fwd)
+                        extra_callback(done, total_steps, fwd)
             except Exception:
                 pass
 
         return {"mode": "epoch", "x_label": "Época",
                 "steps": steps, "train": tr, "val": vl, "metric": "roc_auc"}
 
-    # ── Boosting: trajetória real por round, revelada progressivamente ────────
+    # ── Boosting: resíduo (y - p) encolhendo a cada árvore (animação principal) ─
     if algorithm in BOOSTING_ALGORITHMS:
         Xt, Xv, feat_names = _preprocess_fit_transform(X_tr, X_val, algorithm, treatment)
         tr_curve, vl_curve, model = _boosting_round_aucs(algorithm, Xt, y_tr, Xv, y_val, params)
         n = len(vl_curve)
         idx = _even_indices(n, max_points)
-        trees = _extract_trees(algorithm, model, idx, feat_names)
+
+        # Amostra balanceada de validação p/ ver o resíduo encolher (estável entre rounds)
+        pos_i = np.where(y_val == 1)[0][:50]
+        neg_i = np.where(y_val == 0)[0][:50]
+        sel = np.concatenate([pos_i, neg_i])
+        Xv_sel = Xv[sel]
+        y_sel = [int(v) for v in y_val[sel]]
+
         steps, tr, vl = [], [], []
         for j, i in enumerate(idx, 1):
             steps.append(i + 1)
             tr.append(tr_curve[i] if i < len(tr_curve) else vl_curve[i])
             vl.append(vl_curve[i])
-            state = {"kind": "tree", "round": i + 1, "total": n,
-                     "lib": algorithm, "nodes": trees.get(i, [])}
+            p_sel = _staged_proba(algorithm, model, Xv_sel, i + 1) if len(sel) else np.array([])
+            mean_abs = float(np.mean(np.abs(np.asarray(y_sel) - p_sel))) if len(y_sel) else 0.0
+            state = {"kind": "resid", "round": i + 1, "total": n, "lib": algorithm,
+                     "probs": [float(v) for v in p_sel], "y": list(y_sel),
+                     "mean_abs": mean_abs}
             if progress_callback:
                 progress_callback(j, len(idx), i + 1, f"Árvore {i + 1}/{n}",
                                   tr[-1], vl[-1], state)
+
+        # Showcase: algumas árvores reais do comitê (início, meio, fim)
+        if extra_callback is not None:
+            try:
+                show = sorted({0, n // 2, max(n - 1, 0)})
+                trees = _extract_trees(algorithm, model, show, feat_names)
+                for s_i, ti in enumerate(show, 1):
+                    extra_callback(s_i, len(show),
+                                   {"kind": "tree", "round": ti + 1, "total": n,
+                                    "lib": algorithm, "nodes": trees.get(ti, [])})
+            except Exception:
+                pass
+
         return {"mode": "boosting", "x_label": "Árvores (rounds de boosting)",
                 "steps": steps, "train": tr, "val": vl, "metric": "roc_auc"}
 
