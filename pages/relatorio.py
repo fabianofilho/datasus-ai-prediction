@@ -100,6 +100,9 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 48px 0 calc(52px + 20px);
 }
+.ds-topbar, .ds-topbar a, .ds-topbar span, .ds-topbar div, .ds-topbar p { color: #ffffff !important; }
+.ds-topbar .ms { color: #ffffff !important; fill: #ffffff !important; }
+.ds-topbar .ds-topbar-badge { background: var(--accent) !important; color: var(--primary) !important; }
 .ds-topbar-logo {
   display: flex; align-items: center; gap: 8px;
   font-family: "Space Grotesk", "Inter", sans-serif !important; letter-spacing: .02em;
