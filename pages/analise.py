@@ -2071,6 +2071,16 @@ if not ss["model_results"]:
     _struct_ph.caption("A estrutura do modelo aprendendo (neurônios ou árvores) aparecerá aqui durante o treinamento.")
     _lc_chart_ph.caption("A curva de aprendizado será exibida durante o treinamento.")
 
+    _anim_speed = st.select_slider(
+        "Velocidade da animação do aprendizado",
+        options=["Rápida", "Normal", "Lenta (didática)"],
+        value="Normal",
+        help="Controla apenas a velocidade da animação (neurônios/árvores e curva). "
+             "Não altera o modelo nem as métricas — só dá tempo de acompanhar o aprendizado "
+             "sem precisar aumentar a amostra.",
+    )
+    _anim_delay = {"Rápida": 0.0, "Normal": 0.10, "Lenta (didática)": 0.28}[_anim_speed]
+
     _hpo_prefix = {
         "Optuna (automático)": "Optuna + ",
         "Random Search": "Random Search + ",
@@ -2093,6 +2103,7 @@ if not ss["model_results"]:
             unsafe_allow_html=True,
         )
         try:
+            import time as _time
             from sklearn.model_selection import train_test_split
             from sklearn.metrics import roc_auc_score as _roc_auc
 
@@ -2101,10 +2112,20 @@ if not ss["model_results"]:
 
             # ── Curva de aprendizado — perspectiva por família de algoritmo ───
             #   rede neural → por época · boosting → por árvore · demais → volume
-            from core.models.pipeline import (
-                training_curve as _training_curve,
-                BOOSTING_ALGORITHMS as _BOOST, NEURAL_ALGORITHMS as _NEURAL,
-            )
+            # Import defensivo: se a visualização não estiver disponível (ex.: deploy
+            # desencontrado), o treino segue normalmente, só sem a animação ao vivo.
+            try:
+                from core.models.pipeline import (
+                    training_curve as _training_curve,
+                    BOOSTING_ALGORITHMS as _BOOST, NEURAL_ALGORITHMS as _NEURAL,
+                )
+            except Exception:
+                _training_curve = None
+                _BOOST, _NEURAL = set(), set()
+                _struct_ph.info(
+                    "Visualização do aprendizado ao vivo indisponível nesta versão do app "
+                    "(o treinamento continua normalmente)."
+                )
 
             def _algo_mode(a):
                 if a in _NEURAL:
@@ -2179,7 +2200,8 @@ if not ss["model_results"]:
 
                 def _lc_cb(done, total, xval, label, ta, va, state=None,
                            _st=_store, _lbl=_lc_lbl,
-                           _pb=_mprog[_lc_lbl], _dph=_mdetail[_lc_lbl]):
+                           _pb=_mprog[_lc_lbl], _dph=_mdetail[_lc_lbl],
+                           _delay=_anim_delay):
                     _st["steps"].append(xval)
                     _st["prog"].append(100.0 * done / max(total, 1))
                     _st["train"].append(ta)
@@ -2198,7 +2220,12 @@ if not ss["model_results"]:
                     _pb.progress(done / max(total, 1), text=f"{label} — Val AUC: {va:.3f}")
                     _ms_dt(_dph, f"{label} — Val AUC: {va:.3f}")
                     _lc_status_ph.caption(f"{_lbl} — {label} — Val AUC: {va:.3f}")
+                    if _delay:
+                        _time.sleep(_delay)  # ritmo da animação (não afeta o modelo)
 
+                if _training_curve is None:
+                    _ms_st(_mstatus[_lc_lbl], "check", "Treino seguindo (sem animação)")
+                    continue
                 try:
                     _training_curve(
                         _X_lc, _y_lc, _X_hold, _y_hold,
