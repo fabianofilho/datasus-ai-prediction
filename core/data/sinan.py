@@ -58,22 +58,22 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 
     # Binary target helpers — strip spaces from SITUA_ENCE values
     if "SITUA_ENCE" in df.columns:
-        situacao = df["SITUA_ENCE"].astype(str).str.strip()
+        situacao = df["SITUA_ENCE"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
         df["abandono"] = (situacao == SITUA_ABANDONO).astype(int)
         df["cura"] = (situacao == SITUA_CURA).astype(int)
 
     # DOT (tratamento supervisionado)
     if "TRAT_SUPER" in df.columns:
-        df["dot"] = (df["TRAT_SUPER"].astype(str).str.strip() == "1").astype(int)
+        df["dot"] = (df["TRAT_SUPER"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1").astype(int)
 
     # HIV positive flag
     if "HIV" in df.columns:
-        df["hiv_pos"] = (df["HIV"].astype(str).str.strip() == "1").astype(int)
+        df["hiv_pos"] = (df["HIV"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1").astype(int)
 
     # Identifiers
     for col in ["NM_PACIENT", "NM_MAE_PAC", "CNS_1"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().str.upper().replace("NAN", "")
+            df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.upper().replace("NAN", "")
 
     return df
 

@@ -43,29 +43,29 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
         df["idade_anos"] = _decode_idade(df["NU_IDADE_N"])
 
     if "HOSPITAL" in df.columns:
-        df["hospitalizado"] = (df["HOSPITAL"].astype(str).str.strip() == "1").astype(int)
+        df["hospitalizado"] = (df["HOSPITAL"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1").astype(int)
 
     if "EVOLUCAO" in df.columns:
-        evolucao = df["EVOLUCAO"].astype(str).str.strip()
+        evolucao = df["EVOLUCAO"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
         df["desfecho_adverso"] = evolucao.isin(EVOLUCAO_ADVERSO).astype(int)
         df["obito"] = evolucao.isin({"2", "3"}).astype(int)
         df["incapacidade"] = (evolucao == "5").astype(int)
 
     if "CIRCUNSTAN" in df.columns:
         df["tentativa_suicidio"] = (
-            df["CIRCUNSTAN"].astype(str).str.strip() == CIRCUNSTAN_SUICIDIO
+            df["CIRCUNSTAN"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == CIRCUNSTAN_SUICIDIO
         ).astype(int)
 
     for col in ["CS_SEXO", "CS_RACA", "CS_ESCOL_N"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
 
     return df
 
 
 def filter_confirmed(df: pd.DataFrame) -> pd.DataFrame:
     if "CLASSI_FIN" in df.columns:
-        return df[df["CLASSI_FIN"].astype(str).str.strip() == "1"].copy()
+        return df[df["CLASSI_FIN"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1"].copy()
     return df
 
 

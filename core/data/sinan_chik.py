@@ -48,20 +48,20 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     ]
     for col in bool_cols:
         if col in df.columns:
-            df[col] = (df[col].astype(str).str.strip() == "1").astype(int)
+            df[col] = (df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1").astype(int)
 
     if "HOSPITALIZ" in df.columns:
-        df["hospitalizado"] = (df["HOSPITALIZ"].astype(str).str.strip() == "1").astype(int)
+        df["hospitalizado"] = (df["HOSPITALIZ"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1").astype(int)
 
     if "CLASSI_FIN" in df.columns:
-        df["confirmado"] = (df["CLASSI_FIN"].astype(str).str.strip() == CLASSI_CONFIRMADO).astype(int)
+        df["confirmado"] = (df["CLASSI_FIN"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == CLASSI_CONFIRMADO).astype(int)
 
     if "EVOLUCAO" in df.columns:
-        df["obito"] = (df["EVOLUCAO"].astype(str).str.strip() == EVOLUCAO_OBITO).astype(int)
+        df["obito"] = (df["EVOLUCAO"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == EVOLUCAO_OBITO).astype(int)
 
     for col in ["CS_SEXO", "CS_RACA", "CS_ESCOL_N"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
 
     return df
 

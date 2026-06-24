@@ -32,7 +32,7 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
         df["idade_anos"] = _decode_idade(df["NU_IDADE_N"])
 
     if "EVOLUCAO" in df.columns:
-        evolucao = df["EVOLUCAO"].astype(str).str.strip()
+        evolucao = df["EVOLUCAO"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
         df["cura"] = (evolucao == EVOLUCAO_CURA).astype(int)
         # nao_cura: confirmed non-cure (excludes blank/ignored)
         df["nao_cura"] = evolucao.isin({"2", "3"}).astype(int)
@@ -40,21 +40,21 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in ["CS_SEXO", "CS_RACA", "CS_ESCOL_N"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
 
     return df
 
 
 def filter_confirmed(df: pd.DataFrame) -> pd.DataFrame:
     if "CLASSI_FIN" in df.columns:
-        return df[df["CLASSI_FIN"].astype(str).str.strip() == "1"].copy()
+        return df[df["CLASSI_FIN"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "1"].copy()
     return df
 
 
 def filter_with_outcome(df: pd.DataFrame) -> pd.DataFrame:
     """Keep only cases with a known cure/non-cure outcome."""
     if "EVOLUCAO" in df.columns:
-        known = df["EVOLUCAO"].astype(str).str.strip().isin(["1", "2", "3"])
+        known = df["EVOLUCAO"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).isin(["1", "2", "3"])
         return df[known].copy()
     return df
 

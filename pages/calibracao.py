@@ -553,6 +553,16 @@ def _apply_model_to_subset(X_sub, y_sub, label: str):
         return None
     _probs = _active_model.predict_proba(X_sub)[:, 1]
     _preds = (_probs >= 0.5).astype(int)
+    # Importância ESPECÍFICA do subgrupo (permutation importance), não a global
+    # replicada — assim as barras por subgrupo/estado realmente diferem.
+    try:
+        from sklearn.inspection import permutation_importance
+        _pi = permutation_importance(
+            _active_model, X_sub, y_sub, scoring="roc_auc",
+            n_repeats=5, random_state=42, n_jobs=-1)
+        _fi = {c: float(v) for c, v in zip(X_sub.columns, _pi.importances_mean)}
+    except Exception:
+        _fi = {}
     return {
         "label": label,
         "n": len(y_sub),
@@ -565,7 +575,7 @@ def _apply_model_to_subset(X_sub, y_sub, label: str):
         },
         "oof_probs": _probs,
         "y_true": y_sub.values,
-        "feature_importances": results.get("feature_importances", {}),
+        "feature_importances": _fi,
     }
 
 
@@ -688,7 +698,10 @@ else:
                             "metrics": results["mean_metrics"],
                             "oof_probs": _oof,
                             "y_true": _y_true,
-                            "feature_importances": results.get("feature_importances", {}),
+                            # vazio: a importância global tem chaves pós-transform e não
+                            # se compara com a permutation importance (por coluna) dos
+                            # demais grupos; fica de fora do gráfico comparativo
+                            "feature_importances": {},
                         }
 
                     raw = {}

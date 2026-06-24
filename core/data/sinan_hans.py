@@ -48,13 +48,13 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 
     # Outcome flags
     if "TPALTA_N" in df.columns:
-        alta = df["TPALTA_N"].astype(str).str.strip()
+        alta = df["TPALTA_N"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
         df["abandono"] = (alta == TPALTA_ABANDONO).astype(int)
         df["cura"] = (alta == TPALTA_CURA).astype(int)
 
     # MB (multibacillar) flag — higher treatment burden
     if "FORMACLINI" in df.columns:
-        df["mb"] = (df["FORMACLINI"].astype(str).str.strip() == "2").astype(int)
+        df["mb"] = (df["FORMACLINI"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "2").astype(int)
 
     # Disability at diagnosis
     if "AVALIA_N" in df.columns:
@@ -63,7 +63,7 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
     # Standardize categoricals
     for col in ["CS_SEXO", "CS_RACA", "CS_ESCOL_N"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = df[col].astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
 
     return df
 
@@ -71,7 +71,7 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
 def filter_closed_cases(df: pd.DataFrame) -> pd.DataFrame:
     """Keep only cases with a recorded discharge outcome."""
     if "TPALTA_N" in df.columns:
-        closed = df["TPALTA_N"].astype(str).str.strip().isin(["1", "2", "3", "4", "5", "6"])
+        closed = df["TPALTA_N"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).isin(["1", "2", "3", "4", "5", "6"])
         return df[closed].copy()
     return df
 
