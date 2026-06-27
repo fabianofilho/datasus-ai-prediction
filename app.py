@@ -3,6 +3,8 @@ from pathlib import Path
 from PIL import Image as _PILImage
 import streamlit as st
 
+from core.data.benchmarks import BENCHMARK_GROUPS, BENCHMARKS
+
 _favicon = _PILImage.open(Path(__file__).parent / "favicon.png")
 st.set_page_config(
     page_title="DataSUS AI Prediction",
@@ -234,10 +236,11 @@ h1,h2,h3,h4,h5,h6 { font-family:"Space Grotesk","Inter",sans-serif !important; l
     border-radius: 6px; background: #fafafa; width: fit-content;
 }
 .ds-legend-item { display: flex; align-items: center; gap: .35rem; }
-.dot-ok     { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink:0; }
-.dot-dev    { width: 8px; height: 8px; border-radius: 50%; background: #f97316; flex-shrink:0; }
-.dot-link   { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex-shrink:0; }
-.dot-upload { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; flex-shrink:0; }
+.dot-ok       { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink:0; }
+.dot-dev      { width: 8px; height: 8px; border-radius: 50%; background: #f97316; flex-shrink:0; }
+.dot-link     { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; flex-shrink:0; }
+.dot-upload   { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; flex-shrink:0; }
+.dot-external { width: 8px; height: 8px; border-radius: 50%; background: #6b7280; flex-shrink:0; }
 
 .ds-group {
     font-size: .68rem; font-weight: 700;
@@ -270,6 +273,11 @@ h1,h2,h3,h4,h5,h6 { font-family:"Space Grotesk","Inter",sans-serif !important; l
 }
 .ds-card.upload:hover { border-color: #ef4444; }
 .ds-card.upload.sel { border: 1.5px solid #ef4444; background: #fee2e2 !important; }
+.ds-card.external {
+    border-color: #e5e7eb; background: #f9fafb !important;
+    opacity: .9;
+}
+.ds-card.external:hover { border-color: #6b7280; }
 
 .ds-card-name {
     font-size: .81rem; color: #111827 !important;
@@ -303,9 +311,44 @@ h1,h2,h3,h4,h5,h6 { font-family:"Space Grotesk","Inter",sans-serif !important; l
     background: #fee2e2; padding: 1px 6px; border-radius: 4px;
     letter-spacing: .04em;
 }
+.ds-badge-external {
+    font-size: .6rem; font-weight: 700; color: #374151;
+    background: #e5e7eb; padding: 1px 6px; border-radius: 4px;
+    letter-spacing: .04em;
+}
 .ds-card-note {
     font-size: .67rem; color: #9ca3af; margin-top: .25rem;
     line-height: 1.35; font-style: italic;
+}
+
+/* DIY hero card (single big card no centro da aba) */
+.ds-diy-hero {
+    border: 1px solid #e5e7eb; border-radius: 8px;
+    padding: 2rem 2.25rem; background: #fafbff !important;
+    margin: 1rem 0 1.25rem; max-width: 720px;
+}
+.ds-diy-hero h3 {
+    font-family: "Space Grotesk", "Inter", sans-serif !important;
+    font-size: 1.15rem; color: #223886 !important;
+    margin: 0 0 .35rem; font-weight: 700;
+}
+.ds-diy-hero p { font-size: .85rem; color: #374151; margin: 0 0 .35rem; line-height: 1.55; }
+.ds-diy-hero ul { font-size: .8rem; color: #4b5563; margin: .5rem 0 0; padding-left: 1.1rem; line-height: 1.7; }
+
+/* Tabs styling */
+[data-baseweb="tab-list"] {
+    gap: .5rem !important; border-bottom: 1px solid #e5e7eb !important;
+    margin-bottom: 1.5rem !important;
+}
+[data-baseweb="tab"] {
+    font-family: "Space Grotesk", "Inter", sans-serif !important;
+    font-weight: 600 !important; font-size: .85rem !important;
+    letter-spacing: .04em !important; color: #6b7280 !important;
+    padding: .5rem 1rem !important;
+}
+[data-baseweb="tab"][aria-selected="true"] {
+    color: #223886 !important;
+    border-bottom: 3px solid #9ec83b !important;
 }
 
 /* Botões */
@@ -343,145 +386,248 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.markdown(
-    '<p class="ds-sub">Modelagem preditiva em saúde pública — selecione o desfecho para começar</p>',
+    '<p class="ds-sub">Modelagem preditiva em saúde pública — escolha a fonte de dados para começar</p>',
     unsafe_allow_html=True,
 )
 
-# Legenda
-st.markdown(
-    '<div class="ds-legend">'
-    '<span class="ds-legend-item"><span class="dot-ok"></span>Pipeline completo disponível</span>'
-    '<span class="ds-legend-item"><span class="dot-dev"></span>Em desenvolvimento (requer linkage)</span>'
-    '<span class="ds-legend-item"><span class="dot-link"></span>Linkage entre bases</span>'
-    '<span class="ds-legend-item"><span class="dot-upload"></span>Upload manual necessário</span>'
-    '<span style="color:#d1d5db">|</span>'
-    '<span class="ds-legend-item"><span class="ms" style="font-size:.85rem;color:#6b7280">schedule</span>'
-    'Tempo estimado de download + processamento (1.000 registros)</span>'
-    '</div>',
-    unsafe_allow_html=True,
-)
 
-# ── Seleção de desfecho ───────────────────────────────────────────────────────
-try:
-    sel = st.session_state.outcome_key
-    N_COLS = 4
+# ── Helpers ───────────────────────────────────────────────────────────────────
+_PIPELINE_KEYS = [
+    "raw_data", "cohort", "feature_config", "treatment_config",
+    "model_config", "model_results", "calib_results", "upload_df",
+    "upload_target", "upload_features", "upload_dict", "X_res",
+]
 
-    for group_name, outcomes in OUTCOME_GROUPS.items():
-        # Ordena: ok primeiro, dev segundo, upload por último
-        _status_order = {"ok": 0, "dev": 1, "upload": 2}
-        _sorted = sorted(outcomes, key=lambda o: _status_order.get(o["status"], 1))
+
+def _reset_pipeline():
+    for _rk in _PIPELINE_KEYS:
+        if _rk in st.session_state:
+            st.session_state[_rk] = {} if _rk == "raw_data" else None
+
+
+def _go_diy():
+    st.session_state.outcome_key = "__diy__"
+    _reset_pipeline()
+    st.switch_page("pages/upload.py")
+
+
+def _go_benchmark(bench_key: str):
+    """Carrega benchmark e entra no pipeline DIY direto na página de análise."""
+    bench = BENCHMARKS[bench_key]
+    df = bench.loader()
+    _reset_pipeline()
+    ss = st.session_state
+    ss.outcome_key = "__diy__"
+    ss.upload_df = df
+    ss.upload_target = bench.target_col
+    ss.upload_features = [c for c in df.columns if c != bench.target_col]
+    ss.upload_dict = bench.dict_meta or {}
+    ss.raw_data = {}
+    st.switch_page("pages/analise.py")
+
+
+# ── Tabs ──────────────────────────────────────────────────────────────────────
+tab_datasus, tab_diy, tab_bench = st.tabs(["DATASUS", "DIY", "BENCHMARKS"])
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 1 — DATASUS
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_datasus:
+    st.markdown(
+        '<div class="ds-legend">'
+        '<span class="ds-legend-item"><span class="dot-ok"></span>Pipeline completo disponível</span>'
+        '<span class="ds-legend-item"><span class="dot-dev"></span>Em desenvolvimento (requer linkage)</span>'
+        '<span class="ds-legend-item"><span class="dot-link"></span>Linkage entre bases</span>'
+        '<span class="ds-legend-item"><span class="dot-upload"></span>Upload manual necessário</span>'
+        '<span style="color:#d1d5db">|</span>'
+        '<span class="ds-legend-item"><span class="ms" style="font-size:.85rem;color:#6b7280">schedule</span>'
+        'Tempo estimado de download + processamento (1.000 registros)</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    try:
+        sel = st.session_state.outcome_key
+        N_COLS = 4
+
+        for group_name, outcomes in OUTCOME_GROUPS.items():
+            _status_order = {"ok": 0, "dev": 1, "upload": 2}
+            _sorted = sorted(outcomes, key=lambda o: _status_order.get(o["status"], 1))
+            st.markdown(f'<p class="ds-group">{group_name}</p>', unsafe_allow_html=True)
+
+            for row_start in range(0, len(_sorted), N_COLS):
+                row = _sorted[row_start : row_start + N_COLS]
+                cols = st.columns(N_COLS)
+
+                for col_idx, o in enumerate(row):
+                    key    = o["key"]
+                    icon   = o["icon"]
+                    name   = o["name"]
+                    source = o["source"]
+                    status = o["status"]
+                    est    = o["est_min"]
+                    linkage = o["linkage"]
+                    note   = o["note"]
+                    is_sel = sel == key
+
+                    dev_badge    = '<span class="ds-badge-dev">EM DESENVOLVIMENTO</span>' if status == "dev" else ""
+                    link_badge   = '<span class="ds-badge-link">LINKAGE</span>' if linkage else ""
+                    upload_badge = '<span class="ds-badge-upload">UPLOAD NECESSÁRIO</span>' if status == "upload" else ""
+
+                    card_cls = "ds-card"
+                    if status == "dev":
+                        card_cls += " dev"
+                    if status == "upload":
+                        card_cls += " upload"
+                    if is_sel:
+                        card_cls += " sel"
+
+                    note_html = f'<div class="ds-card-note">{note}</div>' if note else ""
+                    if linkage:
+                        note_html += f'<div class="ds-card-note" style="color:#b45309;display:flex;align-items:center;gap:4px"><span class="ms" style="font-size:.8rem">warning</span> {linkage}</div>'
+
+                    with cols[col_idx]:
+                        st.markdown(
+                            f'<div class="{card_cls}">'
+                            f'<div class="ds-card-name"><span class="ms">{icon}</span>{name}</div>'
+                            f'<div class="ds-card-meta">'
+                            f'<span class="ds-badge-src">{source}</span>'
+                            f'<span class="ds-badge-time">'
+                            f'<span class="ms" style="font-size:.7rem;color:#9ca3af">schedule</span>'
+                            f'~{est} min</span>'
+                            f'{dev_badge}{upload_badge}{link_badge}'
+                            f'</div>'
+                            f'{note_html}'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                        if status == "ok":
+                            btn_label = "Selecionar"
+                        elif status == "upload":
+                            btn_label = "Aguardando Upload"
+                        else:
+                            btn_label = "Ver (em dev.)"
+                        try:
+                            clicked = st.button(
+                                btn_label, key=f"sel_{key}",
+                                type="primary" if is_sel else "secondary",
+                                use_container_width=True,
+                            )
+                        except TypeError:
+                            clicked = st.button(
+                                btn_label, key=f"sel_{key}",
+                                type="primary" if is_sel else "secondary",
+                            )
+                        if clicked:
+                            if status == "ok":
+                                st.session_state.outcome_key = key
+                                st.switch_page("pages/analise.py")
+                            elif status == "upload":
+                                st.session_state.outcome_key = key
+                                _reset_pipeline()
+                                st.switch_page("pages/upload.py")
+                            else:
+                                st.toast("Módulo em desenvolvimento — disponível em breve.")
+    except Exception as e:
+        import traceback
+        st.error(f"**Erro na aplicação:** {e}")
+        st.code(traceback.format_exc())
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 2 — DIY (Do It Yourself)
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_diy:
+    st.markdown(
+        '<div class="ds-diy-hero">'
+        '<h3><span class="ms ms-lg" style="color:#223886">construction</span>Carregue sua própria base</h3>'
+        '<p>Use o mesmo pipeline do DataSUS em qualquer dataset tabular de saúde. '
+        'Defina o desfecho binário, escolha preditoras e rode treino, calibração e relatório.</p>'
+        '<ul>'
+        '<li>Formatos aceitos: <b>CSV</b> (vírgula ou ponto-e-vírgula) e <b>Parquet</b></li>'
+        '<li>Primeira linha deve conter os nomes das colunas</li>'
+        '<li>Coluna alvo precisa ser binária (0/1)</li>'
+        '<li>Dicionário de dados opcional, preenchido no próprio fluxo</li>'
+        '</ul>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Carregar minha base", key="btn_diy_tab", type="primary"):
+        _go_diy()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 3 — BENCHMARKS
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_bench:
+    st.markdown(
+        '<div class="ds-legend">'
+        '<span class="ds-legend-item"><span class="dot-ok"></span>Loader pronto, entra direto no pipeline</span>'
+        '<span class="ds-legend-item"><span class="dot-external"></span>Catálogo externo, requer ETL ou credencial</span>'
+        '<span style="color:#d1d5db">|</span>'
+        '<span class="ds-legend-item"><span class="ms" style="font-size:.85rem;color:#6b7280">schedule</span>'
+        'Tempo estimado de download + parse</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p style="font-size:.8rem;color:#6b7280;margin:-1rem 0 1.5rem">'
+        'Catálogo curado a partir do '
+        '<a href="https://github.com/fabianofilho/awesome-health-datasets" target="_blank" '
+        'style="color:#223886;text-decoration:none;border-bottom:1px dotted #223886">awesome-health-datasets</a>. '
+        'Benchmarks tabulares clássicos rodam no mesmo pipeline DIY; demais ficam como referência.'
+        '</p>',
+        unsafe_allow_html=True,
+    )
+
+    N_COLS = 3
+    for group_name, benches in BENCHMARK_GROUPS.items():
         st.markdown(f'<p class="ds-group">{group_name}</p>', unsafe_allow_html=True)
 
-        for row_start in range(0, len(_sorted), N_COLS):
-            row = _sorted[row_start : row_start + N_COLS]
+        for row_start in range(0, len(benches), N_COLS):
+            row = benches[row_start : row_start + N_COLS]
             cols = st.columns(N_COLS)
 
-            for col_idx, o in enumerate(row):
-                key    = o["key"]
-                icon   = o["icon"]
-                name   = o["name"]
-                source = o["source"]
-                status = o["status"]
-                est    = o["est_min"]
-                linkage = o["linkage"]
-                note   = o["note"]
-                is_sel = sel == key
-
-                # Badges extras
-                dev_badge    = '<span class="ds-badge-dev">EM DESENVOLVIMENTO</span>' if status == "dev" else ""
-                link_badge   = '<span class="ds-badge-link">LINKAGE</span>' if linkage else ""
-                upload_badge = '<span class="ds-badge-upload">UPLOAD NECESSÁRIO</span>' if status == "upload" else ""
-
-                # CSS da card
+            for col_idx, b in enumerate(row):
                 card_cls = "ds-card"
-                if status == "dev":
+                if b.status == "external":
+                    card_cls += " external"
+                elif b.status == "dev":
                     card_cls += " dev"
-                if status == "upload":
-                    card_cls += " upload"
-                if is_sel:
-                    card_cls += " sel"
 
-                note_html = f'<div class="ds-card-note">{note}</div>' if note else ""
-                if linkage:
-                    note_html += f'<div class="ds-card-note" style="color:#b45309;display:flex;align-items:center;gap:4px"><span class="ms" style="font-size:.8rem">warning</span> {linkage}</div>'
+                ext_badge = '<span class="ds-badge-external">EXTERNO</span>' if b.status == "external" else ""
+                dev_badge = '<span class="ds-badge-dev">EM DESENVOLVIMENTO</span>' if b.status == "dev" else ""
 
                 with cols[col_idx]:
                     st.markdown(
                         f'<div class="{card_cls}">'
-                        f'<div class="ds-card-name"><span class="ms">{icon}</span>{name}</div>'
+                        f'<div class="ds-card-name"><span class="ms">{b.icon}</span>{b.name}</div>'
                         f'<div class="ds-card-meta">'
-                        f'<span class="ds-badge-src">{source}</span>'
+                        f'<span class="ds-badge-src">{b.source}</span>'
                         f'<span class="ds-badge-time">'
                         f'<span class="ms" style="font-size:.7rem;color:#9ca3af">schedule</span>'
-                        f'~{est} min</span>'
-                        f'{dev_badge}{upload_badge}{link_badge}'
+                        f'~{b.est_min} min</span>'
+                        f'{ext_badge}{dev_badge}'
                         f'</div>'
-                        f'{note_html}'
+                        f'<div class="ds-card-note">{b.note}</div>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
 
-                    if status == "ok":
-                        btn_label = "Selecionar"
-                    elif status == "upload":
-                        btn_label = "Aguardando Upload"
+                    if b.status == "ok":
+                        if st.button("Carregar e rodar", key=f"bench_{b.key}", type="primary", use_container_width=True):
+                            with st.spinner(f"Baixando {b.name}..."):
+                                _go_benchmark(b.key)
                     else:
-                        btn_label = "Ver (em dev.)"
-                    try:
-                        clicked = st.button(
-                            btn_label, key=f"sel_{key}",
-                            type="primary" if is_sel else "secondary",
-                            use_container_width=True,
-                        )
-                    except TypeError:
-                        clicked = st.button(
-                            btn_label, key=f"sel_{key}",
-                            type="primary" if is_sel else "secondary",
-                        )
-                    if clicked:
-                        if status == "ok":
-                            st.session_state.outcome_key = key
-                            st.switch_page("pages/analise.py")
-                        elif status == "upload":
-                            st.session_state.outcome_key = key
-                            # Reset pipeline state before upload flow
-                            for _rk in ["raw_data", "cohort", "feature_config",
-                                        "treatment_config", "model_config", "model_results",
-                                        "calib_results", "upload_df", "upload_target",
-                                        "upload_dict", "X_res"]:
-                                if _rk in st.session_state:
-                                    st.session_state[_rk] = {} if _rk == "raw_data" else None
-                            st.switch_page("pages/upload.py")
-                        else:
-                            st.toast("Módulo em desenvolvimento — disponível em breve.")
+                        st.link_button("Abrir fonte", b.url, use_container_width=True)
 
-except Exception as e:
-    import traceback
-    st.error(f"**Erro na aplicação:** {e}")
-    st.code(traceback.format_exc())
-    if st.button("↺ Reiniciar sessão", type="primary"):
-        for k in list(st.session_state.keys()):
-            del st.session_state[k]
-        st.rerun()
 
-# ── Rodapé com reset de emergência ────────────────────────────────────────────
+# ── Rodapé: reset de sessão ───────────────────────────────────────────────────
 st.markdown('<hr style="border:none;border-top:1px solid #f3f4f6;margin:2.5rem 0 1rem">', unsafe_allow_html=True)
-_r1, _r2, _r3 = st.columns([2, 8, 1])
-with _r1:
-    if st.button(
-        "🏗 Do It Yourself (DIY)",
-        key="btn_diy",
-        type="primary",
-        use_container_width=False,
-    ):
-        st.session_state.outcome_key = "__diy__"
-        for _rk in ["raw_data", "cohort", "feature_config", "treatment_config",
-                    "model_config", "model_results", "calib_results", "upload_df",
-                    "upload_target", "upload_dict", "X_res"]:
-            if _rk in st.session_state:
-                st.session_state[_rk] = {} if _rk == "raw_data" else None
-        st.switch_page("pages/upload.py")
-with _r3:
+_r1, _r2 = st.columns([9, 1])
+with _r2:
     if st.button("↺ Reset", help="Limpa toda a sessão e reinicia o pipeline", type="secondary"):
         for k in list(st.session_state.keys()):
             del st.session_state[k]
