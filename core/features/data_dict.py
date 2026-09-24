@@ -499,7 +499,7 @@ _SINAN_DENGUE: dict[str, dict] = {
     },
     "CLASSI_FIN": {
         "label": "Classificação Final",
-        "desc": "Classificação final do caso: Dengue sem sinais de alarme (5), Dengue com sinais de alarme (6), Dengue grave (7), Descartado (11).",
+        "desc": "Classificação final do caso (layout de 2014 em diante): Descartado (5), Inconclusivo (8), Dengue (10), Dengue com sinais de alarme (11), Dengue grave (12), Chikungunya (13).",
         "type": "Categórica",
     },
     "HOSPITALIZ": {

@@ -16,7 +16,8 @@ class DengueGrave(OutcomeConfig):
             name="Dengue com Sinais de Alarme ou Grave",
             description=(
                 "Prediz, a partir da notificação inicial de dengue, a probabilidade de evolução "
-                "para dengue com sinais de alarme (CLASSI_FIN=8) ou dengue grave (CLASSI_FIN=11). "
+                "para dengue com sinais de alarme (CLASSI_FIN=11) ou dengue grave (CLASSI_FIN=12). "
+                "A coorte são os casos confirmados (CLASSI_FIN 10, 11 ou 12, layout de 2014 em diante). "
                 "Features incluem sintomas na notificação, idade, hospitalização e características "
                 "demográficas. Utiliza dados do SINAN-Dengue."
             ),
