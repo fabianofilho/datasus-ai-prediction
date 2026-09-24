@@ -74,7 +74,7 @@ use este mapeamento como fonte de verdade. O arquivo central é:
 | Variável          | label canônico              | type      |
 |-------------------|-----------------------------|-----------|
 | FORMACLINI        | Forma Clínica               | Categórica|
-| mb                | Classificação Operacional   | Categórica|
+| mb                | Multibacilar                | Derivada  |
 | grau_incapacidade | Grau de Incapacidade        | Ordinal   |
 | MODOENTR          | Modo de Entrada             | Categórica|
 | MODODETECT        | Modo de Detecção            | Categórica|

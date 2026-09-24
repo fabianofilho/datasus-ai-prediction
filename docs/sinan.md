@@ -49,7 +49,7 @@ A construção de cohorts no SINAN é geralmente orientada pelo agravo.
     *   **Coorte**: Todos os pacientes com notificação de caso novo de tuberculose em um determinado período.
     *   **Observation Window**: O momento da notificação. As features são as variáveis da ficha de notificação (`NU_IDADE_N`, tipo de tuberculose, `RAIOX_TORA`, etc.).
     *   **Prediction Window**: O período de tratamento padrão (geralmente 6 meses).
-    *   **Outcome**: O campo `EVOLUCAO` na ficha de encerramento do caso foi preenchido como "Abandono"? (Sim/Não).
+    *   **Outcome**: O campo `SITUA_ENCE` na ficha de encerramento do caso foi preenchido como abandono (2) ou abandono primário (10)? (Sim/Não). Transferência, mudança de diagnóstico, TB-DR e mudança de esquema (5 a 8) são censura e saem da coorte.
 
 ## 6. Limitações e Considerações
 

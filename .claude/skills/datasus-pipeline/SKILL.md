@@ -38,10 +38,10 @@ Função de entrada: `build_pipeline(X, algorithm, params, balancing, treatment)
 
 | Modo           | Mecanismo                          |
 |----------------|------------------------------------|
-| `class_weight` | `class_weight='balanced'` no modelo (padrão) |
+| `none`         | Sem balanceamento (padrão da tela e das funções) |
+| `class_weight` | `class_weight='balanced'` no modelo; sem efeito em XGBoost e MLP |
 | `smote_over`   | SMOTE (oversampling da classe minoritária)    |
 | `smote_under`  | SMOTETomek (over + undersampling combinados)  |
-| `none`         | Sem balanceamento                             |
 
 ---
 
