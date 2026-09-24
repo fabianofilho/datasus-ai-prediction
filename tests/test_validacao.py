@@ -151,3 +151,22 @@ def test_analise_passa_semente_da_tela_ao_optuna():
         seeds = [kw for kw in c.keywords if kw.arg == "seed"]
         assert seeds and ast.unparse(seeds[0].value) == "_hpo_seed"
     assert 'int(ss.get("sample_seed", 42))' in ANALISE.read_text(encoding="utf-8").replace("'", '"')
+
+
+# ── Balanceamento padrão (ML-02) ──────────────────────────────────────────────
+
+def test_balanceamento_padrao_e_nenhum():
+    # Class Weight não faz nada em XGBoost e MLP e piora a calibração nos
+    # demais; o padrão da tela é não balancear.
+    arvore = ast.parse(ANALISE.read_text(encoding="utf-8"))
+    radios = [
+        n for n in ast.walk(arvore)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "radio" and n.args
+        and isinstance(n.args[0], ast.Constant) and n.args[0].value == "Balanceamento"
+    ]
+    assert len(radios) == 1
+    radio = radios[0]
+    opcoes = ast.literal_eval(radio.args[1])
+    indice = next((kw.value.value for kw in radio.keywords if kw.arg == "index"), 0)
+    assert opcoes[indice] == "Nenhum"
