@@ -17,7 +17,8 @@ class InfeccaoHospitalar(OutcomeConfig):
             description=(
                 "Prediz o risco de infecção hospitalar adquirida durante a internação "
                 "(campo INFEHOSP do SIH-RD). Features incluem diagnóstico de admissão, "
-                "tempo de permanência, uso de UTI e características do paciente."
+                "caráter da internação e características do paciente; permanência, uso de "
+                "UTI e procedimento realizado só existem na alta e ficam de fora."
             ),
             data_sources=["SIH"],
             observation_window_days=0,
@@ -25,10 +26,11 @@ class InfeccaoHospitalar(OutcomeConfig):
             requires_linkage=False,
             icon="🦠",
             estimated_download_min=10,
+            # Predição na admissão: sem UTI, permanência nem procedimento
+            # realizado, que só existem na alta. Ver tests/test_vazamento.py.
             suggested_features=[
-                "IDADE", "SEXO", "diag_chapter", "used_icu",
-                "length_of_stay_days", "CAR_INT", "RACA_COR",
-                "age_group", "PROC_REA",
+                "IDADE", "SEXO", "diag_chapter", "CAR_INT",
+                "RACA_COR", "age_group",
             ],
             target_col="infeccao_hospitalar",
         )

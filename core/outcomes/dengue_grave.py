@@ -18,8 +18,9 @@ class DengueGrave(OutcomeConfig):
                 "Prediz, a partir da notificação inicial de dengue, a probabilidade de evolução "
                 "para dengue com sinais de alarme (CLASSI_FIN=11) ou dengue grave (CLASSI_FIN=12). "
                 "A coorte são os casos confirmados (CLASSI_FIN 10, 11 ou 12, layout de 2014 em diante). "
-                "Features incluem sintomas na notificação, idade, hospitalização e características "
-                "demográficas. Utiliza dados do SINAN-Dengue."
+                "Features incluem sintomas na notificação, idade e características demográficas. "
+                "Sinais de alarme, critérios de gravidade e hospitalização definem ou decorrem do "
+                "desfecho e ficam fora das features. Utiliza dados do SINAN-Dengue."
             ),
             data_sources=["SINAN_DENG"],
             observation_window_days=0,
@@ -27,12 +28,15 @@ class DengueGrave(OutcomeConfig):
             requires_linkage=False,
             icon="🦟",
             estimated_download_min=8,
+            # Sem sinais de alarme (DOR_ABDOM, VOMITO_2, SANG_MUC, VERTIG no
+            # layout antigo; ALRM_* no vigente), critérios de gravidade (GRAV_*)
+            # nem hospitalização: definem a classe 11/12 ou decorrem dela.
+            # Ver tests/test_vazamento.py.
             suggested_features=[
                 "idade_anos", "CS_SEXO", "CS_RACA", "CS_ESCOL_N",
                 "FEBRE", "MIALGIA", "CEFALEIA", "EXANTEMA", "VOMITO",
                 "NAUSEA", "DOR_COSTAS", "PETEQUIA_N", "LEUCOPENIA",
-                "DOR_ABDOM", "VOMITO_2", "SANG_MUC", "VERTIG",
-                "hospitalizado", "age_group",
+                "age_group",
             ],
             target_col="dengue_grave",
         )

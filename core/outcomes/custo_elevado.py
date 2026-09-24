@@ -28,10 +28,12 @@ class CustoHospitalarElevado(OutcomeConfig):
             requires_linkage=False,
             icon="💰",
             estimated_download_min=10,
+            # Predição na admissão: sem UTI, permanência nem procedimento
+            # realizado, que só existem na alta e compõem o próprio VAL_TOT.
+            # Ver tests/test_vazamento.py.
             suggested_features=[
                 "IDADE", "SEXO", "diag_chapter", "diag_block",
-                "used_icu", "CAR_INT", "length_of_stay_days",
-                "RACA_COR", "age_group", "PROC_REA",
+                "CAR_INT", "RACA_COR", "age_group",
             ],
             target_col="custo_elevado",
         )

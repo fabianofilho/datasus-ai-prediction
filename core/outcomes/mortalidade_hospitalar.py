@@ -16,10 +16,11 @@ class MortalidadeHospitalar(OutcomeConfig):
             key="mortalidade_hospitalar",
             name="Mortalidade Hospitalar",
             description=(
-                "Prediz o risco de óbito durante a internação ou em até 30 dias após a alta. "
-                "Combina o campo MOT_SAIDA do SIH (óbito na alta) com record linkage ao SIM "
-                "(para capturar mortes pós-alta). "
-                "Requer dados do SIH e do SIM para o mesmo estado e ano."
+                "Prediz o risco de óbito intra-hospitalar (campo MORTE do SIH-RD), com "
+                "predição na admissão: permanência, diárias, UTI, valor total, diagnóstico "
+                "secundário e procedimento realizado só existem na alta e ficam fora das "
+                "features. O linkage com o SIM para óbitos pós-alta depende de CNS ou CPF, "
+                "ausentes no dado público, e por isso não pareia."
             ),
             data_sources=["SIH", "SIM"],
             observation_window_days=0,
@@ -27,11 +28,12 @@ class MortalidadeHospitalar(OutcomeConfig):
             requires_linkage=True,
             icon="💀",
             estimated_download_min=15,
+            # Predição na admissão: nada que só existe na alta (permanência,
+            # diárias, UTI, valor total, diagnóstico secundário, procedimento
+            # realizado). Ver tests/test_vazamento.py.
             suggested_features=[
                 "IDADE", "SEXO", "diag_chapter", "diag_block",
-                "length_of_stay_days", "used_icu", "DIARIAS",
-                "n_diag_sec", "VAL_TOT", "CAR_INT_code",
-                "age_group", "RACA_COR", "proc_rea_code",
+                "CAR_INT_code", "age_group", "RACA_COR",
             ],
             target_col="obito",
         )

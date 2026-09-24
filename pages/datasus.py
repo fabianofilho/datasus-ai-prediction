@@ -40,8 +40,8 @@ OUTCOME_GROUPS = {
          "note": "Base única SIH. Pipeline completo disponível."},
         {"key": "mortalidade_hospitalar", "icon": "monitor_heart", "name": "Mortalidade Hospitalar",
          "source": "SIH + SIM", "est_min": 15, "status": "dev",
-         "linkage": "Requer linkage SIH ↔ SIM. Qualidade depende do pareamento por CPF/DTNASC.",
-         "note": "Linkage entre internações (SIH) e óbitos (SIM). Dados do SIM podem ter atraso de publicação."},
+         "linkage": "O linkage SIH ↔ SIM depende de CNS ou CPF, ausentes no dado público: óbitos pós-alta não entram.",
+         "note": "Óbito intra-hospitalar (campo MORTE do SIH), com predição na admissão."},
     ],
     "SINAN": [
         {"key": "abandono_tb", "icon": "pulmonology", "name": "Abandono de Tratamento TB",

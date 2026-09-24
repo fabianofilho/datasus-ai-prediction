@@ -14,8 +14,10 @@ class ChikungunyaHospitalizado(OutcomeConfig):
             description=(
                 "Prediz a probabilidade de um paciente notificado com chikungunya necessitar "
                 "de hospitalização. Features incluem sintomas na notificação inicial, "
-                "comorbidades (diabetes, hipertensão, doença renal, hepatopatia), "
-                "sinais de alarme e características demográficas. Utiliza SINAN-Chikungunya."
+                "comorbidades (diabetes, hipertensão, doença renal, hepatopatia) e "
+                "características demográficas. Sinais de alarme (ALRM_*) ficam fora: são "
+                "critério de internação e costumam ser preenchidos junto com ela. "
+                "Utiliza SINAN-Chikungunya."
             ),
             data_sources=["SINAN_CHIK"],
             observation_window_days=0,
@@ -28,7 +30,7 @@ class ChikungunyaHospitalizado(OutcomeConfig):
                 "FEBRE", "MIALGIA", "ARTRITE", "ARTRALGIA", "VOMITO",
                 "PETEQUIA_N", "LEUCOPENIA",
                 "DIABETES", "HIPERTENSA", "RENAL", "HEPATOPAT",
-                "ALRM_HIPOT", "ALRM_PLAQ", "ALRM_VOM",
+                # Sem ALRM_* nem GRAV_*: ver tests/test_vazamento.py.
                 "CS_GESTANT", "age_group",
             ],
             target_col="hospitalizado",

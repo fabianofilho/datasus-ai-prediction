@@ -27,10 +27,11 @@ class PermanenciaProlongada(OutcomeConfig):
             requires_linkage=False,
             icon="🛏️",
             estimated_download_min=10,
+            # Predição na admissão: sem UTI nem procedimento realizado, que só
+            # existem na alta. Ver tests/test_vazamento.py.
             suggested_features=[
                 "IDADE", "SEXO", "diag_chapter", "diag_block",
-                "used_icu", "CAR_INT", "RACA_COR",
-                "PROC_REA", "age_group",
+                "CAR_INT", "RACA_COR", "age_group",
             ],
             target_col="permanencia_prolongada",
         )
