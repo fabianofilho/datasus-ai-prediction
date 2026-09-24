@@ -385,7 +385,7 @@ _SINAN_TB: dict[str, dict] = {
     },
     "SITUA_ENCE": {
         "label": "Situação de Encerramento",
-        "desc": "Desfecho do tratamento: Cura (1), Abandono (2), Óbito TB (3), Óbito outras causas (4), Transferência (5), Falência (6), TB-DR (7).",
+        "desc": "Desfecho do tratamento: Cura (1), Abandono (2), Óbito por TB (3), Óbito por outras causas (4), Transferência (5), Mudança de diagnóstico (6), TB-DR (7), Mudança de esquema (8), Falência (9), Abandono primário (10).",
         "type": "Categórica",
     },
     "RAIOX_TORA": {
