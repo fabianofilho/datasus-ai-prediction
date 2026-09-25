@@ -385,7 +385,7 @@ _SINAN_TB: dict[str, dict] = {
     },
     "SITUA_ENCE": {
         "label": "Situação de Encerramento",
-        "desc": "Desfecho do tratamento: Cura (1), Abandono (2), Óbito TB (3), Óbito outras causas (4), Transferência (5), Falência (6), TB-DR (7).",
+        "desc": "Desfecho do tratamento: Cura (1), Abandono (2), Óbito por TB (3), Óbito por outras causas (4), Transferência (5), Mudança de diagnóstico (6), TB-DR (7), Mudança de esquema (8), Falência (9), Abandono primário (10).",
         "type": "Categórica",
     },
     "RAIOX_TORA": {
@@ -409,10 +409,10 @@ _SINAN_HANS: dict[str, dict] = {
         "values": {"1": "Indeterminada", "2": "Tuberculoide", "3": "Dimorfa", "4": "Virchowiana"},
     },
     "mb": {
-        "label": "Classificação Operacional",
-        "desc": "Categoria para fins de tratamento: Paucibacilar (1), Multibacilar (2).",
-        "type": "Categórica",
-        "values": {"1": "Paucibacilar", "2": "Multibacilar"},
+        "label": "Multibacilar",
+        "desc": "Classificação operacional multibacilar: 1 quando CLASSOPERA = 2 (MB), 0 nos demais casos (paucibacilar ou ignorado).",
+        "type": "Derivada",
+        "values": {"0": "Paucibacilar ou ignorado", "1": "Multibacilar"},
     },
     "grau_incapacidade": {
         "label": "Grau de Incapacidade",
@@ -499,7 +499,7 @@ _SINAN_DENGUE: dict[str, dict] = {
     },
     "CLASSI_FIN": {
         "label": "Classificação Final",
-        "desc": "Classificação final do caso: Dengue sem sinais de alarme (5), Dengue com sinais de alarme (6), Dengue grave (7), Descartado (11).",
+        "desc": "Classificação final do caso (layout de 2014 em diante): Descartado (5), Inconclusivo (8), Dengue (10), Dengue com sinais de alarme (11), Dengue grave (12), Chikungunya (13).",
         "type": "Categórica",
     },
     "HOSPITALIZ": {

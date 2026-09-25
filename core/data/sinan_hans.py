@@ -12,8 +12,8 @@ KEEP_COLS = [
     # Patient
     "NU_IDADE_N", "CS_SEXO", "CS_RACA", "CS_ESCOL_N", "CS_GESTANT",
     # Clinical
-    "FORMACLINI",      # clinical form: 1=PB paucibacillar, 2=MB multibacillar
-    "CLASSOPERA",      # operational classification
+    "FORMACLINI",      # forma clínica: 1=indeterminada, 2=tuberculoide, 3=dimorfa, 4=virchowiana
+    "CLASSOPERA",      # classificação operacional: 1=paucibacilar (PB), 2=multibacilar (MB)
     "MODOENTR",        # entry mode: 1=new case, 2=transfer, etc.
     "MODODETECT",      # detection mode: 1=demand, 2=active, etc.
     "BACILOSCOP",      # baciloscopy: 0=neg, 1=pos, 2=not done
@@ -30,6 +30,9 @@ KEEP_COLS = [
 TPALTA_ABANDONO = "3"
 TPALTA_CURA = "1"
 TPALTA_OBITO = "2"
+
+# CLASSOPERA: 1 = paucibacilar (PB), 2 = multibacilar (MB), conforme o PySUS.
+CLASSOPERA_MB = "2"
 
 
 def preprocess(df: pd.DataFrame) -> pd.DataFrame:
@@ -52,9 +55,11 @@ def preprocess(df: pd.DataFrame) -> pd.DataFrame:
         df["abandono"] = (alta == TPALTA_ABANDONO).astype(int)
         df["cura"] = (alta == TPALTA_CURA).astype(int)
 
-    # MB (multibacillar) flag — higher treatment burden
-    if "FORMACLINI" in df.columns:
-        df["mb"] = (df["FORMACLINI"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == "2").astype(int)
+    # Flag multibacilar (MB), tratamento mais longo. Vem da classificação
+    # operacional (CLASSOPERA == 2), não da forma clínica: FORMACLINI 2 é
+    # tuberculoide, forma paucibacilar.
+    if "CLASSOPERA" in df.columns:
+        df["mb"] = (df["CLASSOPERA"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True) == CLASSOPERA_MB).astype(int)
 
     # Disability at diagnosis
     if "AVALIA_N" in df.columns:

@@ -14,7 +14,7 @@ _REGISTRY: dict[str, dict] = {
         "module": "core.outcomes.mortalidade_hospitalar",
         "class":  "MortalidadeHospitalar",
         "name":   "Mortalidade Hospitalar",
-        "description": "Prediz óbito durante a internação hospitalar usando dados do SIH linkados ao SIM.",
+        "description": "Prediz óbito intra-hospitalar (campo MORTE do SIH), com predição na admissão.",
         "data_sources": ["SIH", "SIM"],
         "icon": "monitor_heart",
         "estimated_download_min": 15,

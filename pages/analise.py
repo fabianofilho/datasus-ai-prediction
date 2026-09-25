@@ -1678,7 +1678,7 @@ if not ss.get("model_config"):
         balancing = st.radio(
             "Balanceamento",
             ["Nenhum", "Class Weight", "SMOTE (oversample)", "SMOTE + Undersampling"],
-            index=1,
+            index=0,
             label_visibility="collapsed",
             help=(
                 "**Nenhum**: sem ajuste. "
@@ -2508,6 +2508,31 @@ if not ss["model_results"]:
             _hpo_folds = min(n_folds, 3) if val_strategy == "Validação cruzada (k-fold)" else 3
             _all_results = []
 
+            # Partição treino/teste ANTES da busca de hiperparâmetros: no holdout
+            # e no corte temporal a busca só enxerga o treino (X_hpo). No k-fold
+            # a busca usa a coorte inteira (HPO não aninhada, pendência conhecida).
+            from core.models.pipeline import train_test_partition
+            X_hpo, y_hpo = X_train, y_train
+            try:
+                if val_strategy == "Validação Temporal":
+                    import pandas as _pd_t
+                    X_tr, X_te, y_tr, y_te = train_test_partition(
+                        X_train, y_train, strategy="temporal",
+                        dates=_pd_t.to_datetime(cohort[temporal_date_col], errors="coerce"),
+                        cutoff=temporal_cutoff,
+                    )
+                    X_hpo, y_hpo = X_tr, y_tr
+                elif val_strategy == "Holdout (train/test)":
+                    X_tr, X_te, y_tr, y_te = train_test_partition(
+                        X_train, y_train, strategy="holdout", test_size=holdout_size,
+                    )
+                    X_hpo, y_hpo = X_tr, y_tr
+            except ValueError as _split_err:
+                st.error(str(_split_err))
+                st.stop()
+            # Semente da tela (Seed de reprodutibilidade) também semeia o Optuna.
+            _hpo_seed = int(ss.get("sample_seed", 42))
+
             import numpy as _np
             from sklearn.metrics import (
                 roc_auc_score as _rauc, average_precision_score as _ap,
@@ -2532,10 +2557,10 @@ if not ss["model_results"]:
                                         text=f"Optuna {_l}: {done}/{total} — AUC {best:.4f}")
                             _fms(_ph, f"Trial {done}/{total} — melhor AUC: {best:.4f}")
                         _params = optimize_hyperparams(
-                            X_train, y_train, algorithm=_algo,
+                            X_hpo, y_hpo, algorithm=_algo,
                             n_trials=n_trials, n_folds=_hpo_folds,
                             balancing=balancing, treatment=treatment,
-                            progress_callback=_opt_cb,
+                            progress_callback=_opt_cb, seed=_hpo_seed,
                         )
                         _mprog[_algo_lbl].progress(1.0, text=f"Optuna {_algo_lbl} concluído")
                         _mdetail[_algo_lbl].empty()
@@ -2553,7 +2578,7 @@ if not ss["model_results"]:
                             _fms(_ph, f"Iteração {done}/{total} — AUC: {best:.4f}")
                         with st.spinner(f"Random Search: {_algo_lbl}…"):
                             _params = random_search(
-                                X_train, y_train, algorithm=_algo,
+                                X_hpo, y_hpo, algorithm=_algo,
                                 n_iter=n_iter, n_folds=_hpo_folds,
                                 balancing=balancing, treatment=treatment,
                                 progress_callback=_rs_cb,
@@ -2566,7 +2591,7 @@ if not ss["model_results"]:
                                "Grid Search — buscando hiperparâmetros…")
                         with st.spinner(f"Grid Search — {_algo_lbl}…"):
                             _params = grid_search(
-                                X_train, y_train, algorithm=_algo,
+                                X_hpo, y_hpo, algorithm=_algo,
                                 n_folds=_hpo_folds, balancing=balancing,
                                 treatment=treatment,
                             )
@@ -2586,20 +2611,7 @@ if not ss["model_results"]:
                         _ms_st(_mstatus[_algo_lbl], "model_training",
                                f"Treinando — corte temporal {temporal_cutoff}…")
                         with st.spinner(f"Treinando {_algo_lbl} · corte temporal {temporal_cutoff}…"):
-                            import pandas as _pd_t
-                            _dates = _pd_t.to_datetime(cohort[temporal_date_col], errors="coerce")
-                            _cutoff_ts = _pd_t.Timestamp(temporal_cutoff)
-                            _train_mask = _dates < _cutoff_ts
-                            _test_mask  = _dates >= _cutoff_ts
-                            if _train_mask.sum() < 10 or _test_mask.sum() < 5:
-                                raise ValueError(
-                                    f"Split temporal insuficiente: treino={_train_mask.sum()}, "
-                                    f"teste={_test_mask.sum()}. Ajuste a data de corte."
-                                )
-                            X_tr = X_train[_train_mask.values]
-                            y_tr = y_train[_train_mask.values]
-                            X_te = X_train[_test_mask.values]
-                            y_te = y_train[_test_mask.values]
+                            # X_tr/X_te vêm da partição feita antes da HPO.
                             _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing, treatment=treatment)
                             _pipe.fit(X_tr, y_tr)
                             _te_probs = _pipe.predict_proba(X_te)[:, 1]
@@ -2639,10 +2651,7 @@ if not ss["model_results"]:
                         _ms_st(_mstatus[_algo_lbl], "model_training",
                                f"Treinando — holdout {holdout_size:.0%}…")
                         with st.spinner(f"Treinando {_algo_lbl} · holdout {holdout_size:.0%}…"):
-                            X_tr, X_te, y_tr, y_te = train_test_split(
-                                X_train, y_train, test_size=holdout_size,
-                                stratify=y_train, random_state=42,
-                            )
+                            # X_tr/X_te vêm da partição feita antes da HPO.
                             _pipe = build_pipeline(X_tr, _algo, _params, balancing=balancing, treatment=treatment)
                             _pipe.fit(X_tr, y_tr)
                             _te_probs = _pipe.predict_proba(X_te)[:, 1]
